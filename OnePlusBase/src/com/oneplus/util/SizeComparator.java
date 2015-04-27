@@ -9,6 +9,12 @@ import android.util.Size;
  */
 public class SizeComparator implements Comparator<Size>
 {
+	/**
+	 * Default instance.
+	 */
+	public static final SizeComparator DEFAULT = new SizeComparator();
+	
+	
 	// Compare
 	@Override
 	public int compare(Size x, Size y)
