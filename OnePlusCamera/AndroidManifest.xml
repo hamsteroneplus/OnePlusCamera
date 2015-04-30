@@ -4,12 +4,21 @@
     android:versionCode="1"
     android:versionName="1.0" >
     
+    
+    <!-- Use permissions -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
+    
+    <!-- SDK -->
     <uses-sdk
         android:minSdkVersion="21"
         android:targetSdkVersion="21" />
 
+    
+    <!-- Application -->
     <application
         android:name="com.oneplus.camera.CameraApplication"
         android:allowBackup="true"

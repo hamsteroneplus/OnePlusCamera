@@ -30,7 +30,7 @@ public abstract class Handle
 	 * @param handle Handle to close.
 	 * @return Null handle.
 	 */
-	public static Handle close(Handle handle)
+	public static <T extends Handle> T close(T handle)
 	{
 		return close(handle, 0);
 	}
@@ -42,19 +42,32 @@ public abstract class Handle
 	 * @param flags Flags.
 	 * @return Null handle.
 	 */
-	public static Handle close(Handle handle, int flags)
+	public static <T extends Handle> T close(T handle, int flags)
 	{
 		if(handle != null)
 		{
 			synchronized(handle)
 			{
-				if(handle.m_IsClosed)
+				Handle actualHandle = (Handle)handle;
+				if(actualHandle.m_IsClosed)
 					return null;
-				handle.m_IsClosed = true;
+				actualHandle.m_IsClosed = true;
 			}
 			handle.onClose(flags);
 		}
 		return null;
+	}
+	
+	
+	/**
+	 * Close handle directly without any additional operations.
+	 */
+	protected final void closeDirectly()
+	{
+		synchronized(this)
+		{
+			m_IsClosed = true;
+		}
 	}
 	
 	

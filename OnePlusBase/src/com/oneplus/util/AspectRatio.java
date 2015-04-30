@@ -1,5 +1,7 @@
 package com.oneplus.util;
 
+import android.util.Size;
+
 /**
  * Aspect ratio.
  */
@@ -87,6 +89,19 @@ public enum AspectRatio
 				}
 			}
 		}
+		return UNKNOWN;
+	}
+	
+	
+	/**
+	 * Get aspect ratio from given size.
+	 * @param size Size to check.
+	 * @return Aspect ratio, {@link #UNKNOWN} if the ratio is unknown.
+	 */
+	public static AspectRatio get(Size size)
+	{
+		if(size != null)
+			return get(size.getWidth(), size.getHeight());
 		return UNKNOWN;
 	}
 }

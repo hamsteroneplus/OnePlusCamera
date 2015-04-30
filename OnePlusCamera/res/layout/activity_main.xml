@@ -2,11 +2,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#000000"
     tools:context="com.oneplus.camera.MainActivity" >
     
-    <SurfaceView 
-        android:id="@+id/surface_view"
-        android:layout_width="match_parent"
-    	android:layout_height="match_parent"/>
+    <!-- Capture bar -->
+    <ViewStub android:id="@+id/capture_bar"
+        android:layout_width="@dimen/capture_bar_width"
+        android:layout_height="match_parent"
+        android:layout="@layout/layout_capture_bar"
+        android:layout_alignParentRight="true"/>
 
 </RelativeLayout>

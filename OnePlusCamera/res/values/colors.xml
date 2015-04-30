@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    
+    <!-- Capture bar -->
+    <color name="capture_bar_background">#99000000</color>
+    
+</resources>

@@ -1,5 +1,7 @@
 package com.oneplus.base;
 
+import com.oneplus.util.AspectRatio;
+
 import android.content.Context;
 import android.graphics.Point;
 import android.util.Size;
@@ -18,6 +20,7 @@ public final class ScreenSize implements Comparable<ScreenSize>
 	
 	
 	// Private fields
+	private AspectRatio m_AspectRatio;
 	private final int m_Height;
 	private final int m_Width;
 	
@@ -69,6 +72,18 @@ public final class ScreenSize implements Comparable<ScreenSize>
 			return (m_Width == size.m_Width && m_Height == size.m_Height);
 		}
 		return false;
+	}
+	
+	
+	/**
+	 * Get screen aspect ratio.
+	 * @return Aspect ratio.
+	 */
+	public AspectRatio getAspectRatio()
+	{
+		if(m_AspectRatio == null)
+			m_AspectRatio = AspectRatio.get(m_Width, m_Height);
+		return m_AspectRatio;
 	}
 	
 	

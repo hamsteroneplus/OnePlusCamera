@@ -45,6 +45,29 @@ public abstract class BasicComponent extends HandlerBaseObject implements Compon
 	}
 	
 	
+	/**
+	 * Find component extends or implements given type, which is also owned by same component owner.
+	 * @param componentType Component type.
+	 * @return Found component, or Null if no component extends or implements given type.
+	 */
+	protected final <T extends Component> T findComponent(Class<T> componentType)
+	{
+		return m_Owner.findComponent(componentType);
+	}
+	
+	
+	/**
+	 * Find component which is owned by same component owner, and call-back when component found.
+	 * @param componentType Type extended or implemented.
+	 * @param callback Call-back.
+	 * @return Whether component is found immediately (synchronously) or not.
+	 */
+	protected final <T extends Component> boolean findComponent(Class<T> componentType, ComponentSearchCallback<T> callback)
+	{
+		return ComponentUtils.findComponent(m_Owner, componentType, m_Owner, callback);
+	}
+	
+	
 	// Get property value.
 	@SuppressWarnings("unchecked")
 	@Override
@@ -92,6 +115,16 @@ public abstract class BasicComponent extends HandlerBaseObject implements Compon
 		
 		// complete
 		return (this.changeState(ComponentState.RUNNING) == ComponentState.RUNNING);
+	}
+	
+	
+	/**
+	 * Check whether component state is {@link ComponentState#RUNNING RUNNING} or {@link ComponentState#INITIALIZING INITIALIZING}.
+	 * @return Whether component is running or initializing.
+	 */
+	public final boolean isRunningOrInitializing()
+	{
+		return (m_State == ComponentState.RUNNING || m_State == ComponentState.INITIALIZING);
 	}
 	
 	

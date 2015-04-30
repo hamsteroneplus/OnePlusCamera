@@ -2,6 +2,7 @@ package com.oneplus.base;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -17,6 +18,36 @@ public abstract class BaseActivity extends Activity implements BaseObject, Handl
 	protected final String TAG;
 	
 	
+	/**
+	 * Flag to print log when property value changes.
+	 */
+	public static final int LOG_PROPERTY_CHANGE = BasicBaseObject.LOG_PROPERTY_CHANGE;
+	/**
+	 * Flag to print log when property call-back changes.
+	 */
+	public static final int LOG_PROPERTY_CALLBACK_CHANGE = BasicBaseObject.LOG_PROPERTY_CALLBACK_CHANGE;
+	/**
+	 * Flag to print log when calling property changed call-backs.
+	 */
+	public static final int LOG_PROPERTY_CALLBACK = BasicBaseObject.LOG_PROPERTY_CALLBACK;
+	/**
+	 * Flag to print log when event raises.
+	 */
+	public static final int LOG_EVENT_RAISE = BasicBaseObject.LOG_EVENT_RAISE;
+	/**
+	 * Flag to print log when event handler changes.
+	 */
+	public static final int LOG_EVENT_HANDLER_CHANGE = BasicBaseObject.LOG_EVENT_HANDLER_CHANGE;
+	/**
+	 * Flag to print log when calling event handler.
+	 */
+	public static final int LOG_EVENT_HANDLER = BasicBaseObject.LOG_EVENT_HANDLER;
+	
+	
+	/**
+	 * Read-only property for current configuration orientation.
+	 */
+	public static final PropertyKey<Integer> PROP_CONFIG_ORIENTATION = new PropertyKey<>("ConfigOrientation", Integer.class, BaseActivity.class, Configuration.ORIENTATION_UNDEFINED);
 	/**
 	 * Read-only property to check whether activity is running or not.
 	 */
@@ -137,6 +168,50 @@ public abstract class BaseActivity extends Activity implements BaseObject, Handl
 	}
 	
 	
+	/**
+	 * Disable logs related to given event.
+	 * @param key Event key.
+	 * @param logs Logs to disable.
+	 */
+	protected final void disableEventLogs(EventKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.disableEventLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Disable logs related to given property.
+	 * @param key Property key.
+	 * @param logs Logs to disable.
+	 */
+	protected final void disablePropertyLogs(PropertyKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.disablePropertyLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Enable logs related to given event.
+	 * @param key Event key.
+	 * @param logs Logs to enable.
+	 */
+	protected final void enableEventLogs(EventKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.enableEventLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Enable logs related to given property.
+	 * @param key Property key.
+	 * @param logs Logs to enable.
+	 */
+	protected final void enablePropertyLogs(PropertyKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.enablePropertyLogs(key, logs);
+	}
+	
+	
 	// Get property value.
 	@Override
 	public <TValue> TValue get(PropertyKey<TValue> key)
@@ -182,6 +257,18 @@ public abstract class BaseActivity extends Activity implements BaseObject, Handl
 	}
 	
 	
+	// Called when configuration changes.
+	@Override
+	public void onConfigurationChanged(Configuration newConfig)
+	{
+		// call super
+		super.onConfigurationChanged(newConfig);
+		
+		// update state
+		this.setReadOnly(PROP_CONFIG_ORIENTATION, newConfig.orientation);
+	}
+	
+	
 	// Called when creating activity.
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
@@ -192,7 +279,8 @@ public abstract class BaseActivity extends Activity implements BaseObject, Handl
 		// create handler
 		m_Handler = new InternalHandler(this);
 		
-		// change state
+		// setup initial state
+		this.setReadOnly(PROP_CONFIG_ORIENTATION, this.getResources().getConfiguration().orientation);
 		this.setReadOnly(PROP_STATE, State.CREATING);
 	}
 	

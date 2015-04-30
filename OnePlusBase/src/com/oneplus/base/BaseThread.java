@@ -14,6 +14,33 @@ public abstract class BaseThread extends Thread implements BaseObject, HandlerOb
 	 */
 	protected final String TAG;
 	
+	
+	/**
+	 * Flag to print log when property value changes.
+	 */
+	public static final int LOG_PROPERTY_CHANGE = BasicBaseObject.LOG_PROPERTY_CHANGE;
+	/**
+	 * Flag to print log when property call-back changes.
+	 */
+	public static final int LOG_PROPERTY_CALLBACK_CHANGE = BasicBaseObject.LOG_PROPERTY_CALLBACK_CHANGE;
+	/**
+	 * Flag to print log when calling property changed call-backs.
+	 */
+	public static final int LOG_PROPERTY_CALLBACK = BasicBaseObject.LOG_PROPERTY_CALLBACK;
+	/**
+	 * Flag to print log when event raises.
+	 */
+	public static final int LOG_EVENT_RAISE = BasicBaseObject.LOG_EVENT_RAISE;
+	/**
+	 * Flag to print log when event handler changes.
+	 */
+	public static final int LOG_EVENT_HANDLER_CHANGE = BasicBaseObject.LOG_EVENT_HANDLER_CHANGE;
+	/**
+	 * Flag to print log when calling event handler.
+	 */
+	public static final int LOG_EVENT_HANDLER = BasicBaseObject.LOG_EVENT_HANDLER;
+	
+	
 	/**
 	 * Property to check whether camera thread is started or not.
 	 */
@@ -113,6 +140,50 @@ public abstract class BaseThread extends Thread implements BaseObject, HandlerOb
 	{
 		this.verifyAccess();
 		m_BaseObjectAdapter.addHandler(key, handler);
+	}
+	
+	
+	/**
+	 * Disable logs related to given event.
+	 * @param key Event key.
+	 * @param logs Logs to disable.
+	 */
+	protected final void disableEventLogs(EventKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.disableEventLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Disable logs related to given property.
+	 * @param key Property key.
+	 * @param logs Logs to disable.
+	 */
+	protected final void disablePropertyLogs(PropertyKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.disablePropertyLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Enable logs related to given event.
+	 * @param key Event key.
+	 * @param logs Logs to enable.
+	 */
+	protected final void enableEventLogs(EventKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.enableEventLogs(key, logs);
+	}
+	
+	
+	/**
+	 * Enable logs related to given property.
+	 * @param key Property key.
+	 * @param logs Logs to enable.
+	 */
+	protected final void enablePropertyLogs(PropertyKey<?> key, int logs)
+	{
+		m_BaseObjectAdapter.enablePropertyLogs(key, logs);
 	}
 	
 	
@@ -308,7 +379,10 @@ public abstract class BaseThread extends Thread implements BaseObject, HandlerOb
 		{
 			// release handler
 			if(m_Handler != null)
+			{
 				m_Handler.release();
+				m_Handler = null;
+			}
 			
 			// release base object
 			if(m_BaseObjectAdapter != null)
