@@ -3,7 +3,6 @@ package com.oneplus.camera;
 import java.util.List;
 
 import com.oneplus.base.Log;
-
 import android.os.Bundle;
 
 /**
@@ -65,7 +64,7 @@ public class MainActivity extends CameraActivity
 		CameraThread cameraThread = this.getCameraThread();
 		cameraThread.addComponentBuilders(ComponentBuilders.BUILDERS_CAMERA_THREAD);
 		cameraThread.setDefaultShutterSound(R.raw.shutter_photo);
-		cameraThread.start();
+		cameraThread.start(this.get(PROP_MEDIA_TYPE));
 		
 		// set content view
 		setContentView(R.layout.activity_main);

@@ -8,12 +8,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+
 import android.content.Context;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+
 import com.oneplus.base.BaseThread;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -104,8 +106,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private volatile int m_DefaultShutterSoundResId;
 	private final VideoCaptureHandlerHandle m_DefaultVideoCaptureHandlerHandle = new VideoCaptureHandlerHandle(null);
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
+	private volatile MediaType m_InitialMediaType;
 	private volatile ScreenSize m_InitialScreenSize;
 	private MediaRecorder m_MediaRecorder;
+	private final List<CameraPreviewStopRequest> m_PendingCameraPreviewStopRequests = new ArrayList<>();
 	private PhotoCaptureHandle m_PhotoCaptureHandle;
 	private PhotoCaptureHandlerHandle m_PhotoCaptureHandlerHandle;
 	private List<PhotoCaptureHandlerHandle> m_PhotoCaptureHandlerHandles;
@@ -131,7 +135,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		@Override
 		public void onPropertyChanged(PropertySource source, PropertyKey<OperationState> key, PropertyChangeEventArgs<OperationState> e)
 		{
-			onCameraPreviewStateChanged(e.getOldValue(), e.getNewValue());
+			onCameraPreviewStateChanged((Camera)source, e.getOldValue(), e.getNewValue());
 		}
 	};
 	private final PropertyChangedCallback<OperationState> m_CaptureStateChangedCallback = new PropertyChangedCallback<OperationState>()
@@ -243,6 +247,22 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	// Class for camera preview stop request.
+	private static final class CameraPreviewStopRequest
+	{
+		public final Camera camera;
+		public final int flags;
+		public final boolean[] result;
+		
+		public CameraPreviewStopRequest(Camera camera, boolean[] result, int flags)
+		{
+			this.camera = camera;
+			this.flags = flags;
+			this.result = result;
+		}
+	}
+	
+	
 	/**
 	 * Initialize new CameraThread instance.
 	 * @param context Related {@link android.content.Context Context}.
@@ -289,6 +309,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Bind to components.
+	@SuppressWarnings("unchecked")
 	private boolean bindToComponents()
 	{
 		// bind to AudioManager
@@ -307,10 +328,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				@Override
 				public void onPropertyChanged(PropertySource source, PropertyKey<List<Camera>> key, PropertyChangeEventArgs<List<Camera>> e)
 				{
-					onAvailableCamerasChanged(e.getNewValue());
+					onAvailableCamerasChanged(e.getOldValue(), e.getNewValue());
 				}
 			});
-			this.onAvailableCamerasChanged(m_CameraDeviceManager.get(CameraDeviceManager.PROP_AVAILABLE_CAMERAS));
+			this.onAvailableCamerasChanged(Collections.EMPTY_LIST, m_CameraDeviceManager.get(CameraDeviceManager.PROP_AVAILABLE_CAMERAS));
 		}
 		else
 		{
@@ -714,15 +735,51 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Called when available camera list changes.
-	private void onAvailableCamerasChanged(List<Camera> cameras)
+	private void onAvailableCamerasChanged(List<Camera> oldCameras, List<Camera> cameras)
 	{
+		// attach/detach call-backs
+		for(int i = cameras.size() - 1 ; i >= 0 ; --i)
+		{
+			Camera camera = cameras.get(i);
+			if(!oldCameras.contains(camera))
+				camera.addCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
+		}
+		for(int i = oldCameras.size() - 1 ; i >= 0 ; --i)
+		{
+			Camera camera = oldCameras.get(i);
+			if(!cameras.contains(camera))
+				camera.removeCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
+		}
+		
+		// update property
 		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
 	}
 	
 	
 	// Called when primary camera preview state changes.
-	private void onCameraPreviewStateChanged(OperationState prevState, OperationState state)
+	private void onCameraPreviewStateChanged(Camera camera, OperationState prevState, OperationState state)
 	{
+		// continue stopping preview
+		if(state == OperationState.STARTED)
+		{
+			for(int i = m_PendingCameraPreviewStopRequests.size() - 1 ; i >= 0 ; --i)
+			{
+				CameraPreviewStopRequest request = m_PendingCameraPreviewStopRequests.get(i);
+				if(request.camera == camera)
+				{
+					Log.w(TAG, "onCameraPreviewStateChanged() - Continue stopping preview for " + camera);
+					m_PendingCameraPreviewStopRequests.remove(i);
+					this.stopCameraPreviewInternal(camera, request.result, request.flags);
+				}
+			}
+			if(camera.get(Camera.PROP_PREVIEW_STATE) != state)
+				return;
+		}
+		
+		// check camera
+		if(this.get(PROP_CAMERA) != camera)
+			return;
+		
 		// update preview state property
 		this.setReadOnly(PROP_CAMERA_PREVIEW_STATE, state);
 		
@@ -867,6 +924,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				m_InitialScreenSize = null;
 			}
 			
+			// setup media type
+			if(m_InitialMediaType != null)
+			{
+				Log.v(TAG, "onStarting() - Initial media type : ", m_InitialMediaType);
+				this.setReadOnly(PROP_MEDIA_TYPE, m_InitialMediaType);
+			}
+			
 			// create component manager
 			m_ComponentManager = new ComponentManager();
 			m_ComponentManager.addComponentBuilders(DEFAULT_COMPONENT_BUILDERS, this);
@@ -974,9 +1038,6 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				break;
 		}
 		
-		// get current camera
-		Camera prevCamera = this.get(PROP_CAMERA);
-		
 		// open camera
 		Log.v(TAG, "openCameraInternal() - Open ", camera);
 		try
@@ -990,21 +1051,6 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		catch(Throwable ex)
 		{
 			return false;
-		}
-		
-		// add/remove call-backs
-		if(prevCamera != camera)
-		{
-			// remove call-backs
-			if(prevCamera != null)
-				prevCamera.removeCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
-			
-			// add call-backs
-			camera.addCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
-			
-			// sync states
-			OperationState prevState = (prevCamera != null ? prevCamera.get(Camera.PROP_PREVIEW_STATE) : OperationState.STOPPED);
-			this.onCameraPreviewStateChanged(prevState, camera.get(Camera.PROP_PREVIEW_STATE));
 		}
 		
 		// update property
@@ -1195,6 +1241,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	// Start camera thread with given media type.
+	public synchronized void start(MediaType mediaType)
+	{
+		this.start();
+		m_InitialMediaType = mediaType;
+	}
+	
+	
 	/**
 	 * Start camera preview.
 	 * @param camera Camera to start preview.
@@ -1314,10 +1368,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			return false;
 		}
 		if(this.isDependencyThread())
-		{
-			this.stopCameraPreviewInternal(camera, null, flags);
-			return true;
-		}
+			return this.stopCameraPreviewInternal(camera, null, flags);
 		else
 		{
 			final boolean isSync = ((flags & FLAG_SYNCHRONOUS) != 0);
@@ -1361,7 +1412,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Stop camera preview
-	private void stopCameraPreviewInternal(final Camera camera, final boolean[] result, int flags)
+	private boolean stopCameraPreviewInternal(final Camera camera, final boolean[] result, int flags)
 	{
 		try
 		{
@@ -1370,6 +1421,17 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			{
 				Log.w(TAG, "stopCameraPreviewInternal() - Stop video recording first");
 				stopCaptureVideoInternal(m_VideoCaptureHandle);
+			}
+			
+			// waiting for starting preview
+			if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STARTING)
+			{
+				if(result != null)
+				{
+					Log.w(TAG, "stopCameraPreviewInternal() - Wait for preview start");
+					m_PendingCameraPreviewStopRequests.add(new CameraPreviewStopRequest(camera, result, flags));
+					return true;
+				}
 			}
 			
 			// stop preview
@@ -1411,6 +1473,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 					});
 				}
 			}
+			return true;
 		}
 		catch(Throwable ex)
 		{
@@ -1424,6 +1487,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 					result.notifyAll();
 				}
 			}
+			return false;
 		}
 	}
 	

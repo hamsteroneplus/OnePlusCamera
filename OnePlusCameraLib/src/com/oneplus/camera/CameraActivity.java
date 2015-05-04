@@ -195,7 +195,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	// Bind to camera thread (called in camera thread).
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private void bindToCameraThread(List<EventKey<?>> eventKeys, List<PropertyKey<?>> propKeys)
+	private void bindToCameraThread(MediaType initialMediaType, List<EventKey<?>> eventKeys, List<PropertyKey<?>> propKeys)
 	{
 		Log.v(TAG, "bindToCameraThread()");
 		
@@ -229,6 +229,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				m_CameraThread.addCallback(propKeys.get(i), callback);
 		}
 		
+		// set initial media type
+		if(!m_CameraThread.setMediaType(initialMediaType))
+			Log.e(TAG, "bindToCameraThread() - Fail to set initial media type to " + initialMediaType);
+		
 		// notify
 		this.onBindToCameraThread();
 	}
@@ -238,52 +242,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private boolean bindToComponents()
 	{
 		// ResolutionManager
-		if(m_ResolutionManager == null)
+		if(this.getResolutionManager() == null)
 		{
-			m_ResolutionManager = m_ComponentManager.findComponent(ResolutionManager.class, this);
-			if(m_ResolutionManager != null)
-			{
-				PropertyChangedCallback<Size> callback = new PropertyChangedCallback<Size>()
-				{
-					@Override
-					public void onPropertyChanged(PropertySource source, PropertyKey<Size> key, PropertyChangeEventArgs<Size> e)
-					{
-						selectCameraPreviewSize();
-					}
-				};
-				m_ResolutionManager.addCallback(ResolutionManager.PROP_PHOTO_PREVIEW_SIZE, callback);
-			}
-			else
-			{
-				Log.e(TAG, "bindToComponents() - No ResolutionManager");
-				return false;
-			}
+			Log.e(TAG, "bindToComponents() - No ResolutionManager");
+			return false;
 		}
 		
 		// Viewfinder
-		if(m_Viewfinder == null)
+		if(this.getViewfinder() == null)
 		{
-			m_Viewfinder = m_ComponentManager.findComponent(Viewfinder.class, this);
-			if(m_Viewfinder != null)
-			{
-				m_Viewfinder.addCallback(Viewfinder.PROP_PREVIEW_RECEIVER, new PropertyChangedCallback<Object>()
-				{
-					@Override
-					public void onPropertyChanged(PropertySource source, PropertyKey<Object> key, PropertyChangeEventArgs<Object> e)
-					{
-						Object receiver = e.getNewValue();
-						if(receiver != null)
-							onCameraPreviewReceiverReady(receiver);
-						else
-							onCameraPreviewReceiverDestroyed();
-					}
-				});
-			}
-			else
-			{
-				Log.e(TAG, "bindToComponents() - No Viewfinder");
-				return false;
-			}
+			Log.e(TAG, "bindToComponents() - No Viewfinder");
+			return false;
 		}
 		
 		// complete
@@ -578,6 +547,66 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	/**
+	 * Get resolution manager.
+	 * @return Resolution manager.
+	 */
+	public final ResolutionManager getResolutionManager()
+	{
+		if(m_ResolutionManager == null)
+		{
+			m_ResolutionManager = m_ComponentManager.findComponent(ResolutionManager.class, this);
+			if(m_ResolutionManager != null)
+			{
+				PropertyChangedCallback<Size> callback = new PropertyChangedCallback<Size>()
+				{
+					@Override
+					public void onPropertyChanged(PropertySource source, PropertyKey<Size> key, PropertyChangeEventArgs<Size> e)
+					{
+						selectCameraPreviewSize();
+					}
+				};
+				m_ResolutionManager.addCallback(ResolutionManager.PROP_PHOTO_PREVIEW_SIZE, callback);
+				m_ResolutionManager.addCallback(ResolutionManager.PROP_VIDEO_PREVIEW_SIZE, callback);
+			}
+			else
+				Log.e(TAG, "getResolutionManager() - No ResolutionManager");
+		}
+		return m_ResolutionManager;
+	}
+	
+	
+	/**
+	 * Get viewfinder.
+	 * @return Viewfinder.
+	 */
+	public final Viewfinder getViewfinder()
+	{
+		if(m_Viewfinder == null)
+		{
+			m_Viewfinder = m_ComponentManager.findComponent(Viewfinder.class, this);
+			if(m_Viewfinder != null)
+			{
+				m_Viewfinder.addCallback(Viewfinder.PROP_PREVIEW_RECEIVER, new PropertyChangedCallback<Object>()
+				{
+					@Override
+					public void onPropertyChanged(PropertySource source, PropertyKey<Object> key, PropertyChangeEventArgs<Object> e)
+					{
+						Object receiver = e.getNewValue();
+						if(receiver != null)
+							onCameraPreviewReceiverReady(receiver);
+						else
+							onCameraPreviewReceiverDestroyed();
+					}
+				});
+			}
+			else
+				Log.e(TAG, "bindToComponents() - No Viewfinder");
+		}
+		return m_Viewfinder;
+	}
+	
+	
+	/**
 	 * Handle message.
 	 * @param msg Message.
 	 */
@@ -724,6 +753,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// start binding to camera thread
 		final List<EventKey<?>> eventKeys = new ArrayList<>();
 		final List<PropertyKey<?>> propKeys = new ArrayList<>();
+		final MediaType initialMediaType = this.get(PROP_MEDIA_TYPE);
 		this.onBindingToCameraThreadEvents(eventKeys);
 		this.onBindingToCameraThreadProperties(propKeys);
 		Handler handler = m_CameraThread.getHandler();
@@ -738,7 +768,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			@Override
 			public void run()
 			{
-				bindToCameraThread(eventKeys, propKeys);
+				bindToCameraThread(initialMediaType, eventKeys, propKeys);
 			}
 		}))
 		{
@@ -1022,7 +1052,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	protected void selectCameraPreviewSize()
 	{
-		if(m_ResolutionManager == null)
+		ResolutionManager resolutionManager = this.getResolutionManager();
+		if(resolutionManager == null)
 		{
 			Log.e(TAG, "selectCameraPreviewSize() - No ResolutionManager.");
 			return;
@@ -1031,10 +1062,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		switch(this.get(PROP_MEDIA_TYPE))
 		{
 			case PHOTO:
-				previewSize = m_ResolutionManager.get(ResolutionManager.PROP_PHOTO_PREVIEW_SIZE);
+				previewSize = resolutionManager.get(ResolutionManager.PROP_PHOTO_PREVIEW_SIZE);
 				break;
 			case VIDEO:
-				previewSize = m_ResolutionManager.get(ResolutionManager.PROP_VIDEO_PREVIEW_SIZE);
+				previewSize = resolutionManager.get(ResolutionManager.PROP_VIDEO_PREVIEW_SIZE);
 				break;
 			default:
 				Log.e(TAG, "selectCameraPreviewSize() - Unknown media type : " + this.get(PROP_MEDIA_TYPE));
@@ -1168,11 +1199,6 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// check state
 		this.verifyAccess();
-		if(m_CameraThread == null)
-		{
-			Log.e(TAG, "setMediaType() - No camera thread");
-			return false;
-		}
 		if(this.get(PROP_MEDIA_TYPE) == mediaType)
 			return true;
 		Log.w(TAG, "setMediaType() - Media type : " + mediaType);
@@ -1212,11 +1238,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// change media type
-		if(!m_CameraThread.setMediaType(mediaType))
+		if(this.get(PROP_IS_CAMERA_THREAD_STARTED))
 		{
-			Log.e(TAG, "setMediaType() - Fail to change media type");
-			return false;
+			if(!m_CameraThread.setMediaType(mediaType))
+			{
+				Log.e(TAG, "setMediaType() - Fail to change media type");
+				return false;
+			}
 		}
+		else
+			Log.w(TAG, "setMediaType() - Change media type before camera thread start");
 		this.setReadOnly(PROP_MEDIA_TYPE, mediaType);
 		
 		// select preview size
