@@ -608,9 +608,6 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	protected void onAvailableCamerasChanged(List<Camera> cameras)
 	{
-		// update property
-		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
-		
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
 		if(camera != null)
@@ -620,14 +617,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			Log.w(TAG, "onAvailableCamerasChanged() - Camera " + camera + " is not contained in new list");
 		}
 		
-		// select camera
-		camera = CameraUtils.findCamera(cameras, Camera.LensFacing.BACK, false);
-		Log.w(TAG, "onAvailableCamerasChanged() - Select " + camera);
-		this.setReadOnly(PROP_CAMERA, camera);
-		
-		// open camera
-		if(!m_CameraThread.openCamera(camera))
-			Log.e(TAG, "onAvailableCamerasChanged() - Fail to open camera " + camera);
+		// update property
+		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
 	}
 	
 	
@@ -822,6 +813,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// call super
 		super.onConfigurationChanged(newConfig);
+		
+		// update screen size
+		this.updateScreenSize();
 		
 		// start preview
 		if(newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE)

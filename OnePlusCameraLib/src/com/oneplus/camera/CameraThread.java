@@ -1,25 +1,19 @@
 package com.oneplus.camera;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.TimeoutException;
-
 import android.content.Context;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
-import android.text.format.DateFormat;
-
 import com.oneplus.base.BaseThread;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -137,7 +131,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		@Override
 		public void onPropertyChanged(PropertySource source, PropertyKey<OperationState> key, PropertyChangeEventArgs<OperationState> e)
 		{
-			onCameraPreviewStateChanged(e.getNewValue());
+			onCameraPreviewStateChanged(e.getOldValue(), e.getNewValue());
 		}
 	};
 	private final PropertyChangedCallback<OperationState> m_CaptureStateChangedCallback = new PropertyChangedCallback<OperationState>()
@@ -727,10 +721,21 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Called when primary camera preview state changes.
-	private void onCameraPreviewStateChanged(OperationState state)
+	private void onCameraPreviewStateChanged(OperationState prevState, OperationState state)
 	{
 		// update preview state property
 		this.setReadOnly(PROP_CAMERA_PREVIEW_STATE, state);
+		
+		// release media recorder
+		if(m_VideoCaptureHandle == null && m_MediaRecorder != null)
+		{
+			if(state == OperationState.STARTED || state == OperationState.STOPPED)
+			{
+				Log.v(TAG, "onCameraPreviewStateChanged() - Release media recorder");
+				m_MediaRecorder.release();
+				m_MediaRecorder = null;
+			}
+		}
 		
 		// update capture state properties
 		if(state == OperationState.STARTED)
@@ -738,20 +743,16 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			// change capture state
 			if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.PREPARING)
 				this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
+			if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO && this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.PREPARING)
+				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
 		}
 		else
 		{
-			// release media recorder
-			if(state == OperationState.STOPPED && m_VideoCaptureHandle == null && m_MediaRecorder != null)
-			{
-				Log.v(TAG, "onCameraPreviewStateChanged() - Release media recorder");
-				m_MediaRecorder.release();
-				m_MediaRecorder = null;
-			}
-			
 			// change capture state
 			if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.READY)
 				this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
+			if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.READY)
+				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
 		}
 	}
 	
@@ -1002,7 +1003,8 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			camera.addCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
 			
 			// sync states
-			this.onCameraPreviewStateChanged(camera.get(Camera.PROP_PREVIEW_STATE));
+			OperationState prevState = (prevCamera != null ? prevCamera.get(Camera.PROP_PREVIEW_STATE) : OperationState.STOPPED);
+			this.onCameraPreviewStateChanged(prevState, camera.get(Camera.PROP_PREVIEW_STATE));
 		}
 		
 		// update property
@@ -1304,7 +1306,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	 * </ul>
 	 * @return Camera preview stops successfully or not.
 	 */
-	public final boolean stopCameraPreview(final Camera camera, int flags)
+	public final boolean stopCameraPreview(final Camera camera, final int flags)
 	{
 		if(camera == null)
 		{
@@ -1313,75 +1315,21 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		if(this.isDependencyThread())
 		{
-			if(Handle.isValid(m_VideoCaptureHandle))
-				this.stopCaptureVideoInternal(m_VideoCaptureHandle);
-			camera.stopPreview(0);
+			this.stopCameraPreviewInternal(camera, null, flags);
 			return true;
 		}
 		else
 		{
 			final boolean isSync = ((flags & FLAG_SYNCHRONOUS) != 0);
-			final Object lock = new Object();
-			final boolean[] stopped = new boolean[]{ false };
-			synchronized(lock)
+			final boolean[] result = new boolean[]{ false };
+			synchronized(result)
 			{
 				if(!HandlerUtils.post(this, new Runnable()
 				{
 					@Override
 					public void run()
 					{
-						try
-						{
-							if(Handle.isValid(m_VideoCaptureHandle))
-								stopCaptureVideoInternal(m_VideoCaptureHandle);
-							camera.stopPreview(0);
-							if(isSync)
-							{
-								if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STOPPED)
-								{
-									synchronized(lock)
-									{
-										Log.w(TAG, "stopCameraPreview() - Notify waiting thread");
-										stopped[0] = true;
-										lock.notifyAll();
-									}
-								}
-								else
-								{
-									Log.w(TAG, "stopCameraPreview() - Wait for camera preview stop");
-									camera.addCallback(Camera.PROP_PREVIEW_STATE, new PropertyChangedCallback<OperationState>()
-									{
-										@Override
-										public void onPropertyChanged(PropertySource source, PropertyKey<OperationState> key, PropertyChangeEventArgs<OperationState> e)
-										{
-											if(e.getNewValue() == OperationState.STOPPED)
-											{
-												synchronized(lock)
-												{
-													Log.w(TAG, "stopCameraPreview() - Notify waiting thread");
-													stopped[0] = true;
-													lock.notifyAll();
-												}
-												camera.removeCallback(Camera.PROP_PREVIEW_STATE, this);
-											}
-										}
-									});
-								}
-							}
-						}
-						catch(Throwable ex)
-						{
-							Log.e(TAG, "stopCameraPreview() - Error stopping camera preview", ex);
-							if(isSync)
-							{
-								synchronized(lock)
-								{
-									Log.w(TAG, "stopCameraPreview() - Notify waiting thread");
-									stopped[0] = true;
-									lock.notifyAll();
-								}
-							}
-						}
+						stopCameraPreviewInternal(camera, (isSync ? result : null), flags);
 					}
 				}))
 				{
@@ -1393,9 +1341,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 					try
 					{
 						Log.w(TAG, "stopCameraPreview() - Wait for camera thread [start]");
-						lock.wait(5000);
+						result.wait(5000);
 						Log.w(TAG, "stopCameraPreview() - Wait for camera thread [end]");
-						if(stopped[0])
+						if(result[0])
 							return true;
 						Log.e(TAG, "stopCameraPreview() - Timeout");
 						return false;
@@ -1407,6 +1355,74 @@ public class CameraThread extends BaseThread implements ComponentOwner
 					}
 				}
 				return true;
+			}
+		}
+	}
+	
+	
+	// Stop camera preview
+	private void stopCameraPreviewInternal(final Camera camera, final boolean[] result, int flags)
+	{
+		try
+		{
+			// stop video recording first
+			if(Handle.isValid(m_VideoCaptureHandle))
+			{
+				Log.w(TAG, "stopCameraPreviewInternal() - Stop video recording first");
+				stopCaptureVideoInternal(m_VideoCaptureHandle);
+			}
+			
+			// stop preview
+			Log.v(TAG, "stopCameraPreviewInternal() - Stop preview [start]");
+			camera.stopPreview(0);
+			Log.v(TAG, "stopCameraPreviewInternal() - Stop preview [end]");
+			
+			// notify waiting thread
+			if(result != null)
+			{
+				if(camera.get(Camera.PROP_PREVIEW_STATE) != OperationState.STOPPING)
+				{
+					synchronized(result)
+					{
+						Log.w(TAG, "stopCameraPreviewInternal() - Notify waiting thread");
+						result[0] = true;
+						result.notifyAll();
+					}
+				}
+				else
+				{
+					Log.w(TAG, "stopCameraPreviewInternal() - Wait for camera preview stop");
+					camera.addCallback(Camera.PROP_PREVIEW_STATE, new PropertyChangedCallback<OperationState>()
+					{
+						@Override
+						public void onPropertyChanged(PropertySource source, PropertyKey<OperationState> key, PropertyChangeEventArgs<OperationState> e)
+						{
+							if(e.getOldValue() == OperationState.STOPPING)
+							{
+								synchronized(result)
+								{
+									Log.w(TAG, "stopCameraPreviewInternal() - Notify waiting thread");
+									result[0] = true;
+									result.notifyAll();
+								}
+								camera.removeCallback(Camera.PROP_PREVIEW_STATE, this);
+							}
+						}
+					});
+				}
+			}
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "stopCameraPreviewInternal() - Error stopping camera preview", ex);
+			if(result != null)
+			{
+				synchronized(result)
+				{
+					Log.w(TAG, "stopCameraPreviewInternal() - Notify waiting thread");
+					result[0] = true;
+					result.notifyAll();
+				}
 			}
 		}
 	}
@@ -1509,7 +1525,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		Camera camera = this.get(PROP_CAMERA);
 		camera.set(Camera.PROP_VIDEO_SURFACE, null);
 		if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STOPPING)
+		{
+			Log.w(TAG, "stopCaptureVideoInternal() - Release media recorder after preview ready");
 			return;
+		}
 		
 		m_MediaRecorder.release();
 		m_MediaRecorder = null;

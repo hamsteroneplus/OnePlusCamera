@@ -705,7 +705,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			Log.w(TAG, "onCaptureSessionConfigured() - Start preview for camera '" + m_Id + "'");
 			try
 			{
-				CaptureRequest.Builder builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+				CaptureRequest.Builder builder;
+				if(m_VideoSurface == null)
+					builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+				else
+					builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
 				builder.addTarget(m_PreviewSurface);
 				if(m_VideoSurface != null)
 					builder.addTarget(m_VideoSurface);
