@@ -81,6 +81,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 	};
 	private final String m_Id;
+	private boolean m_IsCaptureSequenceCompleted;
 	private final LensFacing m_LensFacing;
 	private final ImageReader.OnImageAvailableListener m_PictureAvailableListener = new ImageReader.OnImageAvailableListener()
 	{
@@ -131,7 +132,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		public void onCaptureSequenceCompleted(CameraCaptureSession session, int sequenceId, long frameNumber) 
 		{
-			Log.w(TAG, "onCaptureSequenceCompleted");
+			CameraImpl.this.onCaptureSequenceCompleted();
 		}
 	};
 	private CaptureRequest m_PictureCaptureRequest;
@@ -141,9 +142,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final CameraCaptureSession.CaptureCallback m_PreviewCaptureCallback = new CameraCaptureSession.CaptureCallback()
 	{
 	};
+	private CaptureRequest.Builder m_PreviewRequestBuilder;
 	private Surface m_PreviewSurface;
+	private int m_ReceivedCaptureCompletedCount;
 	private final Queue<CaptureResult> m_ReceivedCaptureCompletedResults = new LinkedList<>();
+	private int m_ReceivedCaptureStartedCount;
 	private final Queue<CaptureResult> m_ReceivedCaptureStartedResults = new LinkedList<>();
+	private int m_ReceivedPictureCount;
 	private final Queue<byte[]> m_ReceivedPictures = new LinkedList<>();
 	private volatile State m_State = State.CLOSED;
 	private int m_TargetCapturedFrameCount;
@@ -248,7 +253,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			@Override
 			protected void onClose(int flags)
 			{
-				//
+				stopCaptureInternal();
 			}
 		};
 		
@@ -287,6 +292,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			try
 			{
 				builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_ZERO_SHUTTER_LAG);
+				Log.v(TAG, "captureInternal() - Use ZSL template");
 			}
 			catch(Throwable ex)
 			{}
@@ -296,6 +302,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			try
 			{
 				builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+				Log.v(TAG, "captureInternal() - Use still capture template");
 			}
 			catch(Throwable ex)
 			{
@@ -307,8 +314,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// create capture request
 		try
 		{
+			// prepare Surfaces
+			builder.addTarget(m_PreviewSurface);
 			builder.addTarget(m_PictureSurface);
-			//
+			if(m_VideoSurface != null)
+				builder.addTarget(m_VideoSurface);
+			
+			// create request
 			m_PictureCaptureRequest = builder.build();
 		} 
 		catch(Throwable ex)
@@ -325,7 +337,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(m_TargetCapturedFrameCount == 1)
 				m_CaptureSession.capture(m_PictureCaptureRequest, m_PictureCaptureCallback, this.getHandler());
 			else if(m_TargetCapturedFrameCount < 0)
-				m_CaptureSession.setRepeatingBurst(Arrays.asList(m_PictureCaptureRequest), m_PictureCaptureCallback, this.getHandler());
+				m_CaptureSession.setRepeatingRequest(m_PictureCaptureRequest, m_PictureCaptureCallback, this.getHandler());
 			else
 			{
 				List<CaptureRequest> requestList = new ArrayList<>();
@@ -391,7 +403,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		
 		// stop capture
-		this.stopCaptureSession();
+		this.stopCaptureSession(false);
 		if(m_CaptureSessionState == OperationState.STOPPING)
 		{
 			Log.w(TAG, "close() - Wait for capture session close");
@@ -526,14 +538,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return;
 		}
 		
+		// update index
+		++m_ReceivedCaptureCompletedCount;
+		
 		// print logs
-		Log.v(TAG, "onCaptureCompleted() - Index : ", (m_CompletedFrameIndex + 1));
+		Log.v(TAG, "onCaptureCompleted() - Index : ", (m_ReceivedCaptureCompletedCount - 1));
 		boolean success = (failure == null);
-		if(!success)
+		if(!success && this.get(PROP_CAPTURE_STATE) != OperationState.STOPPING)
 			Log.e(TAG, "onCaptureCompleted() - Capture failed");
 		
 		// check index
-		if(m_TargetCapturedFrameCount > 0 && m_CompletedFrameIndex >= (m_TargetCapturedFrameCount - 1))
+		if(m_TargetCapturedFrameCount > 0 && m_ReceivedCaptureCompletedCount > m_TargetCapturedFrameCount)
 		{
 			Log.w(TAG, "onCaptureCompleted() - Unexpected call-back, drop");
 			return;
@@ -554,46 +569,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		else
 			picture = null;
 		
-		// complete capture
-		this.onCaptureCompleted(result, failure, picture);
+		// handle result
+		this.onPictureReceived(result, picture);
 	}
-	private void onCaptureCompleted(CaptureResult result, CaptureFailure failure, byte[] picture)
-	{
-		// update index
-		++m_CompletedFrameIndex;
-		
-		// prepare completing capture
-		OperationState captureState = this.get(PROP_CAPTURE_STATE);
-		boolean failed = (picture == null || picture.length == 0);
-		boolean frameCountReached = (m_TargetCapturedFrameCount > 0 && m_CompletedFrameIndex >= (m_TargetCapturedFrameCount - 1));
-		if(captureState == OperationState.STARTED)
-		{
-			if(frameCountReached || failed)
-			{
-				if(failed)
-					Log.e(TAG, "onCaptureCompleted() - Capture failed, start completing capture");
-				else
-					Log.w(TAG, "onCaptureCompleted() - Frame count reached, start completing capture");
-				captureState = OperationState.STOPPING;
-				this.setReadOnly(PROP_CAPTURE_STATE, captureState);
-			}
-		}
-		
-		// raise event
-		if(!failed)
-		{
-			int pictureFormat = this.get(PROP_PICTURE_FORMAT);
-			Size pictureSize = this.get(PROP_PICTURE_SIZE);
-			this.raise(EVENT_PICTURE_RECEIVED, CameraCaptureEventArgs.obtain(m_CaptureHandle, m_CompletedFrameIndex, result, picture, pictureFormat, pictureSize));
-		}
-		else
-			this.raise(EVENT_CAPTURE_FAILED, CameraCaptureEventArgs.obtain(m_CaptureHandle, m_CompletedFrameIndex, result));
-		
-		// complete capture
-		if((frameCountReached || failed) && captureState == OperationState.STOPPING)
-			this.onCaptureCompleted();
-	}
-	private void onCaptureCompleted()
+	private void onCaptureCompleted(boolean continueCaptureSession)
 	{
 		Log.w(TAG, "onCaptureCompleted()");
 		
@@ -603,18 +582,41 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_ReceivedPictures.clear();
 		
 		// reset state
+		m_ReceivedCaptureStartedCount = 0;
+		m_ReceivedCaptureCompletedCount = 0;
+		m_ReceivedPictureCount = 0;
 		m_CaptureHandle = null;
 		m_CompletedFrameIndex = -1;
 		m_TargetCapturedFrameCount = 0;
+		m_IsCaptureSequenceCompleted = false;
 		this.setReadOnly(PROP_CAPTURE_STATE, OperationState.STOPPED);
 		
-		// stop capture session
-		if(m_CaptureSessionState == OperationState.STOPPING)
+		// stop capture session or preview
+		if(continueCaptureSession)
 		{
-			Log.w(TAG, "onCaptureCompleted() - Stop capture session");
-			m_CaptureSessionState = OperationState.STARTED;
-			this.stopCaptureSession();
+			if(m_CaptureSessionState == OperationState.STOPPING)
+			{
+				Log.w(TAG, "onCaptureCompleted() - Stop capture session");
+				m_CaptureSessionState = OperationState.STARTED;
+				this.stopCaptureSession(false);
+			}
+			else if(this.get(PROP_PREVIEW_STATE) == OperationState.STOPPING)
+				this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
 		}
+	}
+	
+	
+	// Called when capture completes on driver side.
+	private void onCaptureSequenceCompleted()
+	{
+		Log.v(TAG, "onCaptureSequenceCompleted()");
+		
+		// update state
+		m_IsCaptureSequenceCompleted = true;
+		
+		// complete capture
+		if(this.get(PROP_CAPTURE_STATE) == OperationState.STOPPING)
+			this.onCaptureCompleted(true);
 	}
 	
 	
@@ -654,6 +656,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_PreviewSurface = null;
 		m_CaptureSession = null;
 		m_CaptureSessionState = OperationState.STOPPED;
+		
+		// clear request builders
+		m_PreviewRequestBuilder = null;
 		
 		// restart capture session
 		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTING)
@@ -701,28 +706,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// start preview
 		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTING)
-		{
-			Log.w(TAG, "onCaptureSessionConfigured() - Start preview for camera '" + m_Id + "'");
-			try
-			{
-				CaptureRequest.Builder builder;
-				if(m_VideoSurface == null)
-					builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-				else
-					builder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-				builder.addTarget(m_PreviewSurface);
-				if(m_VideoSurface != null)
-					builder.addTarget(m_VideoSurface);
-				session.setRepeatingRequest(builder.build(), m_PreviewCaptureCallback, this.getHandler());
-				this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTED);
-			}
-			catch(Throwable ex)
-			{
-				Log.e(TAG, "onCaptureSessionConfigured() - Fail to start preview for camera '" + m_Id + "'", ex);
-				//
-				this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
-			}
-		}
+			this.startPreviewRequest();
 	}
 	
 	
@@ -779,28 +763,35 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return;
 		}
 		
-		// print logs
-		Log.v(TAG, "onCaptureStarted() - Index : ", (m_CompletedFrameIndex + 1));
+		// update index
+		Log.v(TAG, "onCaptureStarted() - Index : ", m_ReceivedCaptureStartedCount);
+		++m_ReceivedCaptureStartedCount;
 		
 		// check index
-		if(m_TargetCapturedFrameCount > 0 && m_CompletedFrameIndex >= (m_TargetCapturedFrameCount - 1))
+		if(m_TargetCapturedFrameCount > 0 && m_ReceivedCaptureStartedCount > m_TargetCapturedFrameCount)
 		{
 			Log.w(TAG, "onCaptureStarted() - Unexpected call-back, drop");
 			return;
 		}
 		
 		// raise event
-		this.raise(EVENT_SHUTTER, CameraCaptureEventArgs.obtain(m_CaptureHandle, m_CompletedFrameIndex + 1, null));
+		this.raise(EVENT_SHUTTER, CameraCaptureEventArgs.obtain(m_CaptureHandle, m_ReceivedCaptureStartedCount - 1, null));
 	}
 	
 	
 	// Called when camera open failed.
+	@SuppressWarnings("incomplete-switch")
 	private void onDeviceError(CameraDevice camera, int error, boolean disconnected)
 	{
 		// check state
 		if(m_State != State.OPENING)
 		{
 			Log.w(TAG, "onDeviceError() - Current state is " + m_State);
+			
+			// raise event
+			this.raise(EVENT_ERROR, EventArgs.EMPTY);
+			
+			// close camera
 			this.close(camera);
 			if(this.get(PROP_IS_RELEASED))
 				this.changeState(State.UNAVAILABLE);
@@ -809,6 +800,19 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				this.raise(EVENT_OPEN_CANCELLED, EventArgs.EMPTY);
 				this.changeState(State.CLOSED);
 			}
+			
+			// stop capture
+			switch(this.get(PROP_CAPTURE_STATE))
+			{
+				case STARTING:
+				case STARTED:
+					Log.e(TAG, "onDeviceError() - Stop capture directly");
+					this.onCaptureCompleted(false);
+					break;
+			}
+			
+			// stop capture session
+			this.stopCaptureSession(true);
 			return;
 		}
 		
@@ -855,8 +859,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		Log.w(TAG, "onDeviceOpened() - Camera ID : '" + m_Id + "', Device : " + camera);
 		
-		// complete
+		// save device instance
 		m_Device = camera;
+		
+		// change state
 		this.changeState(State.OPENED);
 		
 		// start preview
@@ -883,7 +889,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			case STOPPING:
 				break;
 			default:
-				Log.e(TAG, "onPictureReceived() - Capture state is " + captureState);
+				Log.w(TAG, "onPictureReceived() - Capture state is " + captureState);
 				return;
 		}
 		if(m_CaptureHandle == null)
@@ -895,10 +901,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// copy image
 		byte[] picture = this.copyImage(image);
 		
-		Log.v(TAG, "onPictureReceived() - Index : ", (m_CompletedFrameIndex + 1), ", picture buffer size : ", picture.length);
+		// update index
+		++m_ReceivedPictureCount;
+		Log.v(TAG, "onPictureReceived() - Index : ", (m_ReceivedPictureCount - 1), ", picture buffer size : ", picture.length);
 		
 		// check index
-		if(m_TargetCapturedFrameCount > 0 && m_CompletedFrameIndex >= (m_TargetCapturedFrameCount - 1))
+		if(m_TargetCapturedFrameCount > 0 && m_ReceivedPictureCount > m_TargetCapturedFrameCount)
 		{
 			Log.w(TAG, "onPictureReceived() - Unexpected picture, drop");
 			return;
@@ -913,8 +921,44 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return;
 		}
 		
+		// handle received picture
+		this.onPictureReceived(captureResult, picture);
+	}
+	
+	
+	// Called when both picture and capture result are received.
+	private void onPictureReceived(CaptureResult result, byte[] picture)
+	{
+		// prepare completing capture
+		OperationState captureState = this.get(PROP_CAPTURE_STATE);
+		boolean failed = (picture == null || picture.length == 0);
+		boolean frameCountReached = (m_TargetCapturedFrameCount > 0 && m_ReceivedPictureCount >= m_TargetCapturedFrameCount);
+		if(captureState == OperationState.STARTED)
+		{
+			if(frameCountReached || failed)
+			{
+				if(failed)
+					Log.e(TAG, "onPictureReceived() - Capture failed, start completing capture");
+				else
+					Log.w(TAG, "onPictureReceived() - Frame count reached, start completing capture");
+				captureState = OperationState.STOPPING;
+				this.setReadOnly(PROP_CAPTURE_STATE, captureState);
+			}
+		}
+		
+		// raise event
+		if(!failed)
+		{
+			int pictureFormat = this.get(PROP_PICTURE_FORMAT);
+			Size pictureSize = this.get(PROP_PICTURE_SIZE);
+			this.raise(EVENT_PICTURE_RECEIVED, CameraCaptureEventArgs.obtain(m_CaptureHandle, (m_ReceivedPictureCount - 1), result, picture, pictureFormat, pictureSize));
+		}
+		else
+			this.raise(EVENT_CAPTURE_FAILED, CameraCaptureEventArgs.obtain(m_CaptureHandle, (m_ReceivedPictureCount - 1), result));
+		
 		// complete capture
-		this.onCaptureCompleted(captureResult, null, picture);
+		if((frameCountReached || failed) && captureState == OperationState.STOPPING && m_IsCaptureSequenceCompleted)
+			this.onCaptureCompleted(true);
 	}
 	
 	
@@ -979,7 +1023,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Prepare Surface for capture.
-	private Surface prepareSurface(Object receiver, Size captureSize)
+	private Surface prepareSurface(Object receiver)
 	{
 		Surface surface;
 		if(receiver instanceof SurfaceHolder)
@@ -1015,6 +1059,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
+		if(key == PROP_PREVIEW_RECEIVER)
+			return this.setPreviewReceiver(value);
 		if(key == PROP_VIDEO_SURFACE)
 			return this.setVideoSurface((Surface)value);
 		return super.set(key, value);
@@ -1045,9 +1091,60 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		if(m_CaptureSessionState != OperationState.STOPPING && m_CaptureSessionState != OperationState.STOPPED)
 		{
 			Log.w(TAG, "setPictureSize() - Restart capture session to apply new picture size");
-			this.stopCaptureSession();
+			this.stopCaptureSession(false);
 			this.startCaptureSession();
 		}
+		
+		// complete
+		return true;
+	}
+	
+	
+	// Set preview receiver.
+	private boolean setPreviewReceiver(Object receiver)
+	{
+		// check state
+		this.verifyAccess();
+		Object prevReceiver = this.get(PROP_PREVIEW_RECEIVER);
+		if(prevReceiver == receiver)
+			return false;
+		if(this.get(PROP_PREVIEW_STATE) != OperationState.STOPPED)
+		{
+			Log.e(TAG, "setPreviewReceiver() - Preview state is " + this.get(PROP_PREVIEW_STATE));
+			throw new RuntimeException("Cannot change preview receiver when preview state is not STOPPED.");
+		}
+		
+		// stop capture session
+		this.stopCaptureSession(false);
+		
+		// change preview Surface
+		if(m_PreviewRequestBuilder != null)
+		{
+			// remove old Surface
+			if(m_PreviewSurface != null)
+			{
+				m_PreviewRequestBuilder.removeTarget(m_PreviewSurface);
+				if(m_TempSurfaces.remove(m_PreviewSurface))
+					m_PreviewSurface.release();
+				m_PreviewSurface = null;
+			}
+			
+			// add new Surface
+			if(receiver != null)
+			{
+				Surface surface = this.prepareSurface(receiver);
+				if(surface != null)
+					m_PreviewRequestBuilder.addTarget(surface);
+				else
+				{
+					Log.e(TAG, "setPreviewReceiver() - Fail to prepare Surface");
+					throw new RuntimeException("Invalid preview receiver.");
+				}
+			}
+		}
+		
+		// apply new receiver
+		super.setReadOnly(PROP_PREVIEW_RECEIVER, receiver);
 		
 		// complete
 		return true;
@@ -1149,7 +1246,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// prepare preview surface
 		List<Surface> surfaces = new ArrayList<>();
-		m_PreviewSurface = this.prepareSurface(this.get(PROP_PREVIEW_RECEIVER), new Size(1280, 720));
+		m_PreviewSurface = this.prepareSurface(this.get(PROP_PREVIEW_RECEIVER));
 		if(m_PreviewSurface == null)
 		{
 			Log.e(TAG, "startCaptureSession() - Fail to prepare Surface for preview");
@@ -1168,6 +1265,24 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		{
 			Log.v(TAG, "startCaptureSession() - Video surface : ", m_VideoSurface);
 			surfaces.add(m_VideoSurface);
+		}
+		
+		// create request builders
+		try
+		{
+			if(m_VideoSurface == null)
+				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+			else
+			{
+				Log.v(TAG, "startCaptureSession() - Create request builder for video recording");
+				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+				m_PreviewRequestBuilder.addTarget(m_VideoSurface);
+			}
+			m_PreviewRequestBuilder.addTarget(m_PreviewSurface);
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "startCaptureSession() - Fail to create preview request builder", ex);
 		}
 		
 		// create session
@@ -1218,7 +1333,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// start capture session
 		if(m_State == State.OPENED)
 		{
-			if(!this.startCaptureSession())
+			if(m_CaptureSessionState == OperationState.STARTED)
+			{
+				this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTING);
+				return this.startPreviewRequest();
+			}
+			else if(!this.startCaptureSession())
 			{
 				Log.e(TAG, "startPreview() - Fail to start capture session");
 				return false;
@@ -1233,7 +1353,41 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
-	//
+	// Start preview request.
+	private boolean startPreviewRequest()
+	{
+		// check state
+		if(m_CaptureSessionState != OperationState.STARTED)
+		{
+			Log.e(TAG, "startPreviewRequest() - Capture session state is " + m_CaptureSessionState);
+			return false;
+		}
+		if(this.get(PROP_PREVIEW_STATE) != OperationState.STARTING)
+		{
+			Log.e(TAG, "startPreviewRequest() - Preview state is " + this.get(PROP_PREVIEW_STATE));
+			return false;
+		}
+		
+		Log.w(TAG, "startPreviewRequest() - Start preview request for camera '" + m_Id + "'");
+		
+		// start preview
+		try
+		{
+			m_CaptureSession.setRepeatingRequest(m_PreviewRequestBuilder.build(), m_PreviewCaptureCallback, this.getHandler());
+			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTED);
+			return true;
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "startPreviewRequest() - Fail to start preview for camera '" + m_Id + "'", ex);
+			//
+			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
+			return false;
+		}
+	}
+	
+	
+	// Stop capture.
 	private void stopCaptureInternal()
 	{
 		// check state
@@ -1264,7 +1418,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		{
 			try
 			{
-				m_CaptureSession.abortCaptures();
+				if(m_TargetCapturedFrameCount < 0)
+				{
+					Log.w(TAG, "stopCaptureInternal() - Stop repeating request");
+					m_CaptureSession.stopRepeating();
+					this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
+				}
+				else
+				{
+					//Log.w(TAG, "stopCaptureInternal() - Abort captures");
+					//m_CaptureSession.abortCaptures();
+				}
 			}
 			catch(Throwable ex)
 			{
@@ -1279,14 +1443,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Stop capture session.
-	private void stopCaptureSession()
+	private void stopCaptureSession(boolean stopDirectly)
 	{
 		// check state
 		switch(m_CaptureSessionState)
 		{
 			case STOPPED:
-			case STOPPING:
 				return;
+			case STOPPING:
+				if(!stopDirectly)
+					return;
+				break;
 			case STARTED:
 				break;
 			case STARTING:
@@ -1311,7 +1478,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				return;
 			case STARTING:
 				Log.w(TAG, "stopCaptureSession() - Stop while starting capture, stop capture directly");
-				this.onCaptureCompleted();
+				this.onCaptureCompleted(false);
 				break;
 			case STOPPING:
 				Log.w(TAG, "stopCaptureSession() - Wait for capture completion");
@@ -1319,10 +1486,23 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				return;
 		}
 		
+		// stop preview
+		switch(this.get(PROP_PREVIEW_STATE))
+		{
+			case STOPPED:
+			case STOPPING:
+				break;
+			default:
+				Log.w(TAG, "stopCaptureSession() - Stop preview directly");
+				this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPING);
+				break;
+		}
+		
 		// reset state
 		m_CaptureSessionState = OperationState.STOPPING;
 		m_CaptureSession.close();
-		//this.onCaptureSessionClosed(m_CaptureSession);
+		if(stopDirectly)
+			this.onCaptureSessionClosed(m_CaptureSession);
 	}
 	
 	
@@ -1347,8 +1527,44 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// change state
 		this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPING);
 		
-		// stop session
-		this.stopCaptureSession();
+		// stop capture
+		switch(this.get(PROP_CAPTURE_STATE))
+		{
+			case STOPPED:
+				break;
+			case STOPPING:
+				Log.w(TAG, "stopPreview() - Wait for capture stop");
+				return;
+			case STARTING:
+				Log.w(TAG, "stopPreview() - Cancel capture");
+				this.stopCaptureInternal();
+				break;
+			case STARTED:
+				Log.w(TAG, "stopPreview() - Stop capture and wait for stop");
+				this.stopCaptureInternal();
+				return;
+		}
+		
+		// stop capture session
+		this.stopCaptureSession(false);
+		
+		/*
+		// stop request
+		if(m_CaptureSession != null)
+		{
+			try
+			{
+				m_CaptureSession.stopRepeating();
+			} 
+			catch(Throwable ex)
+			{
+				Log.e(TAG, "stopPreview() - Fail to stop preview request", ex);
+			}
+			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
+		}
+		else
+			Log.e(TAG, "stopPreview() - No capture session to stop");
+		*/
 	}
 	
 	

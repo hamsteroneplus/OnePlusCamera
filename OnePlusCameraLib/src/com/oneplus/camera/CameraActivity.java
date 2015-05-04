@@ -148,7 +148,15 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		@Override
 		protected void onClose(int flags)
 		{
-			//
+			switch(this.getMediaType())
+			{
+				case PHOTO:
+					stopPhotoCapture(this);
+					break;
+				case VIDEO:
+					//
+					break;
+			}
 		}
 	}
 	
@@ -675,6 +683,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	protected void onBindingToCameraThreadEvents(List<EventKey<?>> keys)
 	{
+		keys.add(CameraThread.EVENT_CAMERA_ERROR);
 		keys.add(CameraThread.EVENT_DEFAULT_PHOTO_CAPTURE_COMPLETED);
 	}
 	
@@ -686,6 +695,20 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	protected void onBindingToCameraThreadProperties(List<PropertyKey<?>> keys)
 	{
 		keys.add(CameraThread.PROP_AVAILABLE_CAMERAS);
+	}
+	
+	
+	/**
+	 * Called when unexpected camera error occurred.
+	 * @param camera Camera.
+	 */
+	protected void onCameraError(Camera camera)
+	{
+		Log.e(TAG, "onCameraError() - Camera : " + camera);
+		
+		// finish directly
+		if(this.get(PROP_CAMERA) == camera)
+			this.finish();
 	}
 	
 	
@@ -727,7 +750,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	protected void onCameraThreadEventReceived(EventKey<?> key, EventArgs e)
 	{
-		if(key == CameraThread.EVENT_DEFAULT_PHOTO_CAPTURE_COMPLETED)
+		if(key == CameraThread.EVENT_CAMERA_ERROR)
+			this.onCameraError(((CameraEventArgs)e).getCamera());
+		else if(key == CameraThread.EVENT_DEFAULT_PHOTO_CAPTURE_COMPLETED)
 			this.onDefaultPhotoCaptureCompleted((CaptureEventArgs)e);
 	}
 	
@@ -1153,44 +1178,6 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	/**
-	 * Stop current primary camera preview.
-	 */
-	public final void stopCameraPreview()
-	{
-		this.stopCameraPreview(false);
-	}
-	
-	
-	// Stop camera preview.
-	private void stopCameraPreview(boolean sync)
-	{
-		// check camera
-		Camera camera = this.get(PROP_CAMERA);
-		if(camera == null)
-			return;
-		
-		// change capture state
-		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.READY)
-			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
-		if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.READY)
-			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
-		
-		// stop preview
-		int flags = (sync ? CameraThread.FLAG_SYNCHRONOUS : 0);
-		if(m_CameraThread != null)
-		{
-			if(!m_CameraThread.stopCameraPreview(camera, flags))
-			{
-				if(sync)
-					Log.e(TAG, "stopCameraPreview() - Fail to stop camera preview synchronously");
-				else
-					Log.e(TAG, "stopCameraPreview() - Fail to stop camera preview");
-			}
-		}
-	}
-	
-	
-	/**
 	 * Change current media type.
 	 * @param mediaType New media type.
 	 * @return Whether media type changes successfully or not.
@@ -1283,6 +1270,68 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// apply
 		this.setReadOnly(PROP_SETTINGS, settings);
 		return handle;
+	}
+	
+	
+	/**
+	 * Stop current primary camera preview.
+	 */
+	public final void stopCameraPreview()
+	{
+		this.stopCameraPreview(false);
+	}
+	
+	
+	// Stop camera preview.
+	private void stopCameraPreview(boolean sync)
+	{
+		// check camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+			return;
+		
+		// change capture state
+		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.READY)
+			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
+		if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.READY)
+			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
+		
+		// stop preview
+		int flags = (sync ? CameraThread.FLAG_SYNCHRONOUS : 0);
+		if(m_CameraThread != null)
+		{
+			if(!m_CameraThread.stopCameraPreview(camera, flags))
+			{
+				if(sync)
+					Log.e(TAG, "stopCameraPreview() - Fail to stop camera preview synchronously");
+				else
+					Log.e(TAG, "stopCameraPreview() - Fail to stop camera preview");
+			}
+		}
+	}
+	
+	
+	// Stop capturing photo.
+	private void stopPhotoCapture(CaptureHandleImpl handle)
+	{
+		// check state
+		this.verifyAccess();
+		
+		Log.w(TAG, "stopPhotoCapture() - Handle : " + handle);
+		
+		// cancel pending capture
+		if(m_PendingPhotoCaptureHandle == handle)
+		{
+			Log.w(TAG, "stopPhotoCapture() - Cancel pending capture");
+			m_PendingPhotoCaptureHandle = null;
+			return;
+		}
+		
+		// stop self-timer
+		//
+		
+		// stop capture
+		Handle.close(handle.internalCaptureHandle);
 	}
 	
 	

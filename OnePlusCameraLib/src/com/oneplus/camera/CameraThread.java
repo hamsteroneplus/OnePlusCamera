@@ -17,6 +17,7 @@ import android.os.Handler;
 import android.os.Message;
 
 import com.oneplus.base.BaseThread;
+import com.oneplus.base.EventArgs;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -90,6 +91,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	/**
+	 * Event raised when unexpected camera error occurred.
+	 */
+	public static final EventKey<CameraEventArgs> EVENT_CAMERA_ERROR = new EventKey<>("CameraError", CameraEventArgs.class, CameraThread.class);
+	/**
 	 * Event raised when default photo capture process completed.
 	 */
 	public static final EventKey<CaptureEventArgs> EVENT_DEFAULT_PHOTO_CAPTURE_COMPLETED = new EventKey<>("DefaultPhotoCaptureCompleted", CaptureEventArgs.class, CameraThread.class);
@@ -97,6 +102,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	// Private fields
 	private AudioManager m_AudioManager;
+	private Handle m_BurstCaptureSoundStreamHandle;
 	private final Context m_Context;
 	private Handle m_CameraCaptureHandle;
 	private CameraDeviceManager m_CameraDeviceManager;
@@ -105,6 +111,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private Handle m_DefaultShutterSoundHandle;
 	private volatile int m_DefaultShutterSoundResId;
 	private final VideoCaptureHandlerHandle m_DefaultVideoCaptureHandlerHandle = new VideoCaptureHandlerHandle(null);
+	private boolean m_IsCapturingBurstPhotos;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private volatile MediaType m_InitialMediaType;
 	private volatile ScreenSize m_InitialScreenSize;
@@ -150,6 +157,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Event handlers.
+	private final EventHandler<EventArgs> m_CameraErrorHandler = new EventHandler<EventArgs>()
+	{
+		@Override
+		public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e)
+		{
+			onCameraError((Camera)source);
+		}
+	};
 	private final EventHandler<CameraCaptureEventArgs> m_CaptureFailedHandler = new EventHandler<CameraCaptureEventArgs>()
 	{
 		@Override
@@ -508,6 +523,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		
 		// complete
+		m_IsCapturingBurstPhotos = (frameCount != 1);
 		return true;
 	}
 	
@@ -673,6 +689,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				// clear states
 				m_PhotoCaptureHandle = null;
 				m_PhotoCaptureHandlerHandle = null;
+				m_IsCapturingBurstPhotos = false;
 				
 				// update property
 				if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO)
@@ -742,17 +759,34 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			Camera camera = cameras.get(i);
 			if(!oldCameras.contains(camera))
+			{
 				camera.addCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
+				camera.addHandler(Camera.EVENT_ERROR, m_CameraErrorHandler);
+			}
 		}
 		for(int i = oldCameras.size() - 1 ; i >= 0 ; --i)
 		{
 			Camera camera = oldCameras.get(i);
 			if(!cameras.contains(camera))
+			{
 				camera.removeCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
+				camera.removeHandler(Camera.EVENT_ERROR, m_CameraErrorHandler);
+			}
 		}
 		
 		// update property
 		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
+	}
+	
+	
+	// Called when unexpected camera error occurred.
+	private void onCameraError(Camera camera)
+	{
+		if(this.get(PROP_CAMERA) == camera)
+		{
+			Log.e(TAG, "onCameraError() - Camera : " + camera);
+			this.raise(EVENT_CAMERA_ERROR, new CameraEventArgs(camera));
+		}
 	}
 	
 	
@@ -879,7 +913,17 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		// play shutter sound
 		if(e.getFrameIndex() == 0)
-			this.playDefaultShutterSound();
+		{
+			if(m_IsCapturingBurstPhotos)
+			{
+				//if(Handle.isValid(m_DefaultShutterSoundHandle))
+					//m_BurstCaptureSoundStreamHandle = m_AudioManager.playSound(m_DefaultShutterSoundHandle, AudioManager.FLAG_LOOP);
+				//else
+					//Log.w(TAG, "onShutter() - No sound for burst capture");
+			}
+			else
+				this.playDefaultShutterSound();
+		}
 	}
 	
 	
@@ -1538,6 +1582,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			{
 				Log.w(TAG, "stopCapturePhotoInternal() - Use default photo capture stop process");
 				m_CameraCaptureHandle = Handle.close(m_CameraCaptureHandle);
+				m_BurstCaptureSoundStreamHandle = Handle.close(m_BurstCaptureSoundStreamHandle);
 			}
 			else
 			{

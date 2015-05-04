@@ -77,6 +77,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	EventKey<CameraCaptureEventArgs> EVENT_CAPTURE_FAILED = new EventKey<>("CaptureFailed", CameraCaptureEventArgs.class, Camera.class);
 	/**
+	 * Event raised when unexpected camera error occurred.
+	 */
+	EventKey<EventArgs> EVENT_ERROR = new EventKey<>("Error", EventArgs.class, Camera.class);
+	/**
 	 * Event raised when camera open cancelled.
 	 */
 	EventKey<EventArgs> EVENT_OPEN_CANCELLED = new EventKey<>("OpenCancelled", EventArgs.class, Camera.class);
