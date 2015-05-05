@@ -80,7 +80,7 @@ public class Settings extends HandlerBaseObject
 			m_PrivateVolatileValues = null;
 			m_PrivateDefaultValues = null;
 		}
-		else if(isVolatile)
+		else if(!isVolatile)
 		{
 			m_PrivatePreferences = context.getSharedPreferences(name, Context.MODE_PRIVATE);
 			m_PrivateVolatileValues = null;
@@ -336,12 +336,14 @@ public class Settings extends HandlerBaseObject
 				SharedPreferences.Editor editor = m_GlobalPreferences.edit();
 				this.set(editor, key, value);
 				editor.apply();
+				return;
 			}
 			else if(!m_IsVolatile)
 			{
 				SharedPreferences.Editor editor = m_PrivatePreferences.edit();
 				this.set(editor, key, value);
 				editor.apply();
+				return;
 			}
 		}
 		synchronized(m_PrivateVolatileValues)

@@ -66,6 +66,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<Size> PROP_CAMERA_PREVIEW_SIZE = new PropertyKey<>("CameraPreviewSize", Size.class, CameraActivity.class, new Size(0, 0));
 	/**
+	 * Read-only property for current primary camera preview state.
+	 */
+	public static final PropertyKey<OperationState> PROP_CAMERA_PREVIEW_STATE = new PropertyKey<>("CameraPreviewState", OperationState.class, CameraActivity.class, OperationState.STOPPED);
+	/**
 	 * Read-only property to get root content view.
 	 */
 	public static final PropertyKey<View> PROP_CONTENT_VIEW = new PropertyKey<>("ContentView", View.class, CameraActivity.class, PropertyKey.FLAG_READONLY, null);
@@ -116,10 +120,13 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Constants
 	private static final int MSG_CAMERA_THREAD_EVENT_RAISED = -1;
 	private static final int MSG_CAMERA_THREAD_PROP_CHANGED = -2;
+	private static final int MSG_CAMERA_PREVIEW_START_FAILED = -10;
+	private static final int MSG_CAMERA_PREVIEW_STARTED = -11;
 	
 	
 	// Private fields
 	private CameraThread m_CameraThread;
+	private OperationState m_CameraPreviewState = OperationState.STOPPED;
 	private ComponentManager m_ComponentManager;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private boolean m_IsCameraPreviewReceiverReady;
@@ -448,6 +455,20 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Change preview state.
+	private OperationState changeCameraPreviewState(OperationState state)
+	{
+		OperationState oldState = m_CameraPreviewState;
+		if(oldState != state)
+		{
+			m_CameraPreviewState = state;
+			this.notifyPropertyChanged(PROP_CAMERA_PREVIEW_STATE, oldState, state);
+			return m_CameraPreviewState;
+		}
+		return oldState;
+	}
+	
+	
 	/**
 	 * Complete media capture process.
 	 * @param handle Capture handle returned from {@link #capturePhoto(int, int) capturePhoto}.
@@ -531,6 +552,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		if(m_ComponentManager != null)
 			return m_ComponentManager.findComponents(componentType, this);
 		return (TComponent[])new Component[0];
+	}
+	
+	
+	// Get property value.
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TValue> TValue get(PropertyKey<TValue> key)
+	{
+		if(key == PROP_CAMERA_PREVIEW_STATE)
+			return (TValue)m_CameraPreviewState;
+		return super.get(key);
 	}
 	
 	
@@ -622,6 +654,14 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		switch(msg.what)
 		{
+			case MSG_CAMERA_PREVIEW_START_FAILED:
+				this.onCameraPreviewStartFailed((Camera)msg.obj);
+				break;
+				
+			case MSG_CAMERA_PREVIEW_STARTED:
+				this.onCameraPreviewStarted((Camera)msg.obj);
+				break;
+			
 			case MSG_CAMERA_THREAD_EVENT_RAISED:
 			{
 				Object[] array = (Object[])msg.obj;
@@ -636,6 +676,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				break;
 			}
 		}
+	}
+	
+	
+	/**
+	 * Check whether current instance is launched in service mode or not.
+	 * @return Launched in service mode or not.
+	 */
+	public boolean isServiceMode()
+	{
+		return false;
 	}
 	
 	
@@ -740,6 +790,77 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// start preview
 		this.startCameraPreview();
+	}
+	
+	
+	/**
+	 * Called when camera preview started.
+	 */
+	protected void onCameraPreviewStarted()
+	{
+		// change state
+		if(this.changeCameraPreviewState(OperationState.STARTED) != OperationState.STARTED)
+		{
+			Log.e(TAG, "onCameraPreviewStarted() - Process interrupted");
+			return;
+		}
+		
+		Log.w(TAG, "onCameraPreviewStarted()");
+		
+		// change capture state
+		if(this.get(PROP_MEDIA_TYPE) == MediaType.PHOTO && this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.PREPARING)
+			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
+		if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO && this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.PREPARING)
+			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
+	}
+	
+	
+	// Called when camera preview started.
+	private void onCameraPreviewStarted(Camera camera)
+	{
+		// check camera
+		if(this.get(PROP_CAMERA) != camera)
+			return;
+		
+		// check state
+		if(m_CameraPreviewState != OperationState.STARTING)
+		{
+			Log.w(TAG, "onCameraPreviewStarted() - Preview state is " + m_CameraPreviewState);
+			return;
+		}
+		
+		// complete preview start process
+		this.onCameraPreviewStarted();
+	}
+	
+	
+	/**
+	 * Called when camera preview start failed.
+	 */
+	protected void onCameraPreviewStartFailed()
+	{
+		Log.e(TAG, "onCameraPreviewStartFailed()");
+		
+		this.changeCameraPreviewState(OperationState.STOPPED);
+	}
+	
+	
+	// Called when camera preview start failed.
+	private void onCameraPreviewStartFailed(Camera camera)
+	{
+		// check camera
+		if(this.get(PROP_CAMERA) != camera)
+			return;
+		
+		// check state
+		if(m_CameraPreviewState != OperationState.STARTING)
+		{
+			Log.w(TAG, "onCameraPreviewStartFailed() - Preview state is " + m_CameraPreviewState);
+			return;
+		}
+		
+		// complete preview start process
+		this.onCameraPreviewStartFailed();
 	}
 	
 	
@@ -902,6 +1023,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_SIZE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PHOTO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_SETTINGS, LOG_PROPERTY_CHANGE);
 		
@@ -1141,6 +1263,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// check state
 		this.verifyAccess();
+		switch(m_CameraPreviewState)
+		{
+			case STOPPED:
+				break;
+			case STOPPING:
+				Log.w(TAG, "startCameraPreview() - Start while stopping");
+				break;
+			case STARTING:
+			case STARTED:
+				return true;
+		}
 		if(!this.canStartCameraPreview())
 		{
 			Log.w(TAG, "startCameraPreview() - Cannot start preview in current state");
@@ -1148,29 +1281,85 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// check camera
-		Camera camera = this.get(PROP_CAMERA);
+		final Camera camera = this.get(PROP_CAMERA);
 		if(camera == null)
 		{
 			Log.w(TAG, "startCameraPreview() - No camera to start preview");
 			return false;
 		}
 		
-		// start preview
-		if(!m_CameraThread.startCameraPreview(camera, m_Viewfinder.get(Viewfinder.PROP_PREVIEW_RECEIVER)))
+		// change state
+		if(this.changeCameraPreviewState(OperationState.STARTING) != OperationState.STARTING)
 		{
-			Log.e(TAG, "startCameraPreview() - Fail to start camera preview");
+			Log.e(TAG, "startCameraPreview() - Process interrupted");
+			return false;
+		}
+		
+		// start preview
+		final Object previewReceiver = m_Viewfinder.get(Viewfinder.PROP_PREVIEW_RECEIVER);
+		if(!HandlerUtils.post(m_CameraThread, new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				switch(camera.get(Camera.PROP_PREVIEW_STATE))
+				{
+					case STARTING:
+						break;
+					case STARTED:
+						HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_STARTED, 0, 0, camera);
+						break;
+					default:
+						if(m_CameraThread.startCameraPreview(camera, previewReceiver))
+						{
+							switch(camera.get(Camera.PROP_PREVIEW_STATE))
+							{
+								case STARTED:
+									HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_STARTED, 0, 0, camera);
+									break;
+								case STARTING:
+									Log.v(TAG, "startCameraPreview() - Wait for camera preview start");
+									camera.addCallback(Camera.PROP_PREVIEW_STATE, new PropertyChangedCallback<OperationState>()
+									{
+										@Override
+										public void onPropertyChanged(PropertySource source, PropertyKey<OperationState> key, PropertyChangeEventArgs<OperationState> e)
+										{
+											if(e.getNewValue() == OperationState.STARTED)
+												HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_STARTED, 0, 0, camera);
+											else
+											{
+												Log.e(TAG, "startCameraPreview() - Fail to start camera preview");
+												HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_START_FAILED, 0, 0, camera);
+											}
+											camera.removeCallback(Camera.PROP_PREVIEW_STATE, this);
+										}
+									});
+									break;
+								default:
+									Log.e(TAG, "startCameraPreview() - Fail to start camera preview");
+									HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_START_FAILED, 0, 0, camera);
+									break;
+							}
+						}
+						else
+						{
+							Log.e(TAG, "startCameraPreview() - Fail to start camera preview");
+							HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_START_FAILED, 0, 0, camera);
+						}
+						break;
+				}
+			}
+		}))
+		{
+			Log.e(TAG, "startCameraPreview() - Fail to perform cross-thread operation");
+			if(m_CameraPreviewState == OperationState.STARTING)
+				this.changeCameraPreviewState(OperationState.STOPPED);
 			return false;
 		}
 		
 		// change state and create components with NORMAL priority
 		if(this.setReadOnly(PROP_IS_LAUNCHING, false))
 			m_ComponentManager.createComponents(ComponentCreationPriority.NORMAL, this);
-		
-		// change capture state
-		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.PREPARING)
-			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
-		if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO && this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.PREPARING)
-			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
 		
 		// complete
 		return true;
@@ -1245,6 +1434,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Set read-only property value.
+	@Override
+	protected <TValue> boolean setReadOnly(PropertyKey<TValue> key, TValue value)
+	{
+		if(key == PROP_CAMERA_PREVIEW_STATE)
+			throw new IllegalAccessError("Cannot change camera preview state.");
+		return super.setReadOnly(key, value);
+	}
+	
+	
 	/**
 	 * Change current settings.
 	 * @param settings New settings to apply.
@@ -1285,16 +1484,40 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Stop camera preview.
 	private void stopCameraPreview(boolean sync)
 	{
+		// check state
+		this.verifyAccess();
+		switch(m_CameraPreviewState)
+		{
+			case STARTED:
+				break;
+			case STARTING:
+				Log.w(TAG, "stopCameraPreview() - Stop while starting");
+				break;
+			case STOPPING:
+			case STOPPED:
+				return;
+		}
+		
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
 		if(camera == null)
+		{
+			this.changeCameraPreviewState(OperationState.STOPPED);
 			return;
+		}
 		
 		// change capture state
 		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.READY)
 			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
 		if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.READY)
 			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
+		
+		// change state
+		if(this.changeCameraPreviewState(OperationState.STOPPING) != OperationState.STOPPING)
+		{
+			Log.w(TAG, "stopCameraPreview() - Process interrupted");
+			return;
+		}
 		
 		// stop preview
 		int flags = (sync ? CameraThread.FLAG_SYNCHRONOUS : 0);
@@ -1308,6 +1531,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 					Log.e(TAG, "stopCameraPreview() - Fail to stop camera preview");
 			}
 		}
+		
+		// change state
+		if(m_CameraPreviewState == OperationState.STOPPING)
+			this.changeCameraPreviewState(OperationState.STOPPED);
 	}
 	
 	
