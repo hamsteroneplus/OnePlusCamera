@@ -13,6 +13,7 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerObject;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.Rotation;
 
 /**
  * Camera device interface.
@@ -35,6 +36,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Property to get or set captured picture format defined in {@link ImageFormat}.
 	 */
 	PropertyKey<Integer> PROP_PICTURE_FORMAT = new PropertyKey<>("PictureFormat", Integer.class, Camera.class, ImageFormat.JPEG);
+	/**
+	 * Property to get or set captured picture rotation.
+	 */
+	PropertyKey<Rotation> PROP_PICTURE_ROTATION = new PropertyKey<>("PictureRotation", Rotation.class, Camera.class, Rotation.LANDSCAPE);
 	/**
 	 * Property to get or set captured picture size.
 	 */

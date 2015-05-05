@@ -150,6 +150,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final Queue<CaptureResult> m_ReceivedCaptureStartedResults = new LinkedList<>();
 	private int m_ReceivedPictureCount;
 	private final Queue<byte[]> m_ReceivedPictures = new LinkedList<>();
+	private final int m_SensorOrientation;
 	private volatile State m_State = State.CLOSED;
 	private int m_TargetCapturedFrameCount;
 	private final List<Surface> m_TempSurfaces = new ArrayList<>();
@@ -192,6 +193,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// get video sizes
 		this.setReadOnly(PROP_VIDEO_SIZES, Arrays.asList(streamConfigMap.getOutputSizes(MediaRecorder.class)));
+		
+		// get sensor orientation
+		m_SensorOrientation = m_Characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
@@ -319,6 +323,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			builder.addTarget(m_PictureSurface);
 			if(m_VideoSurface != null)
 				builder.addTarget(m_VideoSurface);
+			
+			// set rotation
+			int deviceOrientation = this.get(PROP_PICTURE_ROTATION).getDeviceOrientation();
+			if(m_LensFacing == LensFacing.FRONT)
+				deviceOrientation = -deviceOrientation;
+			builder.set(CaptureRequest.JPEG_ORIENTATION, (m_SensorOrientation + deviceOrientation + 360) % 360);
 			
 			// create request
 			m_PictureCaptureRequest = builder.build();

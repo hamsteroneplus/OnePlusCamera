@@ -28,6 +28,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.base.Rotation;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.base.component.Component;
 import com.oneplus.base.component.ComponentBuilder;
@@ -72,6 +73,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	 * Read-only property for current primary camera preview state.
 	 */
 	public static final PropertyKey<OperationState> PROP_CAMERA_PREVIEW_STATE = new PropertyKey<>("CameraPreviewState", OperationState.class, CameraThread.class, OperationState.STOPPED);
+	/**
+	 * Property to get or set current media capture rotation.
+	 */
+	public static final PropertyKey<Rotation> PROP_CAPTURE_ROTATION = new PropertyKey<>("CaptureRotation", Rotation.class, CameraThread.class, PropertyKey.FLAG_NOT_NULL, Rotation.PORTRAIT);
 	/**
 	 * Read-only property for current captured media type.
 	 */
@@ -454,6 +459,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		Log.w(TAG, "capturePhotoInternal() - Handle : " + handle);
 		
+		// check camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "capturePhotoInternal() - No primary camera");
+			return false;
+		}
+		
 		// change state
 		this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.STARTING);
 		
@@ -461,7 +474,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		PhotoCaptureHandlerHandle handlerHandle = null;
 		try
 		{
-			Camera camera = this.get(PROP_CAMERA);
+			// prepare parameters
+			camera.set(Camera.PROP_PICTURE_ROTATION, this.get(PROP_CAPTURE_ROTATION));
+			
+			// capture
 			for(int i = m_PhotoCaptureHandlerHandles.size() - 1 ; i >= 0 ; --i)
 			{
 				handlerHandle = m_PhotoCaptureHandlerHandles.get(i);
@@ -952,6 +968,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_CAPTURE_ROTATION, LOG_PROPERTY_CHANGE);
 		
 		// create handle lists
 		m_PhotoCaptureHandlerHandles = new ArrayList<>();

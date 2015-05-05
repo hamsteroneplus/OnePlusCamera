@@ -18,6 +18,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.base.Rotation;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.base.component.Component;
 import com.oneplus.base.component.ComponentBuilder;
@@ -30,13 +31,13 @@ import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.media.ResolutionManagerBuilder;
 import com.oneplus.camera.ui.Viewfinder;
 import com.oneplus.camera.ui.ViewfinderBuilder;
-
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
 import android.util.Size;
+import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 
@@ -90,6 +91,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<PhotoCaptureState> PROP_PHOTO_CAPTURE_STATE = new PropertyKey<>("PhotoCaptureState", PhotoCaptureState.class, CameraActivity.class, PhotoCaptureState.PREPARING);
 	/**
+	 * Read-only property for current UI rotation.
+	 */
+	public static final PropertyKey<Rotation> PROP_ROTATION = new PropertyKey<>("Rotation", Rotation.class, CameraActivity.class, Rotation.PORTRAIT);
+	/**
 	 * Read-only property for screen size.
 	 */
 	public static final PropertyKey<ScreenSize> PROP_SCREEN_SIZE = new PropertyKey<>("ScreenSize", ScreenSize.class, CameraActivity.class, ScreenSize.EMPTY);
@@ -130,9 +135,13 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private ComponentManager m_ComponentManager;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private boolean m_IsCameraPreviewReceiverReady;
+	private boolean m_IsOrientationListenerStarted;
+	private int m_LastDeviceOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
+	private OrientationEventListener m_OrientationListener;
 	private CaptureHandleImpl m_PendingPhotoCaptureHandle;
 	private CaptureHandleImpl m_PhotoCaptureHandle;
 	private ResolutionManager m_ResolutionManager;
+	private Rotation m_Rotation = Rotation.PORTRAIT;
 	private final List<SettingsHandle> m_SettingsHandles = new ArrayList<>();
 	private CaptureHandleImpl m_VideoCaptureHandle;
 	private Viewfinder m_Viewfinder;
@@ -562,6 +571,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		if(key == PROP_CAMERA_PREVIEW_STATE)
 			return (TValue)m_CameraPreviewState;
+		if(key == PROP_ROTATION)
+			return (TValue)m_Rotation;
 		return super.get(key);
 	}
 	
@@ -1025,6 +1036,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_SIZE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PHOTO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_ROTATION, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_SETTINGS, LOG_PROPERTY_CHANGE);
 		
 		// create global settings
@@ -1120,6 +1132,40 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	/**
+	 * Called when device orientation changes.
+	 * @param orientation Device orientation [0-359], or {@link OrientationEventListener#ORIENTATION_UNKNOWN}.
+	 */
+	protected void onDeviceOrientationChanged(int orientation)
+	{
+		// check orientation
+		if(orientation == OrientationEventListener.ORIENTATION_UNKNOWN)
+		{
+			Log.w(TAG, "onDeviceOrientationChanged() - Unknown orientation");
+			return;
+		}
+		m_LastDeviceOrientation = orientation;
+		
+		// check difference with current rotation
+		int diff = (orientation - m_Rotation.getDeviceOrientation());
+		if(diff > 180)
+			diff = (360 - diff);
+		else if(diff < -180)
+			diff = (360 + diff);
+		if(Math.abs(diff) <= 60)
+			return;
+		
+		// convert to rotation
+		Rotation prevRotation = m_Rotation;
+		m_Rotation = Rotation.fromDeviceOrientation(orientation);
+		if(prevRotation == m_Rotation)
+			return;
+		
+		// handle rotation change
+		this.onRotationChanged(prevRotation, m_Rotation);
+	}
+	
+	
 	// Called when pausing.
 	@Override
 	protected void onPause()
@@ -1133,6 +1179,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// close all cameras
 		if(m_CameraThread != null)
 			m_CameraThread.closeCameras();
+		
+		// stop orientation listener
+		this.stopOrientationListener();
 	}
 	
 	
@@ -1149,6 +1198,31 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// start preview
 		if(this.canStartCameraPreview())
 			this.startCameraPreview();
+		
+		// start orientation listener
+		this.startOrientationListener();
+	}
+	
+	
+	/**
+	 * Called when UI rotation changes.
+	 * @param prevRotation Previous rotation.
+	 * @param newRotation New rotation.
+	 */
+	protected void onRotationChanged(final Rotation prevRotation, final Rotation newRotation)
+	{
+		// notify camera thread
+		HandlerUtils.post(m_CameraThread, new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				m_CameraThread.set(CameraThread.PROP_CAPTURE_ROTATION, newRotation);
+			}
+		});
+		
+		// notify property change
+		this.notifyPropertyChanged(PROP_ROTATION, prevRotation, newRotation);
 	}
 	
 	
@@ -1252,6 +1326,114 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		super.setContentView(view, params);
 		Log.v(TAG, "setContentView() - Set content view [end]");
 		this.onContentViewSet(view);
+	}
+	
+	
+	/**
+	 * Change current media type.
+	 * @param mediaType New media type.
+	 * @return Whether media type changes successfully or not.
+	 */
+	public boolean setMediaType(MediaType mediaType)
+	{
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_MEDIA_TYPE) == mediaType)
+			return true;
+		Log.w(TAG, "setMediaType() - Media type : " + mediaType);
+		switch(mediaType)
+		{
+			case PHOTO:
+			{
+				switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+				{
+					case PREPARING:
+					case READY:
+						break;
+					default:
+						Log.e(TAG, "setMediaType() - Current video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+						return false;
+				}
+				break;
+			}
+			
+			case VIDEO:
+			{
+				switch(this.get(PROP_PHOTO_CAPTURE_STATE))
+				{
+					case PREPARING:
+					case READY:
+						break;
+					default:
+						Log.e(TAG, "setMediaType() - Current photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+						return false;
+				}
+				break;
+			}
+			
+			default:
+				Log.e(TAG, "setMediaType() - Unknown media type : " + mediaType);
+				return false;
+		}
+		
+		// change media type
+		if(this.get(PROP_IS_CAMERA_THREAD_STARTED))
+		{
+			if(!m_CameraThread.setMediaType(mediaType))
+			{
+				Log.e(TAG, "setMediaType() - Fail to change media type");
+				return false;
+			}
+		}
+		else
+			Log.w(TAG, "setMediaType() - Change media type before camera thread start");
+		this.setReadOnly(PROP_MEDIA_TYPE, mediaType);
+		
+		// select preview size
+		this.selectCameraPreviewSize();
+		
+		// complete
+		return true;
+	}
+	
+	
+	// Set read-only property value.
+	@Override
+	protected <TValue> boolean setReadOnly(PropertyKey<TValue> key, TValue value)
+	{
+		if(key == PROP_CAMERA_PREVIEW_STATE)
+			throw new IllegalAccessError("Cannot change camera preview state.");
+		if(key == PROP_ROTATION)
+			throw new IllegalAccessError("Cannot change UI rotation.");
+		return super.setReadOnly(key, value);
+	}
+	
+	
+	/**
+	 * Change current settings.
+	 * @param settings New settings to apply.
+	 * @return Handle to this settings.
+	 */
+	public final Handle setSettings(Settings settings)
+	{
+		// check state
+		this.verifyAccess();
+		
+		// check parameter
+		if(settings == null)
+		{
+			Log.e(TAG, "setSettings() - No settings.");
+			return null;
+		}
+		
+		// create handle
+		SettingsHandle handle = new SettingsHandle(settings);
+		m_SettingsHandles.add(handle);
+		Log.w(TAG, "setSettings() - Create handle : " + handle);
+		
+		// apply
+		this.setReadOnly(PROP_SETTINGS, settings);
+		return handle;
 	}
 	
 	
@@ -1366,109 +1548,38 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
-	/**
-	 * Change current media type.
-	 * @param mediaType New media type.
-	 * @return Whether media type changes successfully or not.
-	 */
-	public boolean setMediaType(MediaType mediaType)
+	// Start orientation listener.
+	private void startOrientationListener()
 	{
 		// check state
-		this.verifyAccess();
-		if(this.get(PROP_MEDIA_TYPE) == mediaType)
-			return true;
-		Log.w(TAG, "setMediaType() - Media type : " + mediaType);
-		switch(mediaType)
+		if(m_IsOrientationListenerStarted)
+			return;
+		switch(this.get(PROP_STATE))
 		{
-			case PHOTO:
-			{
-				switch(this.get(PROP_VIDEO_CAPTURE_STATE))
-				{
-					case PREPARING:
-					case READY:
-						break;
-					default:
-						Log.e(TAG, "setMediaType() - Current video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
-						return false;
-				}
+			case RESUMING:
+			case RUNNING:
 				break;
-			}
-			
-			case VIDEO:
-			{
-				switch(this.get(PROP_PHOTO_CAPTURE_STATE))
-				{
-					case PREPARING:
-					case READY:
-						break;
-					default:
-						Log.e(TAG, "setMediaType() - Current photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
-						return false;
-				}
-				break;
-			}
-			
 			default:
-				Log.e(TAG, "setMediaType() - Unknown media type : " + mediaType);
-				return false;
+				return;
 		}
 		
-		// change media type
-		if(this.get(PROP_IS_CAMERA_THREAD_STARTED))
+		// create listener
+		if(m_OrientationListener == null)
 		{
-			if(!m_CameraThread.setMediaType(mediaType))
+			m_OrientationListener = new OrientationEventListener(this)
 			{
-				Log.e(TAG, "setMediaType() - Fail to change media type");
-				return false;
-			}
-		}
-		else
-			Log.w(TAG, "setMediaType() - Change media type before camera thread start");
-		this.setReadOnly(PROP_MEDIA_TYPE, mediaType);
-		
-		// select preview size
-		this.selectCameraPreviewSize();
-		
-		// complete
-		return true;
-	}
-	
-	
-	// Set read-only property value.
-	@Override
-	protected <TValue> boolean setReadOnly(PropertyKey<TValue> key, TValue value)
-	{
-		if(key == PROP_CAMERA_PREVIEW_STATE)
-			throw new IllegalAccessError("Cannot change camera preview state.");
-		return super.setReadOnly(key, value);
-	}
-	
-	
-	/**
-	 * Change current settings.
-	 * @param settings New settings to apply.
-	 * @return Handle to this settings.
-	 */
-	public final Handle setSettings(Settings settings)
-	{
-		// check state
-		this.verifyAccess();
-		
-		// check parameter
-		if(settings == null)
-		{
-			Log.e(TAG, "setSettings() - No settings.");
-			return null;
+				@Override
+				public void onOrientationChanged(int orientation)
+				{
+					onDeviceOrientationChanged(orientation);
+				}
+			};
 		}
 		
-		// create handle
-		SettingsHandle handle = new SettingsHandle(settings);
-		m_SettingsHandles.add(handle);
-		Log.w(TAG, "setSettings() - Create handle : " + handle);
-		
-		// apply
-		this.setReadOnly(PROP_SETTINGS, settings);
-		return handle;
+		// start listener
+		Log.v(TAG, "startOrientationListener()");
+		m_OrientationListener.enable();
+		m_IsOrientationListenerStarted = true;
 	}
 	
 	
@@ -1535,6 +1646,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// change state
 		if(m_CameraPreviewState == OperationState.STOPPING)
 			this.changeCameraPreviewState(OperationState.STOPPED);
+	}
+	
+	
+	// Stop device orientation listener.
+	private void stopOrientationListener()
+	{
+		if(!m_IsOrientationListenerStarted || m_OrientationListener == null)
+			return;
+		Log.v(TAG, "stopOrientationListener()");
+		m_OrientationListener.disable();
+		m_IsOrientationListenerStarted = false;
 	}
 	
 	
