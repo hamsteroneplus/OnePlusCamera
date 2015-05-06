@@ -187,6 +187,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				}
 			}
 		});
+		cameraActivity.addCallback(CameraActivity.PROP_VIDEO_CAPTURE_STATE, new PropertyChangedCallback<VideoCaptureState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<VideoCaptureState> key, PropertyChangeEventArgs<VideoCaptureState> e)
+			{
+				updateButtonFunctions(true);
+			}
+		});
 		
 		// setup initial button states
 		this.updateButtonFunctions(true);
@@ -194,39 +202,63 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	
 	
 	// Called when primary button pressed.
+	@SuppressWarnings("incomplete-switch")
 	private void onPrimaryButtonPressed()
 	{
-		//
-		HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
+		switch(m_PrimaryButtonFunction)
+		{
+			case CAPTURE_PHOTO:
+				HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
+				break;
+		}
 	}
 	
 	
 	// Called when primary button released.
 	private void onPrimaryButtonReleased()
 	{
-		/*
-		if(Handle.isValid(m_VideoCaptureHandle))
-			m_VideoCaptureHandle = Handle.close(m_VideoCaptureHandle);
-		else
-			m_VideoCaptureHandle = this.getCameraThread().captureVideo();
-		*/
-		
-		//if(true) return;
 		// cancel triggering burst shots
 		HandlerUtils.removeMessages(this, MSG_START_BURST_CAPTURE);
 		
-		// take single shot or stop burst shots
-		if(!Handle.isValid(m_PhotoCaptureHandle))
+		// trigger capture
+		switch(m_PrimaryButtonFunction)
 		{
-			m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto();
-			if(!Handle.isValid(m_PhotoCaptureHandle))
-				Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture photo");
-		}
-		else if(m_IsCapturingBurstPhotos)
-		{
-			Log.w(TAG, "onPrimaryButtonReleased() - Stop burst shots");
-			m_IsCapturingBurstPhotos = false;
-			m_PhotoCaptureHandle = Handle.close(m_PhotoCaptureHandle);
+			case CAPTURE_PHOTO:
+			{
+				// take single shot or stop burst shots
+				if(!Handle.isValid(m_PhotoCaptureHandle))
+				{
+					m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto();
+					if(!Handle.isValid(m_PhotoCaptureHandle))
+						Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture photo");
+				}
+				else if(m_IsCapturingBurstPhotos)
+				{
+					Log.w(TAG, "onPrimaryButtonReleased() - Stop burst shots");
+					m_IsCapturingBurstPhotos = false;
+					m_PhotoCaptureHandle = Handle.close(m_PhotoCaptureHandle);
+				}
+				break;
+			}
+			case CAPTURE_VIDEO:
+				switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+				{
+					case READY:
+						m_VideoCaptureHandle = this.getCameraActivity().captureVideo();
+						if(!Handle.isValid(m_VideoCaptureHandle))
+							Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture video");
+						break;
+					case PAUSED:
+					case CAPTURING:
+						m_VideoCaptureHandle = Handle.close(m_VideoCaptureHandle);
+						break;
+					default:
+						break;
+				}
+				break;
+			case PAUSE_RESUME_VIDEO:
+				//
+				break;
 		}
 	}
 	

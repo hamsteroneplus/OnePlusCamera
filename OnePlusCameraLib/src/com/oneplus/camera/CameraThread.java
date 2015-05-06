@@ -103,6 +103,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	 * Event raised when default photo capture process completed.
 	 */
 	public static final EventKey<CaptureEventArgs> EVENT_DEFAULT_PHOTO_CAPTURE_COMPLETED = new EventKey<>("DefaultPhotoCaptureCompleted", CaptureEventArgs.class, CameraThread.class);
+	/**
+	 * Event raised when default video capture process completed.
+	 */
+	public static final EventKey<CaptureEventArgs> EVENT_DEFAULT_VIDEO_CAPTURE_COMPLETED = new EventKey<>("DefaultVideoCaptureCompleted", CaptureEventArgs.class, CameraThread.class);
 	
 	
 	// Private fields
@@ -1699,6 +1703,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		Camera camera = this.get(PROP_CAMERA);
 		camera.set(Camera.PROP_VIDEO_SURFACE, null);
+		
+		this.raise(EVENT_DEFAULT_VIDEO_CAPTURE_COMPLETED, new CaptureEventArgs(handle));
+		
 		if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STOPPING)
 		{
 			Log.w(TAG, "stopVideoCaptureInternal() - Release media recorder after preview ready");
