@@ -1,5 +1,7 @@
 package com.oneplus.camera;
 
+import com.oneplus.camera.media.MediaType;
+
 /**
  * Base class for camera application component.
  */
@@ -7,6 +9,7 @@ public abstract class CameraComponent extends CameraThreadComponent
 {
 	// Private fields
 	private final CameraActivity m_CameraActivity;
+	private final boolean m_IsCameraThreadComponent;
 	
 	
 	/**
@@ -17,8 +20,9 @@ public abstract class CameraComponent extends CameraThreadComponent
 	 */
 	protected CameraComponent(String name, CameraActivity activity, boolean hasHandler)
 	{
-		super(name, activity.getCameraThread(), hasHandler);
+		super(name, activity, activity.getCameraThread(), hasHandler);
 		m_CameraActivity = activity;
+		m_IsCameraThreadComponent = false;
 	}
 	
 	
@@ -32,19 +36,17 @@ public abstract class CameraComponent extends CameraThreadComponent
 	{
 		super(name, cameraThread, hasHandler);
 		m_CameraActivity = (CameraActivity)cameraThread.getContext();
+		m_IsCameraThreadComponent = true;
 	}
 	
 	
-	/**
-	 * Get current primary camera.
-	 * @return Primary camera.
-	 */
-	protected final Camera getCamera()
+	// Get current primary camera.
+	@Override
+	protected Camera getCamera()
 	{
-		if(m_CameraActivity.isDependencyThread())
-			return m_CameraActivity.get(CameraActivity.PROP_CAMERA);
-		else
-			return this.getCameraThread().get(CameraThread.PROP_CAMERA);
+		if(m_IsCameraThreadComponent)
+			return super.getCamera();
+		return m_CameraActivity.get(CameraActivity.PROP_CAMERA);
 	}
 	
 	
@@ -55,6 +57,16 @@ public abstract class CameraComponent extends CameraThreadComponent
 	public final CameraActivity getCameraActivity()
 	{
 		return m_CameraActivity;
+	}
+	
+	
+	// Get current capture media type.
+	@Override
+	protected MediaType getMediaType()
+	{
+		if(m_IsCameraThreadComponent)
+			return super.getMediaType();
+		return m_CameraActivity.get(CameraActivity.PROP_MEDIA_TYPE);
 	}
 	
 	

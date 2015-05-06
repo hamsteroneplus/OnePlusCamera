@@ -39,7 +39,7 @@ public interface Camera extends BaseObject, HandlerObject
 	/**
 	 * Property to get or set captured picture rotation.
 	 */
-	PropertyKey<Rotation> PROP_PICTURE_ROTATION = new PropertyKey<>("PictureRotation", Rotation.class, Camera.class, Rotation.LANDSCAPE);
+	PropertyKey<Rotation> PROP_PICTURE_ROTATION = new PropertyKey<>("PictureRotation", Rotation.class, Camera.class, PropertyKey.FLAG_NOT_NULL, Rotation.LANDSCAPE);
 	/**
 	 * Property to get or set captured picture size.
 	 */

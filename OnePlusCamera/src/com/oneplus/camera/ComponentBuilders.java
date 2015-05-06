@@ -4,6 +4,7 @@ import com.oneplus.base.component.ComponentBuilder;
 import com.oneplus.camera.capturemode.CaptureModeManagerBuilder;
 import com.oneplus.camera.media.AudioManagerBuilder;
 import com.oneplus.camera.ui.CaptureBarBuilder;
+import com.oneplus.camera.ui.CaptureModeSwitcherBuilder;
 
 final class ComponentBuilders
 {
@@ -16,5 +17,6 @@ final class ComponentBuilders
 		//new AudioManagerBuilder(),
 		new CaptureBarBuilder(),
 		new CaptureModeManagerBuilder(),
+		new CaptureModeSwitcherBuilder(),
 	};
 }

@@ -1,5 +1,9 @@
 package com.oneplus.camera.ui;
 
+import java.util.LinkedList;
+
+import android.graphics.drawable.Drawable;
+import android.os.Message;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewStub;
@@ -16,17 +20,19 @@ import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.camera.CameraActivity;
-import com.oneplus.camera.CameraComponent;
 import com.oneplus.camera.CaptureEventArgs;
 import com.oneplus.camera.CaptureHandle;
 import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
+import com.oneplus.camera.UIComponent;
+import com.oneplus.camera.VideoCaptureState;
 import com.oneplus.camera.media.MediaType;
+import com.oneplus.util.ListUtils;
 
-final class CaptureBar extends CameraComponent implements CaptureButtons
+final class CaptureBar extends UIComponent implements CaptureButtons
 {
 	// Constants
-	private static final int MSG_START_BURST_SHOTS = 10000;
+	private static final int MSG_START_BURST_CAPTURE = 10000;
 	private static final long BURST_TRIGGER_THRESHOLD = 500;
 	
 	
@@ -35,6 +41,7 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 	private boolean m_IsCapturingBurstPhotos;
 	private CaptureHandle m_PhotoCaptureHandle;
 	private Button m_PrimaryButton;
+	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
 	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
 	private CaptureHandle m_VideoCaptureHandle;
 	
@@ -48,10 +55,48 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 	}
 	
 	
+	// Class for button drawable.
+	private final class ButtonDrawableHandle extends Handle
+	{
+		public final Drawable drawable;
+		public final int flags;
+		
+		public ButtonDrawableHandle(Drawable drawable, int flags)
+		{
+			super("CaptureButtonDrawable");
+			this.drawable = drawable;
+			this.flags = flags;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			restorePrimaryButtonBackground(this);
+		}
+	}
+	
+	
 	// Constructor
 	CaptureBar(CameraActivity cameraActivity)
 	{
 		super("Capture Bar", cameraActivity, true);
+	}
+	
+	
+	// Handle message.
+	@Override
+	protected void handleMessage(Message msg)
+	{
+		switch(msg.what)
+		{
+			case MSG_START_BURST_CAPTURE:
+				this.startBurstCapture();
+				break;
+				
+			default:
+				super.handleMessage(msg);
+				break;
+		}
 	}
 	
 	
@@ -68,7 +113,7 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 					m_PhotoCaptureHandle = e.getCaptureHandle();
 					
 					// cancel triggering burst shots
-					HandlerUtils.removeMessages(this, MSG_START_BURST_SHOTS);
+					HandlerUtils.removeMessages(this, MSG_START_BURST_CAPTURE);
 				}
 				break;
 			case VIDEO:
@@ -119,6 +164,14 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 		});
 		
 		// add property changed call-backs
+		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<MediaType> key, PropertyChangeEventArgs<MediaType> e)
+			{
+				updateButtonFunctions(true);
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_PHOTO_CAPTURE_STATE, new PropertyChangedCallback<PhotoCaptureState>()
 		{
 			@SuppressWarnings("incomplete-switch")
@@ -135,23 +188,8 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 			}
 		});
 		
-		HandlerUtils.post(this, new Runnable()
-		{
-			@Override
-			public void run()
-			{
-				//getCameraActivity().setMediaType(MediaType.VIDEO);
-			}
-		}, 3000);
-		
-		HandlerUtils.post(this, new Runnable()
-		{
-			@Override
-			public void run()
-			{
-				//getCameraActivity().setMediaType(MediaType.PHOTO);
-			}
-		}, 6000);
+		// setup initial button states
+		this.updateButtonFunctions(true);
 	}
 	
 	
@@ -159,7 +197,7 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 	private void onPrimaryButtonPressed()
 	{
 		//
-		HandlerUtils.sendMessage(this, MSG_START_BURST_SHOTS, BURST_TRIGGER_THRESHOLD);
+		HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
 	}
 	
 	
@@ -172,8 +210,10 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 		else
 			m_VideoCaptureHandle = this.getCameraThread().captureVideo();
 		*/
+		
+		//if(true) return;
 		// cancel triggering burst shots
-		HandlerUtils.removeMessages(this, MSG_START_BURST_SHOTS);
+		HandlerUtils.removeMessages(this, MSG_START_BURST_CAPTURE);
 		
 		// take single shot or stop burst shots
 		if(!Handle.isValid(m_PhotoCaptureHandle))
@@ -191,9 +231,125 @@ final class CaptureBar extends CameraComponent implements CaptureButtons
 	}
 	
 	
-	// Start burst shots.
-	private void startBurstShots()
+	// Restore background of primary capture button.
+	private void restorePrimaryButtonBackground(ButtonDrawableHandle handle)
 	{
-		//
+		// check thread
+		this.verifyAccess();
+		
+		// remove handle
+		boolean isLastHandle = ListUtils.isLastObject(m_PrimaryButtonBackgroundHandles, handle);
+		if(!m_PrimaryButtonBackgroundHandles.remove(handle))
+			return;
+		
+		// update buttons
+		if(isLastHandle)
+			this.updateButtonBackgrounds();
+	}
+	
+	
+	// Change background of primary capture button.
+	@Override
+	public Handle setPrimaryButtonBackground(Drawable drawable, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "setPrimaryButtonBackground() - Component is not running");
+			return null;
+		}
+		
+		// create handle
+		ButtonDrawableHandle handle = new ButtonDrawableHandle(drawable, flags);
+		
+		// update button
+		this.updateButtonBackgrounds();
+		return handle;
+	}
+	
+	
+	// Start burst capture.
+	private void startBurstCapture()
+	{
+		// check state
+		CameraActivity cameraActivity = this.getCameraActivity();
+		PhotoCaptureState photoCaptureState = cameraActivity.get(CameraActivity.PROP_PHOTO_CAPTURE_STATE);
+		VideoCaptureState videoCaptureState = cameraActivity.get(CameraActivity.PROP_VIDEO_CAPTURE_STATE);
+		if(photoCaptureState != PhotoCaptureState.READY)
+		{
+			Log.e(TAG, "startBurstCapture() - Photo capture state is " + photoCaptureState);
+			return;
+		}
+		if(videoCaptureState != VideoCaptureState.READY && videoCaptureState != VideoCaptureState.PREPARING)
+		{
+			Log.e(TAG, "startBurstCapture() - Video capture state is " + videoCaptureState);
+			return;
+		}
+		
+		Log.v(TAG, "startBurstCapture()");
+		
+		// start burst capture
+		m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto(-1);
+		if(!Handle.isValid(m_PhotoCaptureHandle))
+		{
+			Log.e(TAG, "startBurstCapture() - Fail to capture photo");
+			return;
+		}
+		m_IsCapturingBurstPhotos = true;
+	}
+	
+	
+	// Update capture button background.
+	private void updateButtonBackgrounds()
+	{
+		// update primary button
+		if(m_PrimaryButton != null)
+		{
+			if(m_PrimaryButtonBackgroundHandles.isEmpty())
+			{
+				switch(m_PrimaryButtonFunction)
+				{
+					case CAPTURE_PHOTO:
+						m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_background);
+						break;
+					case CAPTURE_VIDEO:
+						switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+						{
+							case CAPTURING:
+							case STOPPING:
+								m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_video_recording);
+								break;
+							default:
+								m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_video);
+								break;
+						}
+						break;
+					case PAUSE_RESUME_VIDEO:
+						//
+						break;
+				}
+			}
+			else
+				m_PrimaryButton.setBackground(m_PrimaryButtonBackgroundHandles.getLast().drawable);
+		}
+	}
+	
+	
+	// Update capture button functions.
+	private void updateButtonFunctions(boolean updateBackground)
+	{
+		//CameraActivity cameraActivity = this.getCameraActivity();
+		switch(this.getMediaType())
+		{
+			case PHOTO:
+				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+				break;
+			case VIDEO:
+				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_VIDEO;
+				break;
+		}
+		if(updateBackground)
+			this.updateButtonBackgrounds();
 	}
 }

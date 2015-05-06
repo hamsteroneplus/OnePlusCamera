@@ -1,7 +1,7 @@
 <resources>
 
     <!-- Capture bar -->
-    <dimen name="capture_bar_primary_button_margin_right">90px</dimen>
+    <dimen name="capture_bar_primary_button_margin_right">105px</dimen>
     <dimen name="capture_bar_width">480px</dimen>
 
 </resources>
