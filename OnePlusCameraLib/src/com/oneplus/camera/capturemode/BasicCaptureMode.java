@@ -23,6 +23,11 @@ public abstract class BasicCaptureMode extends HandlerBaseObject implements Capt
 		@Override
 		protected void onExit(CaptureMode nextMode, int flags)
 		{}
+		
+		public String toString()
+		{
+			return "(Invalid)";
+		};
 	};
 	
 	

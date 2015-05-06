@@ -93,9 +93,13 @@ public class MainActivity extends CameraActivity
 		});
 		
 		// start camera thread
+		CameraThread.ResourceIdTable resIdTable = new CameraThread.ResourceIdTable();
 		CameraThread cameraThread = this.getCameraThread();
 		cameraThread.addComponentBuilders(ComponentBuilders.BUILDERS_CAMERA_THREAD);
-		cameraThread.setDefaultShutterSound(R.raw.shutter_photo);
+		resIdTable.photoShutterSound = R.raw.shutter_photo;
+		resIdTable.videoStartSound = R.raw.record_start;
+		resIdTable.videoStopSound = R.raw.record_end;
+		cameraThread.setResourceIdTable(resIdTable);
 		cameraThread.start(this.get(PROP_MEDIA_TYPE));
 		
 		// set content view

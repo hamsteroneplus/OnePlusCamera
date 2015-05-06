@@ -114,7 +114,6 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private volatile ComponentManager m_ComponentManager;
 	private final PhotoCaptureHandlerHandle m_DefaultPhotoCaptureHandlerHandle = new PhotoCaptureHandlerHandle(null);
 	private Handle m_DefaultShutterSoundHandle;
-	private volatile int m_DefaultShutterSoundResId;
 	private final VideoCaptureHandlerHandle m_DefaultVideoCaptureHandlerHandle = new VideoCaptureHandlerHandle(null);
 	private boolean m_IsCapturingBurstPhotos;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
@@ -125,9 +124,12 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private PhotoCaptureHandle m_PhotoCaptureHandle;
 	private PhotoCaptureHandlerHandle m_PhotoCaptureHandlerHandle;
 	private List<PhotoCaptureHandlerHandle> m_PhotoCaptureHandlerHandles;
+	private volatile ResourceIdTable m_ResourceIdTable;
 	private VideoCaptureHandle m_VideoCaptureHandle;
 	private VideoCaptureHandlerHandle m_VideoCaptureHandlerHandle;
 	private List<VideoCaptureHandlerHandle> m_VideoCaptureHandlerHandles;
+	private Handle m_VideoStartSoundHandle;
+	private Handle m_VideoStopSoundHandle;
 	
 	
 	// Runnables.
@@ -194,6 +196,43 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			onShutter(e);
 		}
 	};
+	
+	
+	/**
+	 * Resource ID table.
+	 */
+	public static class ResourceIdTable implements Cloneable
+	{
+		/**
+		 * Sound resource ID for photo capture.
+		 */
+		public int photoShutterSound;
+		/**
+		 * Sound resource ID for video recording start.
+		 */
+		public int videoStartSound;
+		/**
+		 * Sound resource ID for video recording stop.
+		 */
+		public int videoStopSound;
+		
+		/**
+		 * Create clone.
+		 * @return Clone.
+		 */
+		@Override
+		public ResourceIdTable clone()
+		{
+			try
+			{
+				return (ResourceIdTable)super.clone();
+			} 
+			catch(CloneNotSupportedException ex)
+			{
+				throw new RuntimeException(ex);
+			}
+		}
+	}
 	
 	
 	// Class for capture handler.
@@ -335,7 +374,17 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// bind to AudioManager
 		m_AudioManager = m_ComponentManager.findComponent(AudioManager.class, this);
 		if(m_AudioManager != null)
-			m_DefaultShutterSoundHandle = m_AudioManager.loadSound(m_DefaultShutterSoundResId, AudioManager.STREAM_RING, 0);
+		{
+			if(m_ResourceIdTable != null)
+			{
+				if(m_ResourceIdTable.photoShutterSound != 0)
+					m_DefaultShutterSoundHandle = m_AudioManager.loadSound(m_ResourceIdTable.photoShutterSound, AudioManager.STREAM_RING, 0);
+				if(m_ResourceIdTable.videoStartSound != 0)
+					m_VideoStartSoundHandle = m_AudioManager.loadSound(m_ResourceIdTable.videoStartSound, AudioManager.STREAM_RING, 0);
+				if(m_ResourceIdTable.videoStopSound != 0)
+					m_VideoStopSoundHandle = m_AudioManager.loadSound(m_ResourceIdTable.videoStopSound, AudioManager.STREAM_RING, 0);
+			}
+		}
 		else
 			Log.w(TAG, "bindToComponents() - No AudioManager");
 		
@@ -1150,21 +1199,6 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	/**
-	 * Set default shutter sound before starting thread.
-	 * @param resId Shutter sound resource ID.
-	 */
-	public final synchronized void setDefaultShutterSound(int resId)
-	{
-		// check state
-		if(this.get(PROP_IS_STARTED))
-			throw new RuntimeException("Cannot change default shutter sound after starting");
-		
-		// save state
-		m_DefaultShutterSoundResId = resId;
-	}
-	
-	
-	/**
 	 * Change current media type.
 	 * @param mediaType New media type.
 	 * @return Whether media type changes successfully or not.
@@ -1271,6 +1305,21 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	public final Handle setPhotoCaptureHandler(PhotoCaptureHandler handler, int flags)
 	{
 		return null;
+	}
+	
+	
+	/**
+	 * Set resource ID table before starting thread.
+	 * @param table Resource ID table.
+	 */
+	public final synchronized void setResourceIdTable(ResourceIdTable table)
+	{
+		// check state
+		if(this.get(PROP_IS_STARTED))
+			throw new RuntimeException("Cannot change resource ID table after starting");
+		
+		// save state
+		m_ResourceIdTable = (table != null ? table.clone() : null);
 	}
 	
 	
