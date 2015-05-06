@@ -285,7 +285,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		@Override
 		protected void onClose(int flags)
 		{
-			stopCapturePhoto(this);
+			stopPhotoCapture(this);
 		}
 	}
 	private final class VideoCaptureHandle extends CaptureHandle
@@ -301,7 +301,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		@Override
 		protected void onClose(int flags)
 		{
-			stopCaptureVideo(this);
+			stopVideoCapture(this);
 		}
 	}
 	
@@ -1530,7 +1530,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			if(Handle.isValid(m_VideoCaptureHandle))
 			{
 				Log.w(TAG, "stopCameraPreviewInternal() - Stop video recording first");
-				stopCaptureVideoInternal(m_VideoCaptureHandle);
+				stopVideoCaptureInternal(m_VideoCaptureHandle);
 			}
 			
 			// waiting for starting preview
@@ -1603,41 +1603,41 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Stop photo capture.
-	private void stopCapturePhoto(final PhotoCaptureHandle handle)
+	private void stopPhotoCapture(final PhotoCaptureHandle handle)
 	{
 		if(this.isDependencyThread())
-			this.stopCapturePhotoInternal(handle);
+			this.stopPhotoCaptureInternal(handle);
 		else if(!HandlerUtils.post(this, new Runnable()
 		{
 			@Override
 			public void run()
 			{
-				stopCapturePhotoInternal(handle);
+				stopPhotoCaptureInternal(handle);
 			}
 		}))
 		{
-			Log.e(TAG, "stopCapturePhoto() - Fail to perform cross-thread operation");
+			Log.e(TAG, "stopPhotoCapture() - Fail to perform cross-thread operation");
 		}
 	}
 	
 	
 	// Stop photo capture.
-	private void stopCapturePhotoInternal(PhotoCaptureHandle handle)
+	private void stopPhotoCaptureInternal(PhotoCaptureHandle handle)
 	{
 		// check handle
 		if(m_PhotoCaptureHandle != handle)
 		{
-			Log.e(TAG, "stopCapturePhotoInternal() - Invalid handle");
+			Log.e(TAG, "stopPhotoCaptureInternal() - Invalid handle");
 			return;
 		}
 		
-		Log.v(TAG, "stopCapturePhotoInternal() - Handle : ", handle);
+		Log.v(TAG, "stopPhotoCaptureInternal() - Handle : ", handle);
 		
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
 		if(camera == null)
 		{
-			Log.e(TAG, "stopCapturePhotoInternal() - No camera");
+			Log.e(TAG, "stopPhotoCaptureInternal() - No camera");
 			return;
 		}
 		
@@ -1646,45 +1646,45 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			if(handle.captureHandler == null)
 			{
-				Log.w(TAG, "stopCapturePhotoInternal() - Use default photo capture stop process");
+				Log.w(TAG, "stopPhotoCaptureInternal() - Use default photo capture stop process");
 				m_CameraCaptureHandle = Handle.close(m_CameraCaptureHandle);
 				m_BurstCaptureSoundStreamHandle = Handle.close(m_BurstCaptureSoundStreamHandle);
 			}
 			else
 			{
-				Log.w(TAG, "stopCapturePhotoInternal() - Use " + handle.captureHandler + " to stop capture");
+				Log.w(TAG, "stopPhotoCaptureInternal() - Use " + handle.captureHandler + " to stop capture");
 				if(!handle.captureHandler.stopCapture(camera, handle))
-					Log.e(TAG, "stopCapturePhotoInternal() - Fail to stop capture");
+					Log.e(TAG, "stopPhotoCaptureInternal() - Fail to stop capture");
 			}
 		}
 		catch(Throwable ex)
 		{
-			Log.e(TAG, "stopCapturePhotoInternal() - Fail to stop capture", ex);
+			Log.e(TAG, "stopPhotoCaptureInternal() - Fail to stop capture", ex);
 		}
 	}
 	
 	
 	// Stop video recording.
-	private void stopCaptureVideo(final VideoCaptureHandle handle)
+	private void stopVideoCapture(final VideoCaptureHandle handle)
 	{
 		if(this.isDependencyThread())
-			this.stopCaptureVideoInternal(handle);
+			this.stopVideoCaptureInternal(handle);
 		else if(!HandlerUtils.post(this, new Runnable()
 		{
 			@Override
 			public void run()
 			{
-				stopCaptureVideoInternal(handle);
+				stopVideoCaptureInternal(handle);
 			}
 		}))
 		{
-			Log.e(TAG, "stopCaptureVideo() - Fail to perform cross-thread operation");
+			Log.e(TAG, "stopVideoCapture() - Fail to perform cross-thread operation");
 		}
 	}
 	
 	
 	// Stop video recording.
-	private void stopCaptureVideoInternal(VideoCaptureHandle handle)
+	private void stopVideoCaptureInternal(VideoCaptureHandle handle)
 	{
 		try
 		{
@@ -1692,7 +1692,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		catch(Throwable ex)
 		{
-			Log.e(TAG, "stopCaptureVideoInternal() - Fail to stop recorder", ex);
+			Log.e(TAG, "stopVideoCaptureInternal() - Fail to stop recorder", ex);
 		}
 		
 		m_VideoCaptureHandle = null;
@@ -1701,11 +1701,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		camera.set(Camera.PROP_VIDEO_SURFACE, null);
 		if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STOPPING)
 		{
-			Log.w(TAG, "stopCaptureVideoInternal() - Release media recorder after preview ready");
+			Log.w(TAG, "stopVideoCaptureInternal() - Release media recorder after preview ready");
 			return;
 		}
 		
-		m_MediaRecorder.release();
-		m_MediaRecorder = null;
+		if(m_MediaRecorder != null)
+		{
+			m_MediaRecorder.release();
+			m_MediaRecorder = null;
+		}
 	}
 }
