@@ -1,7 +1,6 @@
 package com.oneplus.camera;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,6 +35,9 @@ import com.oneplus.base.component.ComponentCreationPriority;
 import com.oneplus.base.component.ComponentEventArgs;
 import com.oneplus.base.component.ComponentManager;
 import com.oneplus.base.component.ComponentOwner;
+import com.oneplus.camera.io.FileManager;
+import com.oneplus.camera.io.FileManagerBuilder;
+import com.oneplus.camera.io.PhotoSaveTask;
 import com.oneplus.camera.media.AudioManager;
 import com.oneplus.camera.media.MediaType;
 
@@ -46,7 +48,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
-		new CameraDeviceManagerBuilder(),
+		new CameraDeviceManagerBuilder(), new FileManagerBuilder()
 	};
 	
 	
@@ -949,29 +951,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	{
 		Log.v(TAG, "onPictureReceived() - Index : ", e.getFrameIndex());
 		
-		//
-		File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
-		if(!directory.exists() && !directory.mkdir())
-		{
-			Log.e(TAG, "onPictureReceived() - Fail to create " + directory.getAbsolutePath());
-			return;
-		}
-		
-		//
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-		File file = new File(directory, "IMG_" + dateFormat.format(new Date()) + ".jpg");
-		Log.w(TAG, "onPictureReceived() - Write picture to " + file);
-		
-		//
-		try(FileOutputStream stream = new FileOutputStream(file))
-		{
-			stream.write(e.getPicture());
-			Log.w(TAG, "onPictureReceived() - Picture saved");
-		} 
-		catch (Throwable ex)
-		{
-			Log.e(TAG, "onPictureReceived() - Fail to write " + file, ex);
-		}
+		m_ComponentManager.findComponent(FileManager.class, this).saveMedia(new PhotoSaveTask(this.getContext(), e), 0);
 	}
 	
 	
