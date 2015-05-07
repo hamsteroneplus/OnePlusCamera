@@ -58,7 +58,6 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private OperationState m_CaptureSessionState = OperationState.STOPPED;
 	private final CameraCharacteristics m_Characteristics;
 	private final CameraManager m_CameraManager;
-	private int m_CompletedFrameIndex = -1;
 	private CameraDevice m_Device;
 	private final CameraDevice.StateCallback m_DeviceStateCallback = new CameraDevice.StateCallback()
 	{
@@ -80,6 +79,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			onDeviceError(camera, 0, true);
 		}
 	};
+	private FlashMode m_FlashMode = FlashMode.OFF;
 	private final String m_Id;
 	private boolean m_IsCaptureSequenceCompleted;
 	private final LensFacing m_LensFacing;
@@ -195,7 +195,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		this.setReadOnly(PROP_VIDEO_SIZES, Arrays.asList(streamConfigMap.getOutputSizes(MediaRecorder.class)));
 		
 		// get sensor orientation
-		m_SensorOrientation = m_Characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+		m_SensorOrientation = cameraChar.get(CameraCharacteristics.SENSOR_ORIENTATION);
+		
+		// check flash
+		this.setReadOnly(PROP_HAS_FLASH, cameraChar.get(CameraCharacteristics.FLASH_INFO_AVAILABLE));
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
@@ -323,6 +326,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			builder.addTarget(m_PictureSurface);
 			if(m_VideoSurface != null)
 				builder.addTarget(m_VideoSurface);
+			
+			// set flash mode
+			this.setFlashMode(m_FlashMode, builder);
 			
 			// set rotation
 			int deviceOrientation = this.get(PROP_PICTURE_ROTATION).getDeviceOrientation();
@@ -514,6 +520,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	@Override
 	public <TValue> TValue get(PropertyKey<TValue> key)
 	{
+		if(key == PROP_FLASH_MODE)
+			return (TValue)m_FlashMode;
 		if(key == PROP_ID)
 			return (TValue)m_Id;
 		if(key == PROP_LENS_FACING)
@@ -596,7 +604,6 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_ReceivedCaptureCompletedCount = 0;
 		m_ReceivedPictureCount = 0;
 		m_CaptureHandle = null;
-		m_CompletedFrameIndex = -1;
 		m_TargetCapturedFrameCount = 0;
 		m_IsCaptureSequenceCompleted = false;
 		this.setReadOnly(PROP_CAPTURE_STATE, OperationState.STOPPED);
@@ -1067,6 +1074,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	@Override
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
+		if(key == PROP_FLASH_MODE)
+			return this.setFlashMode((FlashMode)value);
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
@@ -1074,6 +1083,70 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		if(key == PROP_VIDEO_SURFACE)
 			return this.setVideoSurface((Surface)value);
 		return super.set(key, value);
+	}
+	
+	
+	// Set flash mode.
+	private boolean setFlashMode(FlashMode flashMode)
+	{
+		// check state
+		this.verifyAccess();
+		FlashMode oldFlashMode = m_FlashMode;
+		if(oldFlashMode == flashMode)
+			return false;
+		if(!this.get(PROP_HAS_FLASH) && flashMode != FlashMode.OFF)
+		{
+			Log.e(TAG, "setFlashMode() - No flash on camera '" + m_Id + "'");
+			return false;
+		}
+		
+		// set flash mode
+		this.setFlashMode(oldFlashMode, m_PreviewRequestBuilder);
+		
+		// apply to preview
+		if(m_CaptureSessionState == OperationState.STARTED)
+		{
+			if(!this.startPreviewRequestDirectly())
+				Log.e(TAG, "setFlashMode() - Fail to apply " + flashMode + " to preview");
+		}
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_FLASH_MODE, oldFlashMode, flashMode);
+	}
+	private void setFlashMode(FlashMode flashMode, CaptureRequest.Builder requestBuilder)
+	{
+		// update state
+		m_FlashMode = flashMode;
+		
+		// apply
+		if(requestBuilder != null)
+		{
+			int aeCtrlValue;
+			int flashModeValue;
+			switch(flashMode)
+			{
+				case AUTO:
+					aeCtrlValue = CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH;
+					flashModeValue = CaptureRequest.FLASH_MODE_SINGLE;
+					break;
+				case OFF:
+					aeCtrlValue = CaptureRequest.CONTROL_AE_MODE_ON;
+					flashModeValue = CaptureRequest.FLASH_MODE_OFF;
+					break;
+				case ON:
+					aeCtrlValue = CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH;
+					flashModeValue = CaptureRequest.FLASH_MODE_SINGLE;
+					break;
+				case TORCH:
+					aeCtrlValue = CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH;
+					flashModeValue = CaptureRequest.FLASH_MODE_TORCH;
+					break;
+				default:
+					throw new RuntimeException("Unsupported flash mode : " + flashMode + ".");
+			}
+			requestBuilder.set(CaptureRequest.CONTROL_AE_MODE, aeCtrlValue);
+			requestBuilder.set(CaptureRequest.FLASH_MODE, flashModeValue);
+		}
 	}
 	
 	
@@ -1280,6 +1353,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// create request builders
 		try
 		{
+			// create builder
 			if(m_VideoSurface == null)
 				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
 			else
@@ -1289,6 +1363,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				m_PreviewRequestBuilder.addTarget(m_VideoSurface);
 			}
 			m_PreviewRequestBuilder.addTarget(m_PreviewSurface);
+			
+			// setup flash mode
+			this.setFlashMode(m_FlashMode, m_PreviewRequestBuilder);
 		}
 		catch(Throwable ex)
 		{
@@ -1381,17 +1458,30 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		Log.w(TAG, "startPreviewRequest() - Start preview request for camera '" + m_Id + "'");
 		
 		// start preview
+		if(this.startPreviewRequestDirectly())
+		{
+			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTED);
+			return true;
+		}
+		else
+		{
+			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
+			return false;
+		}
+	}
+	
+	
+	// Start preview request without state check.
+	private boolean startPreviewRequestDirectly()
+	{
 		try
 		{
 			m_CaptureSession.setRepeatingRequest(m_PreviewRequestBuilder.build(), m_PreviewCaptureCallback, this.getHandler());
-			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTED);
 			return true;
 		}
 		catch(Throwable ex)
 		{
-			Log.e(TAG, "startPreviewRequest() - Fail to start preview for camera '" + m_Id + "'", ex);
-			//
-			this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STOPPED);
+			Log.e(TAG, "startPreviewRequestDirectly() - Fail to start preview for camera '" + m_Id + "'", ex);
 			return false;
 		}
 	}

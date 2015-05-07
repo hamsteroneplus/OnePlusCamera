@@ -25,6 +25,14 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<OperationState> PROP_CAPTURE_STATE = new PropertyKey<>("CaptureState", OperationState.class, Camera.class, OperationState.STOPPED);
 	/**
+	 * Property to get or set flash mode.
+	 */
+	PropertyKey<FlashMode> PROP_FLASH_MODE = new PropertyKey<>("FlashMode", FlashMode.class, Camera.class, PropertyKey.FLAG_NOT_NULL, FlashMode.AUTO);
+	/**
+	 * Read-only property to check whether flash is supported on this camera or not.
+	 */
+	PropertyKey<Boolean> PROP_HAS_FLASH = new PropertyKey<>("HasFlash", Boolean.class, Camera.class, false);
+	/**
 	 * Read-only property for camera ID.
 	 */
 	PropertyKey<String> PROP_ID = new PropertyKey<>("ID", String.class, Camera.class, "");
@@ -101,6 +109,30 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Event raised when start capturing picture.
 	 */
 	EventKey<CameraCaptureEventArgs> EVENT_SHUTTER = new EventKey<>("Shutter", CameraCaptureEventArgs.class, Camera.class);
+	
+	
+	/**
+	 * Flash mode.
+	 */
+	public enum FlashMode
+	{
+		/**
+		 * Disabled.
+		 */
+		OFF,
+		/**
+		 * On.
+		 */
+		ON,
+		/**
+		 * Auto.
+		 */
+		AUTO,
+		/**
+		 * Torch.
+		 */
+		TORCH,
+	}
 	
 	
 	/**
