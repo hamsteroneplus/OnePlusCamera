@@ -19,6 +19,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.base.Rotation;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CaptureEventArgs;
 import com.oneplus.camera.CaptureHandle;
@@ -198,6 +199,10 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// setup initial button states
 		this.updateButtonFunctions(true);
+		
+		// setup UI rotation
+		Rotation rotation = this.getRotation();
+		this.rotateView(m_PrimaryButton, rotation, 0);
 	}
 	
 	
@@ -260,6 +265,18 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				//
 				break;
 		}
+	}
+	
+	
+	// Called when rotation changed.
+	@Override
+	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
+	{
+		// call super
+		super.onRotationChanged(prevRotation, newRotation);
+		
+		// rotate buttons
+		this.rotateView(m_PrimaryButton, newRotation);
 	}
 	
 	

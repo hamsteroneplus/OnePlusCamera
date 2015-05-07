@@ -31,6 +31,8 @@ import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.media.ResolutionManagerBuilder;
 import com.oneplus.camera.ui.Viewfinder;
 import com.oneplus.camera.ui.ViewfinderBuilder;
+
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
@@ -53,6 +55,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	};
 	
 	
+	/**
+	 * Read-only property for current activity rotation.
+	 */
+	public static final PropertyKey<Rotation> PROP_ACTIVITY_ROTATION = new PropertyKey<>("ActivityRotation", Rotation.class, CameraActivity.class, Rotation.LANDSCAPE);
 	/**
 	 * Read-only property for available camera list.
 	 */
@@ -78,6 +84,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Read-only property to check whether camera thread is started or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_THREAD_STARTED = new PropertyKey<>("IsCameraThreadStarted", Boolean.class, CameraActivity.class, false);
+	/**
+	 * Read-only property for current device orientation.
+	 */
+	public static final PropertyKey<Integer> PROP_DEVICE_ORIENTATION = new PropertyKey<>("DeviceOrientation", Integer.class, CameraActivity.class, 0);
 	/**
 	 * Read-only property to check whether activity is launching (before first starting preview) or not.
 	 */
@@ -138,13 +148,13 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Private fields
+	private Rotation m_ActivityRotation = Rotation.LANDSCAPE;
 	private CameraThread m_CameraThread;
 	private OperationState m_CameraPreviewState = OperationState.STOPPED;
 	private ComponentManager m_ComponentManager;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private boolean m_IsCameraPreviewReceiverReady;
 	private boolean m_IsOrientationListenerStarted;
-	private int m_LastDeviceOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
 	private OrientationEventListener m_OrientationListener;
 	private CaptureHandleImpl m_PendingPhotoCaptureHandle;
 	private CaptureHandleImpl m_PhotoCaptureHandle;
@@ -708,6 +718,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	@Override
 	public <TValue> TValue get(PropertyKey<TValue> key)
 	{
+		if(key == PROP_ACTIVITY_ROTATION)
+			return (TValue)m_ActivityRotation;
 		if(key == PROP_CAMERA_PREVIEW_STATE)
 			return (TValue)m_CameraPreviewState;
 		if(key == PROP_ROTATION)
@@ -1214,6 +1226,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		this.enablePropertyLogs(PROP_SETTINGS, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_VIDEO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		
+		// check activity rotation
+		this.onRequestedOrientationChanged(this.getRequestedOrientation());
+		
 		// create global settings
 		Settings settings = new Settings(this, null, false);
 		m_SettingsHandles.add(new SettingsHandle(settings));
@@ -1335,7 +1350,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			Log.w(TAG, "onDeviceOrientationChanged() - Unknown orientation");
 			return;
 		}
-		m_LastDeviceOrientation = orientation;
+		this.setReadOnly(PROP_DEVICE_ORIENTATION, orientation);
 		
 		// check difference with current rotation
 		int diff = (orientation - m_Rotation.getDeviceOrientation());
@@ -1432,6 +1447,40 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			default:
 				Log.e(TAG, "onPhotoCaptureStarted() - Photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
 				return;
+		}
+	}
+	
+	
+	// Called when activity orientation changed.
+	private void onRequestedOrientationChanged(int orientation)
+	{
+		Rotation oldRotation = m_ActivityRotation;
+		Rotation newRotation;
+		switch(this.getRequestedOrientation())
+		{
+			case ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE:
+				newRotation = Rotation.LANDSCAPE;
+				break;
+			case ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:
+				newRotation = Rotation.PORTRAIT;
+				break;
+			case ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE:
+				newRotation = Rotation.INVERSE_LANDSCAPE;
+				break;
+			case ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT:
+				newRotation = Rotation.INVERSE_PORTRAIT;
+				break;
+			default:
+			{
+				Log.e(TAG, "onRequestedOrientationChanged() - Unsupported orientation : " + orientation);
+				newRotation = Rotation.LANDSCAPE;
+				break;
+			}
+		}
+		if(oldRotation != newRotation)
+		{
+			m_ActivityRotation = newRotation;
+			this.notifyPropertyChanged(PROP_ACTIVITY_ROTATION, oldRotation, newRotation);
 		}
 	}
 	
@@ -1752,11 +1801,22 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	@Override
 	protected <TValue> boolean setReadOnly(PropertyKey<TValue> key, TValue value)
 	{
+		if(key == PROP_ACTIVITY_ROTATION)
+			throw new IllegalAccessError("Cannot change activity rotation.");
 		if(key == PROP_CAMERA_PREVIEW_STATE)
 			throw new IllegalAccessError("Cannot change camera preview state.");
 		if(key == PROP_ROTATION)
 			throw new IllegalAccessError("Cannot change UI rotation.");
 		return super.setReadOnly(key, value);
+	}
+	
+	
+	// Set activity orientation.
+	@Override
+	public void setRequestedOrientation(int requestedOrientation)
+	{
+		super.setRequestedOrientation(requestedOrientation);
+		this.onRequestedOrientationChanged(requestedOrientation);
 	}
 	
 	
