@@ -112,30 +112,6 @@ public interface Camera extends BaseObject, HandlerObject
 	
 	
 	/**
-	 * Flash mode.
-	 */
-	public enum FlashMode
-	{
-		/**
-		 * Disabled.
-		 */
-		OFF,
-		/**
-		 * On.
-		 */
-		ON,
-		/**
-		 * Auto.
-		 */
-		AUTO,
-		/**
-		 * Torch.
-		 */
-		TORCH,
-	}
-	
-	
-	/**
 	 * Represents camera device facing.
 	 */
 	public enum LensFacing

@@ -12,5 +12,16 @@
         android:layout_alignParentRight="true"
         android:layout_centerVertical="true"
         android:layout_marginRight="@dimen/capture_bar_primary_button_margin_right"/>
+    
+    <!-- Flash button -->
+    <ImageButton android:id="@+id/flash_button"
+		android:layout_width="wrap_content"
+        android:layout_height="wrap_content" 
+        android:background="@null"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginRight="@dimen/capture_bar_button_margin_right"
+        android:layout_marginBottom="@dimen/capture_bar_button_margin_bottom"
+        android:scaleType="center"/>
 
 </RelativeLayout>

@@ -8,6 +8,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewStub;
 import android.widget.Button;
+import android.widget.ImageButton;
 
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
@@ -23,6 +24,8 @@ import com.oneplus.base.Rotation;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CaptureEventArgs;
 import com.oneplus.camera.CaptureHandle;
+import com.oneplus.camera.FlashController;
+import com.oneplus.camera.FlashMode;
 import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
@@ -39,6 +42,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	
 	// Private fields
 	private View m_CaptureBar;
+	private ImageButton m_FlashButton;
+	private FlashController m_FlashController;
 	private boolean m_IsCapturingBurstPhotos;
 	private CaptureHandle m_PhotoCaptureHandle;
 	private Button m_PrimaryButton;
@@ -101,6 +106,37 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	}
 	
 	
+	// Called when flash button clicked.
+	private void onFlashButtonClicked()
+	{
+		if(m_FlashController == null)
+		{
+			Log.e(TAG, "onFlashButtonClicked() - No flash controller");
+			return;
+		}
+		FlashMode flashMode;
+		switch(m_FlashController.get(FlashController.PROP_FLASH_MODE))
+		{
+			case AUTO:
+				if(this.getMediaType() == MediaType.PHOTO)
+					flashMode = FlashMode.ON;
+				else
+					flashMode = FlashMode.TORCH;
+				break;
+			case OFF:
+				if(this.getMediaType() == MediaType.PHOTO)
+					flashMode = FlashMode.AUTO;
+				else
+					flashMode = FlashMode.TORCH;
+				break;
+			default:
+				flashMode = FlashMode.OFF;
+				break;
+		}
+		m_FlashController.set(FlashController.PROP_FLASH_MODE, flashMode);
+	}
+	
+	
 	// Called when media capture starts.
 	private void onCaptureStarted(CaptureEventArgs e)
 	{
@@ -125,11 +161,15 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	
 	
 	// Initialize.
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	protected void onInitialize()
 	{
 		// call super
 		super.onInitialize();
+		
+		// find components
+		m_FlashController = this.findComponent(FlashController.class);
 		
 		// setup UI
 		CameraActivity cameraActivity = this.getCameraActivity();
@@ -151,6 +191,15 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 						break;
 				}
 				return false;
+			}
+		});
+		m_FlashButton = (ImageButton)m_CaptureBar.findViewById(R.id.flash_button);
+		m_FlashButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v)
+			{
+				onFlashButtonClicked();
 			}
 		});
 		
@@ -196,13 +245,31 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				updateButtonFunctions(true);
 			}
 		});
+		if(m_FlashController != null)
+		{
+			PropertyChangedCallback callback = new PropertyChangedCallback()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
+				{
+					updateFlashButton();
+				}
+			};
+			m_FlashController.addCallback(FlashController.PROP_FLASH_MODE, callback);
+			m_FlashController.addCallback(FlashController.PROP_HAS_FLASH, callback);
+			m_FlashController.addCallback(FlashController.PROP_IS_FLASH_DISABLED, callback);
+		}
 		
 		// setup initial button states
 		this.updateButtonFunctions(true);
 		
-		// setup UI rotation
+		// setup initial UI rotation
 		Rotation rotation = this.getRotation();
 		this.rotateView(m_PrimaryButton, rotation, 0);
+		this.rotateView(m_FlashButton, rotation, 0);
+		
+		// setup flash button initial state
+		this.updateFlashButton();
 	}
 	
 	
@@ -277,6 +344,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// rotate buttons
 		this.rotateView(m_PrimaryButton, newRotation);
+		this.rotateView(m_FlashButton, newRotation);
 	}
 	
 	
@@ -400,5 +468,42 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		}
 		if(updateBackground)
 			this.updateButtonBackgrounds();
+	}
+	
+	
+	// Update flash button.
+	private void updateFlashButton()
+	{
+		// check state
+		if(m_FlashButton == null)
+			return;
+		if(m_FlashController == null)
+		{
+			Log.e(TAG, "updateFlashButton() - No flash controller");
+			m_FlashButton.setVisibility(View.GONE);
+			return;
+		}
+		
+		// check flash function
+		if(!m_FlashController.get(FlashController.PROP_HAS_FLASH) || m_FlashController.get(FlashController.PROP_IS_FLASH_DISABLED))
+		{
+			m_FlashButton.setVisibility(View.INVISIBLE);
+			return;
+		}
+		
+		// update icon
+		switch(m_FlashController.get(FlashController.PROP_FLASH_MODE))
+		{
+			case AUTO:
+				m_FlashButton.setImageResource(R.drawable.flash_auto);
+				break;
+			case ON:
+			case TORCH:
+				m_FlashButton.setImageResource(R.drawable.flash_on);
+				break;
+			default:
+				m_FlashButton.setImageResource(R.drawable.flash_off);
+				break;
+		}
 	}
 }

@@ -18,5 +18,6 @@ final class ComponentBuilders
 		new CaptureBarBuilder(),
 		new CaptureModeManagerBuilder(),
 		new CaptureModeSwitcherBuilder(),
+		new FlashControllerBuilder(),
 	};
 }

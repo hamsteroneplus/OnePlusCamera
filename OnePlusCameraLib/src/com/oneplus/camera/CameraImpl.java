@@ -1075,7 +1075,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
 		if(key == PROP_FLASH_MODE)
-			return this.setFlashMode((FlashMode)value);
+			return this.setFlashModeProp((FlashMode)value);
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
@@ -1087,32 +1087,6 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Set flash mode.
-	private boolean setFlashMode(FlashMode flashMode)
-	{
-		// check state
-		this.verifyAccess();
-		FlashMode oldFlashMode = m_FlashMode;
-		if(oldFlashMode == flashMode)
-			return false;
-		if(!this.get(PROP_HAS_FLASH) && flashMode != FlashMode.OFF)
-		{
-			Log.e(TAG, "setFlashMode() - No flash on camera '" + m_Id + "'");
-			return false;
-		}
-		
-		// set flash mode
-		this.setFlashMode(oldFlashMode, m_PreviewRequestBuilder);
-		
-		// apply to preview
-		if(m_CaptureSessionState == OperationState.STARTED)
-		{
-			if(!this.startPreviewRequestDirectly())
-				Log.e(TAG, "setFlashMode() - Fail to apply " + flashMode + " to preview");
-		}
-		
-		// complete
-		return this.notifyPropertyChanged(PROP_FLASH_MODE, oldFlashMode, flashMode);
-	}
 	private void setFlashMode(FlashMode flashMode, CaptureRequest.Builder requestBuilder)
 	{
 		// update state
@@ -1147,6 +1121,36 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			requestBuilder.set(CaptureRequest.CONTROL_AE_MODE, aeCtrlValue);
 			requestBuilder.set(CaptureRequest.FLASH_MODE, flashModeValue);
 		}
+	}
+	
+	
+	// Set flash mode (property).
+	private boolean setFlashModeProp(FlashMode flashMode)
+	{
+		// check state
+		this.verifyAccess();
+		FlashMode oldFlashMode = m_FlashMode;
+		if(oldFlashMode == flashMode)
+			return false;
+		if(!this.get(PROP_HAS_FLASH) && flashMode != FlashMode.OFF)
+		{
+			Log.e(TAG, "setFlashModeProp() - No flash on camera '" + m_Id + "'");
+			return false;
+		}
+		
+		// set flash mode
+		Log.v(TAG, "setFlashModeProp() - Flash mode : ", flashMode);
+		this.setFlashMode(flashMode, m_PreviewRequestBuilder);
+		
+		// apply to preview
+		if(m_CaptureSessionState == OperationState.STARTED)
+		{
+			if(!this.startPreviewRequestDirectly())
+				Log.e(TAG, "setFlashModeProp() - Fail to apply " + flashMode + " to preview");
+		}
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_FLASH_MODE, oldFlashMode, flashMode);
 	}
 	
 	

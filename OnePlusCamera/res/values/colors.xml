@@ -2,6 +2,6 @@
 <resources>
     
     <!-- Capture bar -->
-    <color name="capture_bar_background">#99000000</color>
+    <color name="capture_bar_background">#1A101012</color>
     
 </resources>

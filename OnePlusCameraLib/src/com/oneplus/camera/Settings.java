@@ -374,6 +374,34 @@ public class Settings extends HandlerBaseObject
 	}
 	
 	
+	/**
+	 * Set default value.
+	 * @param key Key.
+	 * @param value Default value.
+	 */
+	public final void setDefaultValue(String key, Object value)
+	{
+		synchronized(m_PrivateDefaultValues)
+		{
+			m_PrivateDefaultValues.put(key, value);
+		}
+	}
+	
+	
+	/**
+	 * Set global default value.
+	 * @param key Key.
+	 * @param value Default value.
+	 */
+	public static void setGlobalDefaultValue(String key, Object value)
+	{
+		synchronized(GLOBAL_DEFAULT_VALUES)
+		{
+			GLOBAL_DEFAULT_VALUES.put(key, value);
+		}
+	}
+	
+	
 	// Get string represents this settings.
 	@Override
 	public String toString()
