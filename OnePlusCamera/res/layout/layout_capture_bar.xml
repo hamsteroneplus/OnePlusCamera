@@ -13,6 +13,18 @@
         android:layout_centerVertical="true"
         android:layout_marginRight="@dimen/capture_bar_primary_button_margin_right"/>
     
+    <!-- Self-timer button -->
+    <ImageButton android:id="@+id/self_timer_button"
+		android:layout_width="wrap_content"
+        android:layout_height="wrap_content" 
+        android:background="@null"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginLeft="@dimen/capture_bar_button_margin_left"
+        android:layout_marginBottom="@dimen/capture_bar_button_margin_bottom"
+        android:src="@drawable/self_timer_off"
+        android:scaleType="center"/>
+    
     <!-- Flash button -->
     <ImageButton android:id="@+id/flash_button"
 		android:layout_width="wrap_content"
@@ -22,6 +34,30 @@
         android:layout_alignParentBottom="true"
         android:layout_marginRight="@dimen/capture_bar_button_margin_right"
         android:layout_marginBottom="@dimen/capture_bar_button_margin_bottom"
+        android:scaleType="center"/>
+    
+    <!-- Switch camera button -->
+    <ImageButton android:id="@+id/switch_camera_button"
+		android:layout_width="wrap_content"
+        android:layout_height="wrap_content" 
+        android:background="@null"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginRight="@dimen/capture_bar_button_margin_right"
+        android:layout_marginTop="@dimen/capture_bar_button_margin_top"
+        android:src="@drawable/switch_camera"
+        android:scaleType="center"/>
+    
+    <!-- more options button -->
+    <ImageButton android:id="@+id/more_options_button"
+		android:layout_width="wrap_content"
+        android:layout_height="wrap_content" 
+        android:background="@null"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginLeft="@dimen/capture_bar_button_margin_left"
+        android:layout_marginTop="@dimen/capture_bar_button_margin_top"
+        android:src="@drawable/more_options"
         android:scaleType="center"/>
 
 </RelativeLayout>

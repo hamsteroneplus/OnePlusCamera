@@ -45,10 +45,13 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	private ImageButton m_FlashButton;
 	private FlashController m_FlashController;
 	private boolean m_IsCapturingBurstPhotos;
+	private ImageButton m_MoreOptionsButton;
 	private CaptureHandle m_PhotoCaptureHandle;
 	private Button m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
 	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+	private ImageButton m_SelfTimerButton;
+	private ImageButton m_SwitchCameraButton;
 	private CaptureHandle m_VideoCaptureHandle;
 	
 	
@@ -202,6 +205,9 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				onFlashButtonClicked();
 			}
 		});
+		m_MoreOptionsButton = (ImageButton)m_CaptureBar.findViewById(R.id.more_options_button);
+		m_SelfTimerButton = (ImageButton)m_CaptureBar.findViewById(R.id.self_timer_button);
+		m_SwitchCameraButton = (ImageButton)m_CaptureBar.findViewById(R.id.switch_camera_button);
 		
 		// add event handlers
 		cameraActivity.addHandler(CameraActivity.EVENT_CAPTURE_STARTED, new EventHandler<CaptureEventArgs>()
@@ -267,6 +273,9 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		Rotation rotation = this.getRotation();
 		this.rotateView(m_PrimaryButton, rotation, 0);
 		this.rotateView(m_FlashButton, rotation, 0);
+		this.rotateView(m_MoreOptionsButton, rotation, 0);
+		this.rotateView(m_SelfTimerButton, rotation, 0);
+		this.rotateView(m_SwitchCameraButton, rotation, 0);
 		
 		// setup flash button initial state
 		this.updateFlashButton();
@@ -345,6 +354,9 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		// rotate buttons
 		this.rotateView(m_PrimaryButton, newRotation);
 		this.rotateView(m_FlashButton, newRotation);
+		this.rotateView(m_MoreOptionsButton, newRotation);
+		this.rotateView(m_SelfTimerButton, newRotation);
+		this.rotateView(m_SwitchCameraButton, newRotation);
 	}
 	
 	
