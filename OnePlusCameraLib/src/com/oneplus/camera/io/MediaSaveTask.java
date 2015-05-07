@@ -225,19 +225,6 @@ public abstract class MediaSaveTask
 			Log.e(TAG, "saveMediaToFile() - Fail to save media to file", ex);
 			return false;
 		}
-		// insert file to mediastore
-		try
-		{
-			m_ContentUri = this.onInsertToMediaStore(m_FilePath, null);
-			if (m_ContentUri == null || m_ContentUri.equals(Uri.EMPTY)) {
-				return false;
-			}
-		}
-		catch(Throwable ex)
-		{
-			Log.e(TAG, "onInsertToMediaStore() - Fail to insert media to mediastore", ex);
-			return false;
-		}
 		
 		// complete
 		return true;

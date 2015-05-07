@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.UUID;
 
 import com.oneplus.base.Log;
 import com.oneplus.camera.CameraCaptureEventArgs;
@@ -39,6 +40,9 @@ public class PhotoSaveTask extends MediaSaveTask {
 		}
 		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
 		File file = new File(directory, "IMG_" + dateFormat.format(new Date()) + ".jpg");
+		if(file.exists()){
+			file = new File(directory, "IMG_" + dateFormat.format(new Date()) + UUID.randomUUID() + ".jpg");
+		}
 		Log.w(TAG, "onPictureReceived() - Write picture to " + file);
 		return file.getAbsolutePath();
 	}
@@ -46,20 +50,16 @@ public class PhotoSaveTask extends MediaSaveTask {
 	@Override
 	protected Uri onInsertToMediaStore(String filePath, ContentValues preparedValues) {
 		Log.d(TAG, "onInsertToMediaStore: " + " filePath: " + filePath + " preparedValues: " + preparedValues);
-		Uri ret = null;
-		ContentValues values = new ContentValues();
-		values.put(Media.TITLE, filePath.substring(filePath.lastIndexOf("/")+1 , filePath.lastIndexOf(".")));
-		values.put(Media.DESCRIPTION, filePath.substring(filePath.lastIndexOf("/")+1));
-		values.put(Images.Media.MIME_TYPE, "image/jpeg");
-		values.put(MediaStore.MediaColumns.DATA, filePath);
-		ret = context.getContentResolver().insert(Media.EXTERNAL_CONTENT_URI, values);
-		return ret;
+		return context.getContentResolver().insert(Media.EXTERNAL_CONTENT_URI, preparedValues);
 	}
 
 	@Override
 	protected boolean onPrepareMediaStoreValues(String filePath, ContentValues values) {
-		// TODO Auto-generated method stub
-		return false;
+		values.put(Media.TITLE, filePath.substring(filePath.lastIndexOf("/")+1 , filePath.lastIndexOf(".")));
+		values.put(Media.DESCRIPTION, filePath.substring(filePath.lastIndexOf("/")+1));
+		values.put(Images.Media.MIME_TYPE, "image/jpeg");
+		values.put(MediaStore.MediaColumns.DATA, filePath);
+		return true;
 	}
 
 	@Override

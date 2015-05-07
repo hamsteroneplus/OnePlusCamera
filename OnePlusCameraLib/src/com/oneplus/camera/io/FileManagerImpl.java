@@ -49,12 +49,43 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 
 	@Override
 	public Handle saveMedia(final MediaSaveTask task, final int flags) {
-		FileManagerImpl.this.raise(EVENT_MEDIA_FILE_SAVED,  new MediaEventArgs(task));
+		
 				
 		saveHandler.post(new Runnable() {
 			public void run() {
-				task.saveMediaToFile();
+				//save file
+				if(task.saveMediaToFile()){
+					FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
+
+					@Override
+					public void run() {
+						FileManagerImpl.this.raise(EVENT_MEDIA_FILE_SAVED,  new MediaEventArgs(task));
+					}});
+					//insert MediaStore
+					if(task.insertToMediaStore()){
+						FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
+
+						@Override
+						public void run() {
+							FileManagerImpl.this.raise(EVENT_MEDIA_SAVED,  new MediaEventArgs(task));
+						}});
+					}else{
+						FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
+
+							@Override
+							public void run() {
+								FileManagerImpl.this.raise(EVENT_MEDIA_SAVE_FAILED,  new MediaEventArgs(task));
+							}});
+					}
+				}else{
+					FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
+
+						@Override
+						public void run() {
+							FileManagerImpl.this.raise(EVENT_MEDIA_SAVE_FAILED,  new MediaEventArgs(task));
+						}});
 				}
+			}
 			});
 		
 		return null;
