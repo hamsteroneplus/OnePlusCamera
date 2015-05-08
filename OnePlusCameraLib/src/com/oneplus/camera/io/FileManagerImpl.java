@@ -4,11 +4,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 
-import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
-import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.camera.CameraThread;
@@ -35,13 +32,6 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		thread = new SaveMediaThread("save media thread");
 		thread.start();
 		saveHandler = thread.getHandler();
-		FileManagerImpl.this.addHandler(EVENT_MEDIA_FILE_SAVED, new EventHandler<MediaEventArgs>(){
-
-			@Override
-			public void onEventReceived(EventSource source, EventKey<MediaEventArgs> key, MediaEventArgs e) {
-				Log.d(TAG, "test");
-				
-			}});
 	}
 	
 	/**
