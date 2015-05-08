@@ -44,4 +44,16 @@ public final class Path
 		}
 		return path;
 	}
+	
+	/**
+	 * Get file name from given path.
+	 * @param path File.
+	 * @return File name without extension.
+	 */
+	public static String getFileNameWithoutExtension(String path)
+	{
+		if(path == null)
+			throw new IllegalArgumentException("No file or directory path.");
+		return path.substring(path.lastIndexOf("/")+1 , path.lastIndexOf("."));
+	}
 }

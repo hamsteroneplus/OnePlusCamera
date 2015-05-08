@@ -10,6 +10,7 @@ import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
+import com.oneplus.base.HandlerUtils;
 import com.oneplus.camera.CameraThread;
 import com.oneplus.camera.CameraThreadComponent;
 import com.oneplus.camera.media.MediaEventArgs;
@@ -24,6 +25,13 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	FileManagerImpl(CameraThread cameraThread)
 	{
 		super("File manager", cameraThread, true);
+	}
+	
+	/**
+	 * Called when initializing component.
+	 */
+	protected void onInitialize()
+	{
 		thread = new SaveMediaThread("save media thread");
 		thread.start();
 		saveHandler = thread.getHandler();
@@ -50,73 +58,63 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	@Override
 	public Handle saveMedia(final MediaSaveTask task, final int flags) {
 		
-				
-		saveHandler.post(new Runnable() {
-			public void run() {
-				//save file
-				if(task.saveMediaToFile()){
-					FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
-
-					@Override
-					public void run() {
-						FileManagerImpl.this.raise(EVENT_MEDIA_FILE_SAVED,  new MediaEventArgs(task));
-					}});
-					//insert MediaStore
-					if(task.insertToMediaStore()){
-						FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
-
-						@Override
-						public void run() {
-							FileManagerImpl.this.raise(EVENT_MEDIA_SAVED,  new MediaEventArgs(task));
-						}});
+		if(task != null && isRunningOrInitializing()){
+			saveHandler.post(new Runnable() {
+				public void run() {
+					//save file
+					if(task.saveMediaToFile()){
+						notifyCameraThread(EVENT_MEDIA_FILE_SAVED, task);
+						//insert MediaStore
+						if(task.insertToMediaStore()){
+							notifyCameraThread(EVENT_MEDIA_SAVED, task);
+						}else{
+							notifyCameraThread(EVENT_MEDIA_SAVE_FAILED, task);
+						}
 					}else{
-						FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
-
-							@Override
-							public void run() {
-								FileManagerImpl.this.raise(EVENT_MEDIA_SAVE_FAILED,  new MediaEventArgs(task));
-							}});
+						notifyCameraThread(EVENT_MEDIA_SAVE_FAILED, task);
 					}
-				}else{
-					FileManagerImpl.this.getCameraThread().getHandler().post(new Runnable(){
-
-						@Override
-						public void run() {
-							FileManagerImpl.this.raise(EVENT_MEDIA_SAVE_FAILED,  new MediaEventArgs(task));
-						}});
 				}
-			}
 			});
+		}
 		
 		return null;
 	}
 	
+	private boolean notifyCameraThread(final EventKey<MediaEventArgs> event, final MediaSaveTask task){
+		return HandlerUtils.post(getCameraThread(), new Runnable(){
+
+			@Override
+			public void run() {
+				FileManagerImpl.this.raise(event,  new MediaEventArgs(task));
+			}});
+	}
+	
+	 class SaveMediaThread extends HandlerThread {
+			private static final String TAG = "SaveMediaThread";
+			private Handler mHandler;
+
+			public SaveMediaThread(String name) {
+				super(name);
+			}
+
+			public Handler getHandler() {
+				return mHandler;
+			}
+
+			@Override
+			public void start() {
+				super.start();
+				Looper looper = getLooper(); // will block until thread¡¦s Looper object initialized 
+				mHandler = new Handler(looper) {
+					@Override
+					public void handleMessage(Message msg) {
+						switch (msg.what) {
+						// process messages here
+						}
+					}
+				};
+			}
+		}
 	
 }
 
- class SaveMediaThread extends HandlerThread {
-	private static final String TAG = "SaveMediaThread";
-	private Handler mHandler;
-
-	public SaveMediaThread(String name) {
-		super(name);
-	}
-
-	public Handler getHandler() {
-		return mHandler;
-	}
-
-	@Override
-	public void start() {
-		super.start();
-		Looper looper = getLooper(); // will block until thread¡¦s Looper object initialized 
-		mHandler = new Handler(looper) {
-			@Override
-			public void handleMessage(Message msg) {
-				switch (msg.what) {
-				// process messages here
-				}
-			}
-		};
-	}
-}
