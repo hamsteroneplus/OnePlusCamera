@@ -68,14 +68,14 @@ public abstract class BasicBaseObject extends BasicThreadDependentObject impleme
 	{
 		public List<EventHandler<?>> addingHandlers;
 		public List<EventHandler<?>> handlers;
-		//public final EventKey<?> key;
+		public final EventKey<?> key;
 		public int logFlags;
 		public int raisingCounter;
 		public List<EventHandler<?>> removingHandlers;
 		
 		public Event(EventKey<?> key)
 		{
-			//this.key = key;
+			this.key = key;
 		}
 	}
 	
@@ -305,6 +305,40 @@ public abstract class BasicBaseObject extends BasicThreadDependentObject impleme
 		if(property != null)
 			return this.notifyPropertyChanged(property, oldValue, newValue);
 		return this.checkValueChanges(oldValue, newValue);
+	}
+	
+	
+	/**
+	 * Check whether there is at least one call-back added to property or not.
+	 * @param key Property key.
+	 * @return Whether there is at least one call-back or not.
+	 */
+	protected boolean hasCallbacks(PropertyKey<?> key)
+	{
+		Property property = m_Properties.get(key.id);
+		while(property != null && property.key != key)
+			property = m_Properties.get(key.id);
+		if(property == null)
+			return false;
+		List<PropertyChangedCallback<?>> callbacks = property.callbacks;
+		return (callbacks != null && !callbacks.isEmpty());
+	}
+	
+	
+	/**
+	 * Check whether there is at least one handler added to event or not.
+	 * @param key Event key.
+	 * @return Whether there is at least one handler or not.
+	 */
+	protected boolean hasHandlers(EventKey<?> key)
+	{
+		Event event = m_Events.get(key.id);
+		while(event != null && event.key != key)
+			event = m_Events.get(key.id);
+		if(event == null)
+			return false;
+		List<EventHandler<?>> handlers = event.handlers;
+		return (handlers != null && !handlers.isEmpty());
 	}
 	
 	

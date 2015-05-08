@@ -70,6 +70,7 @@ final class CameraDeviceManagerImpl extends CameraThreadComponent implements Cam
 		List<Camera> newList;
 		try
 		{
+			Context context = this.getContext();
 			String[] cameraIdList = m_CameraManager.getCameraIdList();
 			Camera[] cameras = new Camera[cameraIdList.length];
 			for(int i = cameraIdList.length - 1 ; i >= 0 ; --i)
@@ -88,7 +89,7 @@ final class CameraDeviceManagerImpl extends CameraThreadComponent implements Cam
 					}
 				}
 				if(cameras[i] == null)
-					cameras[i] = new CameraImpl(m_CameraManager, id, m_CameraManager.getCameraCharacteristics(id));
+					cameras[i] = new CameraImpl(context, m_CameraManager, id, m_CameraManager.getCameraCharacteristics(id));
 			}
 			newList = Arrays.asList(cameras);
 		} 

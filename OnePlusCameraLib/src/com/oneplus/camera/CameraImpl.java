@@ -7,6 +7,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import android.content.Context;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
@@ -21,18 +22,31 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
+import android.os.Message;
+import android.renderscript.Allocation;
+import android.renderscript.Element;
+import android.renderscript.RenderScript;
+import android.renderscript.Type;
 import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
 import com.oneplus.base.EventArgs;
+import com.oneplus.base.EventHandler;
+import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerBaseObject;
+import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.renderscript.RenderScriptManager;
 
 class CameraImpl extends HandlerBaseObject implements Camera
 {
+	// Constants
+	private static final int MSG_PREVIEW_FRAME_RECEIVED = 10000;
+	
+	
 	// Private fields
 	private Handle m_CaptureHandle;
 	private CameraCaptureSession m_CaptureSession;
@@ -58,6 +72,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private OperationState m_CaptureSessionState = OperationState.STOPPED;
 	private final CameraCharacteristics m_Characteristics;
 	private final CameraManager m_CameraManager;
+	private Context m_Context;
 	private CameraDevice m_Device;
 	private final CameraDevice.StateCallback m_DeviceStateCallback = new CameraDevice.StateCallback()
 	{
@@ -82,6 +97,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private FlashMode m_FlashMode = FlashMode.OFF;
 	private final String m_Id;
 	private boolean m_IsCaptureSequenceCompleted;
+	private volatile boolean m_IsPreviewReceived;
 	private final LensFacing m_LensFacing;
 	private final ImageReader.OnImageAvailableListener m_PictureAvailableListener = new ImageReader.OnImageAvailableListener()
 	{
@@ -139,10 +155,22 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private ImageReader m_PictureReader;
 	private Size m_PictureSize = new Size(0, 0);
 	private Surface m_PictureSurface;
+	private Allocation m_PreviewCallbackAllocation;
+	private final Allocation.OnBufferAvailableListener m_PreviewCallbackAllocationCallback = new Allocation.OnBufferAvailableListener()
+	{
+		@Override
+		public void onBufferAvailable(Allocation a)
+		{
+			HandlerUtils.sendMessage(CameraImpl.this, MSG_PREVIEW_FRAME_RECEIVED);
+		}
+	};
+	private byte[] m_PreviewCallbackData;
+	private Surface m_PreviewCallbackSurface;
 	private final CameraCaptureSession.CaptureCallback m_PreviewCaptureCallback = new CameraCaptureSession.CaptureCallback()
 	{
 	};
 	private CaptureRequest.Builder m_PreviewRequestBuilder;
+	private Size m_PreviewSize = new Size(0, 0);
 	private Surface m_PreviewSurface;
 	private int m_ReceivedCaptureCompletedCount;
 	private final Queue<CaptureResult> m_ReceivedCaptureCompletedResults = new LinkedList<>();
@@ -150,6 +178,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final Queue<CaptureResult> m_ReceivedCaptureStartedResults = new LinkedList<>();
 	private int m_ReceivedPictureCount;
 	private final Queue<byte[]> m_ReceivedPictures = new LinkedList<>();
+	private RenderScript m_RenderScript;
+	private Handle m_RenderScriptHandle;
 	private final int m_SensorOrientation;
 	private volatile State m_State = State.CLOSED;
 	private int m_TargetCapturedFrameCount;
@@ -158,12 +188,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Constructor
-	public CameraImpl(CameraManager cameraManager, String id, CameraCharacteristics cameraChar)
+	public CameraImpl(Context context, CameraManager cameraManager, String id, CameraCharacteristics cameraChar)
 	{
 		// call super
 		super(true);
 		
 		// save characteristics
+		m_Context = context;
 		m_CameraManager = cameraManager;
 		m_Characteristics = cameraChar;
 		m_Id = id;
@@ -204,6 +235,33 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_STATE, LOG_PROPERTY_CHANGE);
+	}
+	
+	
+	// Add event handler.
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TArgs extends EventArgs> void addHandler(EventKey<TArgs> key, EventHandler<TArgs> handler)
+	{
+		if(key == EVENT_PREVIEW_RECEIVED)
+			this.addPreviewReceivedHandler((EventHandler<CameraCaptureEventArgs>)handler);
+		else
+			super.addHandler(key, handler);
+	}
+	
+	
+	// Add handler to EVENT_PREVIEW_RECEIVED.
+	private void addPreviewReceivedHandler(EventHandler<CameraCaptureEventArgs> handler)
+	{
+		boolean isFirstHandler = !this.hasHandlers(EVENT_PREVIEW_RECEIVED);
+		super.addHandler(EVENT_PREVIEW_RECEIVED, handler);
+		if(isFirstHandler && m_PreviewRequestBuilder != null && m_PreviewCallbackSurface != null)
+		{
+			Log.v(TAG, "addPreviewReceivedHandler() - Add preview call-back surface");
+			m_PreviewRequestBuilder.addTarget(m_PreviewCallbackSurface);
+			if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
+				this.startPreviewRequestDirectly();
+		}
 	}
 	
 	
@@ -441,6 +499,15 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			m_Device = null;
 		}
 		
+		// destroy RenderScript resources
+		if(m_PreviewCallbackAllocation != null)
+		{
+			m_PreviewCallbackAllocation.destroy();
+			m_PreviewCallbackAllocation = null;
+		}
+		m_RenderScriptHandle = Handle.close(m_RenderScriptHandle);
+		m_RenderScript = null;
+		
 		// change state
 		this.changeState(State.CLOSED);
 	}
@@ -528,11 +595,30 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_LensFacing;
 		if(key == PROP_PICTURE_SIZE)
 			return (TValue)m_PictureSize;
+		if(key == PROP_PREVIEW_SIZE)
+			return (TValue)m_PreviewSize;
 		if(key == PROP_STATE)
 			return (TValue)m_State;
 		if(key == PROP_VIDEO_SURFACE)
 			return (TValue)m_VideoSurface;
 		return super.get(key);
+	}
+	
+	
+	// Handle message.
+	@Override
+	protected void handleMessage(Message msg)
+	{
+		switch(msg.what)
+		{
+			case MSG_PREVIEW_FRAME_RECEIVED:
+				this.onPreviewFrameReceived();
+				break;
+				
+			default:
+				super.handleMessage(msg);
+				break;
+		}
 	}
 	
 	
@@ -673,9 +759,27 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_PreviewSurface = null;
 		m_CaptureSession = null;
 		m_CaptureSessionState = OperationState.STOPPED;
+		m_PreviewCallbackData = null;
+		if(m_IsPreviewReceived)
+		{
+			m_IsPreviewReceived = false;
+			this.notifyPropertyChanged(PROP_IS_PREVIEW_RECEIVED, true, false);
+		}
 		
 		// clear request builders
 		m_PreviewRequestBuilder = null;
+		
+		// release preview call-back buffer
+		if(m_PreviewCallbackSurface != null)
+		{
+			m_PreviewCallbackSurface.release();
+			m_PreviewCallbackSurface = null;
+		}
+		if(m_PreviewCallbackAllocation != null)
+		{
+			m_PreviewCallbackAllocation.destroy();
+			m_PreviewCallbackAllocation = null;
+		}
 		
 		// restart capture session
 		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTING)
@@ -979,6 +1083,57 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Called when preview frame received.
+	private void onPreviewFrameReceived()
+	{
+		// receive preview frame
+		if(m_PreviewCallbackAllocation != null)
+		{
+			try
+			{
+				m_PreviewCallbackAllocation.ioReceive();
+			}
+			catch(Throwable ex)
+			{
+				Log.e(TAG, "onPreviewFrameReceived() - Fail to receive preview frame", ex);
+			}
+		}
+		
+		// remove surface
+		boolean isPreviewStarted = (this.get(PROP_PREVIEW_STATE) == OperationState.STARTED);
+		boolean hasHandlers = this.hasHandlers(EVENT_PREVIEW_RECEIVED);
+		if(!hasHandlers && m_PreviewRequestBuilder != null && m_PreviewCallbackSurface != null)
+		{
+			Log.v(TAG, "onPreviewFrameReceived() - Remove preview call-back surface");
+			m_PreviewRequestBuilder.removeTarget(m_PreviewCallbackSurface);
+			if(isPreviewStarted)
+				this.startPreviewRequestDirectly();
+		}
+		
+		// check state
+		if(!isPreviewStarted)
+			return;
+		
+		// update state
+		if(!m_IsPreviewReceived)
+		{
+			Log.v(TAG, "onPreviewFrameReceived() - First preview frame received");
+			m_IsPreviewReceived = true;
+			this.notifyPropertyChanged(PROP_IS_PREVIEW_RECEIVED, false, true);
+		}
+		
+		// raise event
+		if(hasHandlers && m_PreviewCallbackAllocation != null)
+		{
+			int dataSize = (m_PreviewSize.getWidth() * m_PreviewSize.getHeight() * 3 / 2);
+			if(m_PreviewCallbackData == null || m_PreviewCallbackData.length != dataSize)
+				m_PreviewCallbackData = new byte[dataSize];
+			m_PreviewCallbackAllocation.copyTo(m_PreviewCallbackData);
+			this.raise(EVENT_PREVIEW_RECEIVED, CameraCaptureEventArgs.obtain(null, -1, null, m_PreviewCallbackData, ImageFormat.YUV_420_888, m_PreviewSize));
+		}
+	}
+	
+	
 	// Called when releasing object.
 	@Override
 	protected void onRelease()
@@ -986,6 +1141,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// change state
 		if(m_State == State.CLOSED)
 			this.changeState(State.UNAVAILABLE);
+		
+		// clear references
+		m_Context = null;
 		
 		// call super
 		super.onRelease();
@@ -1070,6 +1228,32 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Remove event handler.
+	@SuppressWarnings("unchecked")
+	@Override
+	public <TArgs extends EventArgs> void removeHandler(EventKey<TArgs> key, EventHandler<TArgs> handler)
+	{
+		if(key == EVENT_PREVIEW_RECEIVED)
+			this.removePreviewReceivedHandler((EventHandler<CameraCaptureEventArgs>)handler);
+		else
+			super.removeHandler(key, handler);
+	}
+	
+	
+	// Remove handler from EVENT_PREVIEW_RECEIVED.
+	private void removePreviewReceivedHandler(EventHandler<CameraCaptureEventArgs> handler)
+	{
+		super.removeHandler(EVENT_PREVIEW_RECEIVED, handler);
+		if(!this.hasHandlers(EVENT_PREVIEW_RECEIVED) && m_PreviewRequestBuilder != null && m_PreviewCallbackSurface != null)
+		{
+			Log.v(TAG, "removePreviewReceivedHandler() - Remove preview call-back surface");
+			m_PreviewRequestBuilder.removeTarget(m_PreviewCallbackSurface);
+			if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
+				this.startPreviewRequestDirectly();
+		}
+	}
+	
+	
 	// Set property value.
 	@Override
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
@@ -1078,6 +1262,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return this.setFlashModeProp((FlashMode)value);
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
+		if(key == PROP_PREVIEW_SIZE)
+			return this.setPreviewSizeProp((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
 			return this.setPreviewReceiver(value);
 		if(key == PROP_VIDEO_SURFACE)
@@ -1238,6 +1424,55 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Set preview size property.
+	private boolean setPreviewSizeProp(Size previewSize)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		
+		// check preview size
+		if(previewSize == null)
+			throw new IllegalArgumentException("No preview size");
+		Size oldSize = m_PreviewSize;
+		if(previewSize.equals(oldSize))
+			return false;
+		if(!this.get(PROP_PREVIEW_SIZES).contains(previewSize))
+		{
+			Log.e(TAG, "setPreviewSizeProp() - Invalid preview size : " + previewSize);
+			return false;
+		}
+		
+		// stop preview first
+		boolean needRestartPreview;
+		switch(this.get(PROP_PREVIEW_STATE))
+		{
+			case STARTING:
+			case STARTED:
+				Log.w(TAG, "setPreviewSizeProp() - Stop preview to change preview size");
+				this.stopPreview(0);
+				needRestartPreview = true;
+				break;
+			default:
+				needRestartPreview = false;
+				break;
+		}
+		
+		// set preview size
+		m_PreviewSize = previewSize;
+		
+		// restart preview
+		if(needRestartPreview)
+		{
+			Log.w(TAG, "setPreviewSizeProp() - Restart preview");
+			this.startPreview(0);
+		}
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_PREVIEW_SIZE, oldSize, previewSize);
+	}
+	
+	
 	// Set video surface.
 	private boolean setVideoSurface(Surface surface)
 	{
@@ -1311,6 +1546,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		
 		// check picture size
+		if(m_PreviewSize.getWidth() <= 0 || m_PreviewSize.getHeight() <= 0)
+		{
+			Log.e(TAG, "startCaptureSession() - Empty preview size");
+			return false;
+		}
+		
+		// check picture size
 		Size pictureSize = m_PictureSize;
 		if(pictureSize.getWidth() <= 0 || pictureSize.getHeight() <= 0)
 		{
@@ -1347,11 +1589,33 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_PictureSurface = m_PictureReader.getSurface();
 		surfaces.add(m_PictureSurface);
 		
-		// prepare video surface
+		// prepare video/preview call-back surface
 		if(m_VideoSurface != null)
 		{
 			Log.v(TAG, "startCaptureSession() - Video surface : ", m_VideoSurface);
 			surfaces.add(m_VideoSurface);
+		}
+		else
+		{
+			// create render script
+			if(m_RenderScript == null)
+			{
+				m_RenderScriptHandle = RenderScriptManager.createRenderScript(m_Context);
+				m_RenderScript = RenderScriptManager.getRenderScript(m_RenderScriptHandle);
+			}
+			
+			// create allocation for preview frame call-back
+			if(m_RenderScript != null)
+			{
+				Type.Builder typeBuilder = new Type.Builder(m_RenderScript, Element.YUV(m_RenderScript));
+				typeBuilder.setYuvFormat(ImageFormat.YUV_420_888);
+				typeBuilder.setX(m_PreviewSize.getWidth());
+				typeBuilder.setY(m_PreviewSize.getHeight());
+				m_PreviewCallbackAllocation = Allocation.createTyped(m_RenderScript, typeBuilder.create(), Allocation.USAGE_IO_INPUT | Allocation.USAGE_SCRIPT);
+				m_PreviewCallbackAllocation.setOnBufferAvailableListener(m_PreviewCallbackAllocationCallback);
+				m_PreviewCallbackSurface = m_PreviewCallbackAllocation.getSurface();
+				surfaces.add(m_PreviewCallbackSurface);
+			}
 		}
 		
 		// create request builders
@@ -1364,9 +1628,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			{
 				Log.v(TAG, "startCaptureSession() - Create request builder for video recording");
 				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-				m_PreviewRequestBuilder.addTarget(m_VideoSurface);
 			}
+			
+			// prepare output surfaces
 			m_PreviewRequestBuilder.addTarget(m_PreviewSurface);
+			if(m_VideoSurface != null)
+				m_PreviewRequestBuilder.addTarget(m_VideoSurface);
+			else// if(this.hasHandlers(EVENT_PREVIEW_RECEIVED) && m_PreviewCallbackSurface != null)
+			{
+				Log.v(TAG, "startCaptureSession() - Add preview call-back surface");
+				m_PreviewRequestBuilder.addTarget(m_PreviewCallbackSurface);
+			}
 			
 			// setup flash mode
 			this.setFlashMode(m_FlashMode, m_PreviewRequestBuilder);

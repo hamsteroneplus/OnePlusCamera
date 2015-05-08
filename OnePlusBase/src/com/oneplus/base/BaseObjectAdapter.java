@@ -22,6 +22,22 @@ public final class BaseObjectAdapter extends BasicBaseObject
 	}
 	
 	
+	// Check whether there is at least one call-back added to property or not.
+	@Override
+	public boolean hasCallbacks(PropertyKey<?> key)
+	{
+		return super.hasCallbacks(key);
+	}
+	
+	
+	// Check whether there is at least one handler added to event or not.
+	@Override
+	public boolean hasHandlers(EventKey<?> key)
+	{
+		return super.hasHandlers(key);
+	}
+	
+	
 	// Notify that value of given property has been changed.
 	@Override
 	public <TValue> boolean notifyPropertyChanged(PropertyKey<TValue> key, TValue oldValue, TValue newValue)

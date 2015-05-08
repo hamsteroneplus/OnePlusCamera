@@ -1889,6 +1889,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// start preview
+		final Size previewSize = this.get(PROP_CAMERA_PREVIEW_SIZE);
 		final Object previewReceiver = m_Viewfinder.get(Viewfinder.PROP_PREVIEW_RECEIVER);
 		if(!HandlerUtils.post(m_CameraThread, new Runnable()
 		{
@@ -1903,7 +1904,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 						HandlerUtils.sendMessage(CameraActivity.this, MSG_CAMERA_PREVIEW_STARTED, 0, 0, camera);
 						break;
 					default:
-						if(m_CameraThread.startCameraPreview(camera, previewReceiver))
+						if(m_CameraThread.startCameraPreview(camera, previewSize, previewReceiver))
 						{
 							switch(camera.get(Camera.PROP_PREVIEW_STATE))
 							{

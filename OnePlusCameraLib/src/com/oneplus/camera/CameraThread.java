@@ -14,6 +14,7 @@ import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Size;
 
 import com.oneplus.base.BaseThread;
 import com.oneplus.base.EventArgs;
@@ -1276,7 +1277,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		if(needRestartPreview)
 		{
 			Log.w(TAG, "setMediaTypeInternal() - Restart preview");
-			if(!this.startCameraPreview(camera, null))
+			if(!this.startCameraPreview(camera, null, null))
 				Log.e(TAG, "setMediaTypeInternal() - Fail to restart preview");
 		}
 		
@@ -1346,23 +1347,25 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	/**
 	 * Start camera preview.
 	 * @param camera Camera to start preview.
+	 * @param previewSize Preview size.
 	 * @param receiver Camera preview receiver, Null to use current receiver.
 	 * @return Whether camera preview starts successfully or not.
 	 */
-	public final boolean startCameraPreview(Camera camera, Object receiver)
+	public final boolean startCameraPreview(Camera camera, Size previewSize, Object receiver)
 	{
-		return this.startCameraPreview(camera, receiver, 0);
+		return this.startCameraPreview(camera, previewSize, receiver, 0);
 	}
 	
 	
 	/**
 	 * Start camera preview.
 	 * @param camera Camera to start preview.
+	 * @param previewSize Preview size.
 	 * @param receiver Camera preview receiver, Null to use current receiver.
 	 * @param flags Flags, reserved.
 	 * @return Whether camera preview starts successfully or not.
 	 */
-	public final boolean startCameraPreview(final Camera camera, final Object receiver, final int flags)
+	public final boolean startCameraPreview(final Camera camera, final Size previewSize, final Object receiver, final int flags)
 	{
 		// check parameter
 		if(camera == null)
@@ -1371,13 +1374,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			return false;
 		}
 		if(this.isDependencyThread())
-			return this.startCameraPreviewInternal(camera, receiver, flags);
+			return this.startCameraPreviewInternal(camera, previewSize, receiver, flags);
 		else if(HandlerUtils.post(this, new Runnable()
 		{
 			@Override
 			public void run()
 			{
-				startCameraPreviewInternal(camera, receiver, flags);
+				startCameraPreviewInternal(camera, previewSize, receiver, flags);
 			}
 		}))
 		{
@@ -1390,7 +1393,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	// Start camera preview.
 	@SuppressWarnings("incomplete-switch")
-	private boolean startCameraPreviewInternal(Camera camera, Object receiver, int flags)
+	private boolean startCameraPreviewInternal(Camera camera, Size previewSize, Object receiver, int flags)
 	{
 		// open camera first
 		if(!this.openCameraInternal(camera, 0))
@@ -1420,6 +1423,17 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			Log.w(TAG, "startCameraPreviewInternal() - Change preview receiver to " + receiver);
 			camera.set(Camera.PROP_PREVIEW_RECEIVER, receiver);
 		}
+		else
+			Log.v(TAG, "startCameraPreviewInternal() - Use current preview receiver");
+		
+		// set preview size
+		if(previewSize != null)
+		{
+			Log.w(TAG, "startCameraPreviewInternal() - Preview size : " + previewSize);
+			camera.set(Camera.PROP_PREVIEW_SIZE, previewSize);
+		}
+		else
+			Log.v(TAG, "startCameraPreviewInternal() - Use current preview size");
 		
 		// start preview
 		Log.w(TAG, "startCameraPreviewInternal() - Start preview for camera " + camera);

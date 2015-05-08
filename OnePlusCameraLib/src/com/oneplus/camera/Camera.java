@@ -37,6 +37,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<String> PROP_ID = new PropertyKey<>("ID", String.class, Camera.class, "");
 	/**
+	 * Read-only property to check whether first preview frame is received or not.
+	 */
+	PropertyKey<Boolean> PROP_IS_PREVIEW_RECEIVED = new PropertyKey<>("IsPreviewReceived", Boolean.class, Camera.class, false);
+	/**
 	 * Read-only property for camera device facing.
 	 */
 	PropertyKey<LensFacing> PROP_LENS_FACING = new PropertyKey<>("LensFacing", LensFacing.class, Camera.class, LensFacing.BACK);
@@ -61,6 +65,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Property to get or set preview receiver.
 	 */
 	PropertyKey<Object> PROP_PREVIEW_RECEIVER = new PropertyKey<>("PreviewReceiver", Object.class, Camera.class, 0, null);
+	/**
+	 * Property to get or set preview size.
+	 */
+	PropertyKey<Size> PROP_PREVIEW_SIZE = new PropertyKey<>("PreviewSize", Size.class, Camera.class, new Size(0, 0));
 	/**
 	 * Read-only property to get all supported preview sizes.
 	 */
@@ -105,6 +113,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Event raised when receiving captured picture.
 	 */
 	EventKey<CameraCaptureEventArgs> EVENT_PICTURE_RECEIVED = new EventKey<>("PictureReceived", CameraCaptureEventArgs.class, Camera.class);
+	/**
+	 * Event raised when receiving preview frame.
+	 */
+	EventKey<CameraCaptureEventArgs> EVENT_PREVIEW_RECEIVED = new EventKey<>("PreviewReceived", CameraCaptureEventArgs.class, Camera.class);
 	/**
 	 * Event raised when start capturing picture.
 	 */
