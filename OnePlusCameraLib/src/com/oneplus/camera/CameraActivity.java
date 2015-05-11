@@ -26,6 +26,7 @@ import com.oneplus.base.component.ComponentCreationPriority;
 import com.oneplus.base.component.ComponentEventArgs;
 import com.oneplus.base.component.ComponentManager;
 import com.oneplus.base.component.ComponentOwner;
+import com.oneplus.camera.Camera.LensFacing;
 import com.oneplus.camera.media.MediaType;
 import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.media.ResolutionManagerBuilder;
@@ -85,6 +86,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_THREAD_STARTED = new PropertyKey<>("IsCameraThreadStarted", Boolean.class, CameraActivity.class, false);
 	/**
+	 * Read-only property to check whether self timer is started or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_SELF_TIMER_STARTED = new PropertyKey<>("IsSelfTimerStarted", Boolean.class, CameraActivity.class, false);
+	/**
 	 * Read-only property for current device orientation.
 	 */
 	public static final PropertyKey<Integer> PROP_DEVICE_ORIENTATION = new PropertyKey<>("DeviceOrientation", Integer.class, CameraActivity.class, 0);
@@ -108,6 +113,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Read-only property for screen size.
 	 */
 	public static final PropertyKey<ScreenSize> PROP_SCREEN_SIZE = new PropertyKey<>("ScreenSize", ScreenSize.class, CameraActivity.class, ScreenSize.EMPTY);
+	/**
+	 * Property to get or set self-timer interval in seconds.
+	 */
+	public static final PropertyKey<Long> PROP_SELF_TIMER_INTERVAL = new PropertyKey<>("SelfTimerInterval", Long.class, CameraActivity.class, PropertyKey.FLAG_NOT_NULL, 0L);
 	/**
 	 * Read-only property for current settings.
 	 */
@@ -137,6 +146,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Constants
+	private static final String SETTINGS_KEY_CAMERA_LENS_FACING = "CameraLensFacing";
+	private static final String SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK = "SelfTimer.Back";
+	private static final String SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT = "SelfTimer.Front";
 	private static final int MSG_CAMERA_THREAD_EVENT_RAISED = -1;
 	private static final int MSG_CAMERA_THREAD_PROP_CHANGED = -2;
 	private static final int MSG_CAMERA_PREVIEW_START_FAILED = -10;
@@ -152,6 +164,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private CameraThread m_CameraThread;
 	private OperationState m_CameraPreviewState = OperationState.STOPPED;
 	private ComponentManager m_ComponentManager;
+	private CountDownTimer m_CountDownTimer;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private boolean m_IsCameraPreviewReceiverReady;
 	private boolean m_IsOrientationListenerStarted;
@@ -160,6 +173,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private CaptureHandleImpl m_PhotoCaptureHandle;
 	private ResolutionManager m_ResolutionManager;
 	private Rotation m_Rotation = Rotation.PORTRAIT;
+	private Handle m_SelfTimerHandle;
 	private final List<SettingsHandle> m_SettingsHandles = new ArrayList<>();
 	private CaptureHandleImpl m_VideoCaptureHandle;
 	private Viewfinder m_Viewfinder;
@@ -222,6 +236,15 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		{
 			restoreSettings(this);
 		}
+	}
+	
+	
+	// Static initializer.
+	static
+	{
+		Settings.setGlobalDefaultValue(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.BACK);
+		Settings.setGlobalDefaultValue(SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK, 0L);
+		Settings.setGlobalDefaultValue(SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT, 0L);
 	}
 	
 	
@@ -292,20 +315,54 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Bind to related components
-	private boolean bindToComponents()
+	private boolean bindToInitialComponents()
 	{
 		// ResolutionManager
 		if(this.getResolutionManager() == null)
 		{
-			Log.e(TAG, "bindToComponents() - No ResolutionManager");
+			Log.e(TAG, "bindToInitialComponents() - No ResolutionManager");
 			return false;
 		}
 		
 		// Viewfinder
 		if(this.getViewfinder() == null)
 		{
-			Log.e(TAG, "bindToComponents() - No Viewfinder");
+			Log.e(TAG, "bindToInitialComponents() - No Viewfinder");
 			return false;
+		}
+		
+		// complete
+		return true;
+	}
+	
+	
+	// Bind to related normal component.
+	private boolean bindToNormalComponents()
+	{
+		// CountDownTimer
+		if(m_CountDownTimer == null)
+		{
+			m_CountDownTimer = m_ComponentManager.findComponent(CountDownTimer.class, this);
+			if(m_CountDownTimer != null)
+			{
+				m_CountDownTimer.addCallback(CountDownTimer.PROP_REMAINING_SECONDS, new PropertyChangedCallback<Long>()
+				{
+					@Override
+					public void onPropertyChanged(PropertySource source, PropertyKey<Long> key, PropertyChangeEventArgs<Long> e)
+					{
+						onCountDownTimerChanged(e.getNewValue());
+					}
+				});
+				m_CountDownTimer.addHandler(CountDownTimer.EVENT_CANCELLED, new EventHandler<EventArgs>()
+				{
+					@Override
+					public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e)
+					{
+						onCountDownTimerCancelled();
+					}
+				});
+				this.updateSelfTimerInternal();
+			}
 		}
 		
 		// complete
@@ -426,6 +483,11 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			case READY:
 				break;
 			case STARTING:
+				if(Handle.isValid(m_SelfTimerHandle))
+				{
+					Log.w(TAG, "capturePhoto() - Counting-down self timer");
+					return null;
+				}
 			case CAPTURING:
 			case STOPPING:
 				m_PendingPhotoCaptureHandle = new CaptureHandleImpl(frameCount);
@@ -445,7 +507,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		CaptureHandleImpl handle = new CaptureHandleImpl(frameCount);
 		
 		// capture
-		if(!this.capturePhoto(handle))
+		if(!this.capturePhoto(handle, false))
 		{
 			Log.e(TAG, "capturePhoto() - Fail to capture");
 			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
@@ -458,29 +520,53 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Start photo capture.
-	private boolean capturePhoto(final CaptureHandleImpl handle)
+	private boolean capturePhoto(final CaptureHandleImpl handle, boolean fromSelfTimer)
 	{
-		Log.v(TAG, "capturePhoto() - Handle : ", handle);
+		Log.v(TAG, "capturePhoto() - Handle : ", handle, ", from self timer : ", fromSelfTimer);
 		
 		// check video snapshot
 		if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO && !this.canVideoSnapshot())
 		{
 			Log.e(TAG, "capturePhoto() - Cannot take video snapshot");
+			if(fromSelfTimer)
+				this.resetPhotoCaptureState();
 			return false;
 		}
 		
 		// change state
-		this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.STARTING);
+		if(!fromSelfTimer)
+			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.STARTING);
 		
 		// start count-down
-		switch(this.get(PROP_MEDIA_TYPE))
+		if(!fromSelfTimer)
 		{
-			case PHOTO:
-				//
-				break;
-			case VIDEO:
-				Log.w(TAG, "capturePhoto() - Video snapshot");
-				break;
+			switch(this.get(PROP_MEDIA_TYPE))
+			{
+				case PHOTO:
+				{
+					long seconds = this.get(PROP_SELF_TIMER_INTERVAL);
+					if(seconds > 0)
+					{
+						if(m_CountDownTimer != null)
+						{
+							Log.w(TAG, "capturePhoto() - Start self timer");
+							m_SelfTimerHandle = m_CountDownTimer.start(seconds, 0);
+							if(Handle.isValid(m_SelfTimerHandle))
+							{
+								this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, true);
+								return true;
+							}
+							Log.e(TAG, "capturePhoto() - Fail to start self timer");
+						}
+						else
+							Log.w(TAG, "capturePhoto() - No CountDownTimer interface");
+					}
+					break;
+				}
+				case VIDEO:
+					Log.w(TAG, "capturePhoto() - Video snapshot");
+					break;
+			}
 		}
 		
 		// capture
@@ -889,15 +975,55 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
+		boolean selectCamera = (camera == null);
 		if(camera != null)
 		{
-			if(cameras.contains(camera))
-				return;
-			Log.w(TAG, "onAvailableCamerasChanged() - Camera " + camera + " is not contained in new list");
+			if(!cameras.contains(camera))
+			{
+				Log.w(TAG, "onAvailableCamerasChanged() - Camera " + camera + " is not contained in new list");
+				selectCamera = true;
+			}
 		}
 		
 		// update property
 		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
+		
+		// check state
+		if(!selectCamera)
+			return;
+		
+		// select camera
+		LensFacing lensFacing = this.get(PROP_SETTINGS).getEnum(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.class);
+		camera = CameraUtils.findCamera(cameras, lensFacing, false);
+		if(camera == null)
+		{
+			Log.e(TAG, "onAvailableCamerasChanged() - No camera with lens facing " + lensFacing + ", select another camera");
+			lensFacing = (lensFacing == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
+			camera = CameraUtils.findCamera(cameras, lensFacing, false);
+		}
+		if(camera != null)
+		{
+			Log.w(TAG, "onAvailableCamerasChanged() - Select " + camera);
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, camera.get(Camera.PROP_LENS_FACING));
+		}
+		else
+			Log.e(TAG, "onAvailableCamerasChanged() - No camera to use");
+		this.setReadOnly(PROP_CAMERA, camera);
+		
+		// check activity state
+		switch(this.get(PROP_STATE))
+		{
+			case CREATING:
+			case RESUMING:
+			case RUNNING:
+				break;
+			default:
+				return;
+		}
+		
+		// open camera
+		if(camera != null && !this.getCameraThread().openCamera(camera))
+			Log.e(TAG, "onAvailableCamerasChanged() - Fail to open camera " + camera);
 	}
 	
 	
@@ -1149,7 +1275,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 						if(pendingHandle != null && (SystemClock.elapsedRealtime() - pendingHandle.creationTime) <= 800)
 						{
 							Log.w(TAG, "onCaptureCompleted() - Capture next photo immediately");
-							if(this.capturePhoto(pendingHandle))
+							if(this.capturePhoto(pendingHandle, false))
 								return;
 						}
 					}
@@ -1214,8 +1340,64 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		m_ComponentManager.createComponents(ComponentCreationPriority.HIGH, this);
 		
 		// bind to components
-		if(!this.bindToComponents())
+		if(!this.bindToInitialComponents())
 			this.finish();
+	}
+	
+	
+	// Called when count-down timer cancelled.
+	private void onCountDownTimerCancelled()
+	{
+		// check state
+		if(!Handle.isValid(m_SelfTimerHandle))
+			return;
+		
+		// clear handle
+		m_SelfTimerHandle = null;
+		this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, false);
+		
+		// reset capture state
+		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.STARTING)
+			this.resetPhotoCaptureState();
+		else
+			Log.w(TAG, "onCountDownTimerCancelled() - Photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+	}
+	
+	
+	// Called when count-down timer changed.
+	private void onCountDownTimerChanged(long seconds)
+	{
+		// check state
+		if(!Handle.isValid(m_SelfTimerHandle))
+			return;
+		
+		Log.v(TAG, "onCountDownTimerChanged() - Remaining seconds : ", seconds);
+		
+		// capture photo
+		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.STARTING)
+		{
+			if(seconds == 0)
+			{
+				m_SelfTimerHandle = null;
+				this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, false);
+				if(Handle.isValid(m_PhotoCaptureHandle))
+				{
+					Log.v(TAG, "onCountDownTimerChanged() - Capture photo");
+					this.capturePhoto(m_PhotoCaptureHandle, true);
+				}
+				else
+				{
+					Log.e(TAG, "onCountDownTimerChanged() - No capture handle");
+					this.resetPhotoCaptureState();
+				}
+			}
+		}
+		else
+		{
+			Log.e(TAG, "onCountDownTimerChanged() - Photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+			m_SelfTimerHandle = Handle.close(m_SelfTimerHandle);
+			this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, false);
+		}
 	}
 	
 	
@@ -1704,6 +1886,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Set property value.
+	@Override
+	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
+	{
+		if(key == PROP_SELF_TIMER_INTERVAL)
+			return this.setSelfTimerIntervalProp((Long)value);
+		return super.set(key, value);
+	}
+	
+	
 	// Set content view.
 	@Override
 	public void setContentView(int layoutResID)
@@ -1800,6 +1992,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// select preview size
 		this.selectCameraPreviewSize();
 		
+		// update self timer
+		this.updateSelfTimerInternal();
+		
 		// complete
 		return true;
 	}
@@ -1825,6 +2020,33 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		super.setRequestedOrientation(requestedOrientation);
 		this.onRequestedOrientationChanged(requestedOrientation);
+	}
+	
+	
+	// Set self timer interval property.
+	private boolean setSelfTimerIntervalProp(long seconds)
+	{
+		// check value
+		if(seconds < 0)
+			throw new IllegalArgumentException("Self timer interval cannot be negative.");
+		
+		// check camera
+		/*
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "setSelfTimerIntervalProp() - No primary camera");
+			super.set(PROP_SELF_TIMER_INTERVAL, 0L);
+			return false;
+		}
+		*/
+		
+		// save interval to settings
+		this.get(PROP_SETTINGS).set(SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK, seconds);
+		this.get(PROP_SETTINGS).set(SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT, seconds);
+		
+		// update property
+		return super.set(PROP_SELF_TIMER_INTERVAL, seconds);
 	}
 	
 	
@@ -1961,7 +2183,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// change state and create components with NORMAL priority
 		if(this.setReadOnly(PROP_IS_LAUNCHING, false))
+		{
 			m_ComponentManager.createComponents(ComponentCreationPriority.NORMAL, this);
+			this.bindToNormalComponents();
+		}
 		
 		// complete
 		return true;
@@ -2025,6 +2250,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				Log.w(TAG, "stopCameraPreview() - Stop while starting");
 				break;
 			case STOPPING:
+				if(!sync)
+					return;
+				break;
 			case STOPPED:
 				return;
 		}
@@ -2105,7 +2333,14 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// stop self-timer
-		//
+		if(Handle.isValid(m_SelfTimerHandle))
+		{
+			Log.w(TAG, "stopPhotoCapture() - Stop self timer");
+			this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, false);
+			m_SelfTimerHandle = Handle.close(m_SelfTimerHandle);
+			this.onCaptureCompleted(handle);
+			return;
+		}
 		
 		// change capture state
 		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
@@ -2167,6 +2402,92 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	/**
+	 * Switch to another camera.
+	 * @return Whether camera switched successfully or not.
+	 */
+	public boolean switchCamera()
+	{
+		// check state
+		this.verifyAccess();
+		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				break;
+			default:
+				Log.e(TAG, "switchCamera() - Photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+				return false;
+		}
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				break;
+			default:
+				Log.e(TAG, "switchCamera() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				return false;
+		}
+		
+		// get current camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "switchCamera() - No primary camera");
+			return false;
+		}
+		
+		// select another camera
+		LensFacing lensFacing = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
+		Camera newCamera = CameraUtils.findCamera(this.get(PROP_AVAILABLE_CAMERAS), lensFacing, false);
+		if(newCamera == null)
+		{
+			Log.e(TAG, "switchCamera() - No camera to switch");
+			return false;
+		}
+		Log.w(TAG, "switchCamera() - Select " + newCamera);
+		
+		// stop preview
+		boolean restartPreview;
+		switch(m_CameraPreviewState)
+		{
+			case STARTING:
+			case STARTED:
+				restartPreview = true;
+				break;
+			default:
+				restartPreview = false;
+				break;
+		}
+		this.stopCameraPreview(true);
+		if(m_CameraPreviewState != OperationState.STOPPED)
+		{
+			Log.e(TAG, "switchCamera() - Preview state is " + m_CameraPreviewState);
+			return false;
+		}
+		
+		// close camera
+		m_CameraThread.closeCamera(camera);
+		
+		// open camera
+		boolean success = m_CameraThread.openCamera(newCamera);
+		if(success)
+		{
+			this.setReadOnly(PROP_CAMERA, newCamera);
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, lensFacing);
+		}
+		else
+			Log.e(TAG, "switchCamera() - Fail to open camera by camera thread");
+		
+		// open camera or start preview
+		if(restartPreview && !this.startCameraPreview())
+			Log.e(TAG, "switchCamera() - Fail to restart preview");
+		
+		// complete
+		return success;
+	}
+	
+	
 	// Update screen size.
 	private void updateScreenSize()
 	{
@@ -2175,5 +2496,35 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			Log.w(TAG, "updateScreenSize() - Screen size : " + size);
 		if(m_CameraThread != null)
 			m_CameraThread.setScreenSize(size);
+	}
+	
+	
+	// Update self timer interval according to current state
+	private void updateSelfTimerInternal()
+	{
+		// check count-down timer
+		if(m_CountDownTimer == null)
+			return;
+		
+		// check media type
+		if(this.get(PROP_MEDIA_TYPE) != MediaType.PHOTO)
+		{
+			super.set(PROP_SELF_TIMER_INTERVAL, 0L);
+			return;
+		}
+		
+		// check camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "updateSelfTimerInternal() - No primary camera");
+			super.set(PROP_SELF_TIMER_INTERVAL, 0L);
+			return;
+		}
+		
+		// get interval from settings
+		String key = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK : SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT);
+		long seconds = Math.max(0, this.get(PROP_SETTINGS).getLong(key));
+		super.set(PROP_SELF_TIMER_INTERVAL, seconds);
 	}
 }

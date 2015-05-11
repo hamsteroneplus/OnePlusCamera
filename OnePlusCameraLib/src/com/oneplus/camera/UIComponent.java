@@ -31,15 +31,15 @@ public abstract class UIComponent extends CameraComponent
 	/**
 	 * Interpolator for UI fade-in animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_FADE_IN;
+	public static final TimeInterpolator INTERPOLATOR_FADE_IN = null;
 	/**
 	 * Interpolator for UI fade-out animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_FADE_OUT;
+	public static final TimeInterpolator INTERPOLATOR_FADE_OUT = null;
 	/**
 	 * Interpolator for UI rotation animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_ROTATION;
+	public static final TimeInterpolator INTERPOLATOR_ROTATION = new PathInterpolator(0.8f, 0, 0.2f, 1);
 	
 	
 	// Call-backs.
@@ -55,11 +55,7 @@ public abstract class UIComponent extends CameraComponent
 	
 	// Static initializer.
 	static
-	{
-		INTERPOLATOR_FADE_IN = new PathInterpolator(0.8f, 0, 0.2f, 1);
-		INTERPOLATOR_FADE_OUT = INTERPOLATOR_FADE_IN;
-		INTERPOLATOR_ROTATION = INTERPOLATOR_FADE_IN;
-	}
+	{}
 	
 	
 	/**
@@ -173,5 +169,67 @@ public abstract class UIComponent extends CameraComponent
 		}
 		else
 			view.setRotation(toDegrees);
+	}
+	
+	
+	/**
+	 * Change visibility of view.
+	 * @param view View to change visibility.
+	 * @param isVisible Visibility.
+	 */
+	protected void setViewVisibility(View view, boolean isVisible)
+	{
+		this.setViewVisibility(view, isVisible, null);
+	}
+	
+	
+	/**
+	 * Change visibility of view.
+	 * @param view View to change visibility.
+	 * @param isVisible Visibility.
+	 * @param callback Animation call-back.
+	 */
+	protected void setViewVisibility(View view, boolean isVisible, ViewUtils.AnimationCompletedCallback callback)
+	{
+		long duration;
+		TimeInterpolator interpolator;
+		if(isVisible)
+		{
+			duration = DURATION_FADE_IN;
+			interpolator = INTERPOLATOR_FADE_IN;
+		}
+		else
+		{
+			duration = 0;
+			interpolator = null;
+		}
+		ViewUtils.setVisibility(view, isVisible, duration, interpolator, callback);
+	}
+	
+	
+	/**
+	 * Change visibility of view.
+	 * @param view View to change visibility.
+	 * @param isVisible Visibility.
+	 * @param duration Animation duration in milliseconds.
+	 * @param interpolator Interpolator.
+	 */
+	protected void setViewVisibility(View view, boolean isVisible, long duration, TimeInterpolator interpolator)
+	{
+		ViewUtils.setVisibility(view, isVisible, duration, interpolator);
+	}
+	
+	
+	/**
+	 * Change visibility of view.
+	 * @param view View to change visibility.
+	 * @param isVisible Visibility.
+	 * @param duration Animation duration in milliseconds.
+	 * @param interpolator Interpolator.
+	 * @param callback Animation call-back.
+	 */
+	protected void setViewVisibility(View view, boolean isVisible, long duration, TimeInterpolator interpolator, ViewUtils.AnimationCompletedCallback callback)
+	{
+		ViewUtils.setVisibility(view, isVisible, duration, interpolator, callback);
 	}
 }

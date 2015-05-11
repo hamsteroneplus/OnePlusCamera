@@ -740,6 +740,8 @@ public abstract class BasicBaseObject extends BasicThreadDependentObject impleme
 	{
 		if(key == PROP_IS_RELEASED)
 			throw new IllegalArgumentException("Cannot set property " + key + ".");
+		if(!key.isReadOnly())
+			return this.set(key, value);
 		return this.setInternal(key, value);
 	}
 	

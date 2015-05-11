@@ -20,6 +20,7 @@ import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.Rotation;
+import com.oneplus.camera.Camera;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CaptureEventArgs;
 import com.oneplus.camera.CaptureHandle;
@@ -29,6 +30,7 @@ import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.VideoCaptureState;
+import com.oneplus.camera.Camera.LensFacing;
 import com.oneplus.camera.media.MediaType;
 import com.oneplus.util.ListUtils;
 
@@ -207,6 +209,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		m_MoreOptionsButton = (ImageButton)m_CaptureBar.findViewById(R.id.more_options_button);
 		m_SelfTimerButton = (ImageButton)m_CaptureBar.findViewById(R.id.self_timer_button);
 		m_SwitchCameraButton = (ImageButton)m_CaptureBar.findViewById(R.id.switch_camera_button);
+		m_SwitchCameraButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v)
+			{
+				onSwitchCameraButtonClicked();
+			}
+		});
 		
 		// add event handlers
 		cameraActivity.addHandler(CameraActivity.EVENT_CAPTURE_STARTED, new EventHandler<CaptureEventArgs>()
@@ -219,6 +229,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		});
 		
 		// add property changed call-backs
+		cameraActivity.addCallback(CameraActivity.PROP_CAMERA, new PropertyChangedCallback<Camera>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Camera> key, PropertyChangeEventArgs<Camera> e)
+			{
+				updateSwitchCameraButton(e.getNewValue());
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
 		{
 			@Override
@@ -276,8 +294,9 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		this.rotateView(m_SelfTimerButton, rotation, 0);
 		this.rotateView(m_SwitchCameraButton, rotation, 0);
 		
-		// setup flash button initial state
+		// setup button initial states
 		this.updateFlashButton();
+		this.updateSwitchCameraButton();
 	}
 	
 	
@@ -356,6 +375,18 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		this.rotateView(m_MoreOptionsButton, newRotation);
 		this.rotateView(m_SelfTimerButton, newRotation);
 		this.rotateView(m_SwitchCameraButton, newRotation);
+	}
+	
+	
+	// Called when camera switch button clicked.
+	private void onSwitchCameraButtonClicked()
+	{
+		// check state
+		//
+		
+		// switch camera
+		if(!this.getCameraActivity().switchCamera())
+			Log.e(TAG, "onSwitchCameraButtonClicked() - Fail to switch camera");
 	}
 	
 	
@@ -491,16 +522,18 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		if(m_FlashController == null)
 		{
 			Log.e(TAG, "updateFlashButton() - No flash controller");
-			m_FlashButton.setVisibility(View.GONE);
+			this.setViewVisibility(m_FlashButton, false);
 			return;
 		}
 		
 		// check flash function
 		if(!m_FlashController.get(FlashController.PROP_HAS_FLASH) || m_FlashController.get(FlashController.PROP_IS_FLASH_DISABLED))
 		{
-			m_FlashButton.setVisibility(View.INVISIBLE);
+			this.setViewVisibility(m_FlashButton, false);
 			return;
 		}
+		else
+			this.setViewVisibility(m_FlashButton, true);
 		
 		// update icon
 		switch(m_FlashController.get(FlashController.PROP_FLASH_MODE))
@@ -516,5 +549,21 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				m_FlashButton.setImageResource(R.drawable.flash_off);
 				break;
 		}
+	}
+	
+	
+	// Update switch camera button.
+	private void updateSwitchCameraButton()
+	{
+		this.updateSwitchCameraButton(this.getCamera());
+	}
+	private void updateSwitchCameraButton(Camera camera)
+	{
+		if(m_SwitchCameraButton == null)
+			return;
+		if(camera == null || camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK)
+			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera);
+		else
+			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera_on);
 	}
 }
