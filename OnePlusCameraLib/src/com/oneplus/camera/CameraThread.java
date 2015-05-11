@@ -49,7 +49,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
-		new CameraDeviceManagerBuilder(), new FileManagerBuilder()
+		new CameraDeviceManagerBuilder(), new FileManagerBuilder() , new CountDownTimerBuilder()
 	};
 	
 	
@@ -990,6 +990,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// bind to components
 		if(!this.bindToComponents())
 			throw new RuntimeException("Fail to bind components.");
+		
 	}
 	
 	
