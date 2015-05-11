@@ -334,8 +334,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return false;
 		
 		// check orientation
-		if(this.get(PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_LANDSCAPE)
-			return false;
+		if(this.get(PROP_ACTIVITY_ROTATION).isLandscape())
+		{
+			if(this.get(PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_LANDSCAPE)
+				return false;
+		}
+		else
+		{
+			if(this.get(PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_PORTRAIT)
+				return false;
+		}
 		
 		// OK
 		return true;

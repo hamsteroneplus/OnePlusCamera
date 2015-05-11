@@ -18,11 +18,12 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.base.Rotation;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.CameraActivity;
-import com.oneplus.camera.CameraComponent;
+import com.oneplus.camera.UIComponent;
 
-final class ViewfinderImpl extends CameraComponent implements Viewfinder
+final class ViewfinderImpl extends UIComponent implements Viewfinder
 {
 	// Constants
 	private static final int MSG_RECREATE_DIRECT_OUTPUT_SURFACE = 10000;
@@ -46,8 +47,12 @@ final class ViewfinderImpl extends CameraComponent implements Viewfinder
 	
 	
 	// Calculate preview bounds. (Called in any thread)
-	private void calculatePreviewBounds(Size containerSize, Size previewSize, boolean isScreen, Rect result)
+	private void calculatePreviewBounds(Size containerSize, Rotation rotation, Size previewSize, boolean isScreen, Rect result)
 	{
+		// rotate preview size
+		if(rotation.isPortrait())
+			previewSize = new Size(previewSize.getHeight(), previewSize.getWidth());
+		
 		// calculate resized preview size
 		float ratioX = ((float)containerSize.getWidth() / previewSize.getWidth());
 		float ratioY = ((float)containerSize.getHeight() / previewSize.getHeight());
@@ -58,12 +63,24 @@ final class ViewfinderImpl extends CameraComponent implements Viewfinder
 		// check position
 		if(isScreen)
 		{
-			int centerX = (containerSize.getHeight() * 2 / 3);
-			result.left = Math.max(0, (centerX - (newPreviewWidth / 2)));
+			if(rotation.isLandscape())
+			{
+				int centerX = (containerSize.getHeight() * 2 / 3);
+				result.left = Math.max(0, (centerX - (newPreviewWidth / 2)));
+				result.top = ((containerSize.getHeight() - newPreviewHeight) / 2);
+			}
+			else
+			{
+				int centerY = (containerSize.getWidth() * 2 / 3);
+				result.left = ((containerSize.getWidth() - newPreviewWidth) / 2);
+				result.top = Math.max(0, (centerY - (newPreviewHeight / 2)));
+			}
 		}
 		else
+		{
 			result.left = ((containerSize.getWidth() - newPreviewWidth) / 2);
-		result.top = ((containerSize.getHeight() - newPreviewHeight) / 2);
+			result.top = ((containerSize.getHeight() - newPreviewHeight) / 2);
+		}
 		result.right = (result.left + newPreviewWidth);
 		result.bottom = (result.top + newPreviewHeight);
 	}
@@ -108,8 +125,16 @@ final class ViewfinderImpl extends CameraComponent implements Viewfinder
 		
 		// create SurfaceView
 		RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-		layoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-		layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+		if(this.getCameraActivityRotation().isLandscape())
+		{
+			layoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+			layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+		}
+		else
+		{
+			layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+			layoutParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
+		}
 		m_DirectOutputSurfaceView = new SurfaceView(this.getCameraActivity());
 		m_DirectOutputSurfaceHolder = m_DirectOutputSurfaceView.getHolder();
 		m_DirectOutputSurfaceHolder.addCallback(new SurfaceHolder.Callback()
@@ -327,7 +352,7 @@ final class ViewfinderImpl extends CameraComponent implements Viewfinder
 	{
 		// calculate preview bounds
 		Rect previewBounds = new Rect();
-		this.calculatePreviewBounds(m_ScreenSize, previewSize, true, previewBounds);
+		this.calculatePreviewBounds(m_ScreenSize, this.getCameraActivityRotation(), previewSize, true, previewBounds);
 		
 		// update SurfaceView bounds
 		if(m_DirectOutputSurfaceView != null)
@@ -375,8 +400,19 @@ final class ViewfinderImpl extends CameraComponent implements Viewfinder
 		}
 		
 		// check orientation
-		if(isReceiverReady && cameraActivity.get(CameraActivity.PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_LANDSCAPE)
-			isReceiverReady = false;
+		if(isReceiverReady)
+		{
+			if(this.getCameraActivityRotation().isLandscape())
+			{
+				if(cameraActivity.get(CameraActivity.PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_LANDSCAPE)
+					isReceiverReady = false;
+			}
+			else
+			{
+				if(cameraActivity.get(CameraActivity.PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_PORTRAIT)
+					isReceiverReady = false;
+			}
+		}
 		
 		// update receiver state
 		if(isReceiverReady)

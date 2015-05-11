@@ -12,10 +12,6 @@
         android:layout="@layout/layout_capture_ui"/>
     
     <!-- Capture bar -->
-    <ViewStub android:id="@+id/capture_bar"
-        android:layout_width="@dimen/capture_bar_width"
-        android:layout_height="match_parent"
-        android:layout="@layout/layout_capture_bar"
-        android:layout_alignParentRight="true"/>
+    <include layout="@layout/layout_capture_bar"/>
 
 </RelativeLayout>

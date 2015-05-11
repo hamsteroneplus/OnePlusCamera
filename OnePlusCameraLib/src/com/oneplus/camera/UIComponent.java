@@ -75,6 +75,16 @@ public abstract class UIComponent extends CameraComponent
 	
 	
 	/**
+	 * Get current camera activity rotation.
+	 * @return Current activity rotation.
+	 */
+	protected final Rotation getCameraActivityRotation()
+	{
+		return this.getCameraActivity().get(CameraActivity.PROP_ACTIVITY_ROTATION);
+	}
+	
+	
+	/**
 	 * Get current UI rotation.
 	 * @return Current rotation.
 	 */

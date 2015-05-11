@@ -1,11 +1,13 @@
 <resources>
 
     <!-- Capture bar -->
-    <dimen name="capture_bar_button_margin_bottom">30dp</dimen>
-    <dimen name="capture_bar_button_margin_left">24dp</dimen>
-    <dimen name="capture_bar_button_margin_right">24dp</dimen>
-    <dimen name="capture_bar_button_margin_top">30dp</dimen>
-    <dimen name="capture_bar_primary_button_margin_right">35dp</dimen>
-    <dimen name="capture_bar_width">160dp</dimen>
+    <dimen name="capture_bar_button_margin_bottom">24dp</dimen>
+    <dimen name="capture_bar_button_margin_left">30dp</dimen>
+    <dimen name="capture_bar_button_margin_right">30dp</dimen>
+    <dimen name="capture_bar_button_margin_top">24dp</dimen>
+    <dimen name="capture_bar_primary_button_margin_bottom">35dp</dimen>
+    <dimen name="capture_bar_primary_button_margin_right">0dp</dimen>
+    <dimen name="capture_bar_height">160dp</dimen>
+    <dimen name="capture_bar_width">0dp</dimen>
 
 </resources>

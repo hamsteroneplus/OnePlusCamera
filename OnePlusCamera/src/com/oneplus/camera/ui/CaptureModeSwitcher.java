@@ -68,8 +68,9 @@ class CaptureModeSwitcher extends UIComponent
 					// check direction
 					float diffX = (event.getX() - m_BaseViewTouchDownPosition.x);
 					float diffY = (event.getY() - m_BaseViewTouchDownPosition.y);
+					Rotation activityRotation = this.getCameraActivityRotation();
 					Rotation rotation = this.getRotation();
-					if(rotation.isLandscape())
+					if(rotation.isLandscape() == activityRotation.isLandscape())
 					{
 						if(Math.abs(diffX) >= m_IncorrectSwipeDirectionThreshold)
 						{
@@ -84,7 +85,7 @@ class CaptureModeSwitcher extends UIComponent
 							direction = -1;
 						else
 							direction = 0;
-						if(rotation == Rotation.INVERSE_LANDSCAPE)
+						if(rotation != activityRotation)
 							direction = -direction;
 						if(direction != 0)
 						{
@@ -108,8 +109,24 @@ class CaptureModeSwitcher extends UIComponent
 							direction = -1;
 						else
 							direction = 0;
-						if(rotation == Rotation.INVERSE_PORTRAIT)
-							direction = -direction;
+						switch(activityRotation)
+						{
+							case LANDSCAPE:
+								if(rotation == Rotation.INVERSE_PORTRAIT)
+									direction = -direction;
+							case PORTRAIT:
+								if(rotation == Rotation.LANDSCAPE)
+									direction = -direction;
+								break;
+							case INVERSE_LANDSCAPE:
+								if(rotation == Rotation.PORTRAIT)
+									direction = -direction;
+								break;
+							case INVERSE_PORTRAIT:
+								if(rotation == Rotation.INVERSE_LANDSCAPE)
+									direction = -direction;
+								break;
+						}
 						if(direction != 0)
 						{
 							m_BaseViewTouchDownPosition = null;

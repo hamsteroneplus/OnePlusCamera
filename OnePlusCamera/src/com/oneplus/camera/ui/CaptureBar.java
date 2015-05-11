@@ -6,7 +6,6 @@ import android.graphics.drawable.Drawable;
 import android.os.Message;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewStub;
 import android.widget.Button;
 import android.widget.ImageButton;
 
@@ -176,7 +175,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// setup UI
 		CameraActivity cameraActivity = this.getCameraActivity();
-		m_CaptureBar = ((ViewStub)cameraActivity.findViewById(R.id.capture_bar)).inflate();
+		m_CaptureBar = cameraActivity.findViewById(R.id.capture_bar);
 		m_PrimaryButton = (Button)m_CaptureBar.findViewById(R.id.primary_capture_button);
 		m_PrimaryButton.setOnTouchListener(new View.OnTouchListener()
 		{
