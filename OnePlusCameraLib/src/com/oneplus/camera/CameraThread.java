@@ -696,6 +696,46 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	/**
+	 * Close given camera.
+	 * @param camera Camera to close.
+	 */
+	public final void closeCamera(final Camera camera)
+	{
+		// check parameter
+		if(camera == null)
+		{
+			Log.e(TAG, "closeCamera() - No camera to close");
+			return;
+		}
+		
+		// close camera
+		if(this.isDependencyThread())
+			this.closeCameraInternal(camera);
+		else if(!HandlerUtils.post(this, new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				closeCameraInternal(camera);
+			}
+		}))
+		{
+			Log.e(TAG, "closeCamera() - Fail to perform cross-thread operation");
+		}
+	}
+	
+	
+	// Close camera.
+	private void closeCameraInternal(Camera camera)
+	{
+		Log.w(TAG, "closeCameraInternal() - Start");
+		Log.v(TAG, "closeCameraInternal() - Camera : ", camera);
+		camera.close(0);
+		Log.w(TAG, "closeCameraInternal() - End");
+	}
+	
+	
+	/**
 	 * Close all cameras.
 	 */
 	public final void closeCameras()

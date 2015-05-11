@@ -146,6 +146,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Constants
+	private static final String SETTINGS_KEY_CAMERA_LENS_FACING = "CameraLensFacing";
 	private static final String SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK = "SelfTimer.Back";
 	private static final String SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT = "SelfTimer.Front";
 	private static final int MSG_CAMERA_THREAD_EVENT_RAISED = -1;
@@ -241,6 +242,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Static initializer.
 	static
 	{
+		Settings.setGlobalDefaultValue(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.BACK);
 		Settings.setGlobalDefaultValue(SETTINGS_KEY_SELF_TIMER_INTERVAL_BACK, 0L);
 		Settings.setGlobalDefaultValue(SETTINGS_KEY_SELF_TIMER_INTERVAL_FRONT, 0L);
 	}
@@ -973,15 +975,55 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
+		boolean selectCamera = (camera == null);
 		if(camera != null)
 		{
-			if(cameras.contains(camera))
-				return;
-			Log.w(TAG, "onAvailableCamerasChanged() - Camera " + camera + " is not contained in new list");
+			if(!cameras.contains(camera))
+			{
+				Log.w(TAG, "onAvailableCamerasChanged() - Camera " + camera + " is not contained in new list");
+				selectCamera = true;
+			}
 		}
 		
 		// update property
 		this.setReadOnly(PROP_AVAILABLE_CAMERAS, cameras);
+		
+		// check state
+		if(!selectCamera)
+			return;
+		
+		// select camera
+		LensFacing lensFacing = this.get(PROP_SETTINGS).getEnum(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.class);
+		camera = CameraUtils.findCamera(cameras, lensFacing, false);
+		if(camera == null)
+		{
+			Log.e(TAG, "onAvailableCamerasChanged() - No camera with lens facing " + lensFacing + ", select another camera");
+			lensFacing = (lensFacing == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
+			camera = CameraUtils.findCamera(cameras, lensFacing, false);
+		}
+		if(camera != null)
+		{
+			Log.w(TAG, "onAvailableCamerasChanged() - Select " + camera);
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, camera.get(Camera.PROP_LENS_FACING));
+		}
+		else
+			Log.e(TAG, "onAvailableCamerasChanged() - No camera to use");
+		this.setReadOnly(PROP_CAMERA, camera);
+		
+		// check activity state
+		switch(this.get(PROP_STATE))
+		{
+			case CREATING:
+			case RESUMING:
+			case RUNNING:
+				break;
+			default:
+				return;
+		}
+		
+		// open camera
+		if(camera != null && !this.getCameraThread().openCamera(camera))
+			Log.e(TAG, "onAvailableCamerasChanged() - Fail to open camera " + camera);
 	}
 	
 	
@@ -2208,6 +2250,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				Log.w(TAG, "stopCameraPreview() - Stop while starting");
 				break;
 			case STOPPING:
+				if(!sync)
+					return;
+				break;
 			case STOPPED:
 				return;
 		}
@@ -2354,6 +2399,92 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			Handle.close(handle.internalCaptureHandle);
 		else
 			Log.w(TAG, "stopPhotoCapture() - Stop when starting");
+	}
+	
+	
+	/**
+	 * Switch to another camera.
+	 * @return Whether camera switched successfully or not.
+	 */
+	public boolean switchCamera()
+	{
+		// check state
+		this.verifyAccess();
+		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				break;
+			default:
+				Log.e(TAG, "switchCamera() - Photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+				return false;
+		}
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				break;
+			default:
+				Log.e(TAG, "switchCamera() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				return false;
+		}
+		
+		// get current camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "switchCamera() - No primary camera");
+			return false;
+		}
+		
+		// select another camera
+		LensFacing lensFacing = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
+		Camera newCamera = CameraUtils.findCamera(this.get(PROP_AVAILABLE_CAMERAS), lensFacing, false);
+		if(newCamera == null)
+		{
+			Log.e(TAG, "switchCamera() - No camera to switch");
+			return false;
+		}
+		Log.w(TAG, "switchCamera() - Select " + newCamera);
+		
+		// stop preview
+		boolean restartPreview;
+		switch(m_CameraPreviewState)
+		{
+			case STARTING:
+			case STARTED:
+				restartPreview = true;
+				break;
+			default:
+				restartPreview = false;
+				break;
+		}
+		this.stopCameraPreview(true);
+		if(m_CameraPreviewState != OperationState.STOPPED)
+		{
+			Log.e(TAG, "switchCamera() - Preview state is " + m_CameraPreviewState);
+			return false;
+		}
+		
+		// close camera
+		m_CameraThread.closeCamera(camera);
+		
+		// open camera
+		boolean success = m_CameraThread.openCamera(newCamera);
+		if(success)
+		{
+			this.setReadOnly(PROP_CAMERA, newCamera);
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, lensFacing);
+		}
+		else
+			Log.e(TAG, "switchCamera() - Fail to open camera by camera thread");
+		
+		// open camera or start preview
+		if(restartPreview && !this.startCameraPreview())
+			Log.e(TAG, "switchCamera() - Fail to restart preview");
+		
+		// complete
+		return success;
 	}
 	
 	
