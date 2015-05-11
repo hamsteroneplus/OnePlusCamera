@@ -40,14 +40,14 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	protected void onDeinitialize()
 	{
 		super.onDeinitialize();
-		thread.getLooper().quitSafely();
+		thread.quitSafely();
 		thread = null;
 		saveHandler = null;
 	}
 
 	@Override
 	public Handle saveMedia(final MediaSaveTask task, final int flags) {
-		
+		verifyCaller();
 		if(task != null && isRunningOrInitializing()){
 			saveHandler.post(new Runnable() {
 				public void run() {
@@ -79,32 +79,38 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 			}});
 	}
 	
-	 class SaveMediaThread extends HandlerThread {
-			private static final String TAG = "SaveMediaThread";
-			private Handler mHandler;
 
-			public SaveMediaThread(String name) {
-				super(name);
-			}
-
-			public Handler getHandler() {
-				return mHandler;
-			}
-
-			@Override
-			public void start() {
-				super.start();
-				Looper looper = getLooper(); // will block until thread¡¦s Looper object initialized 
-				mHandler = new Handler(looper) {
-					@Override
-					public void handleMessage(Message msg) {
-						switch (msg.what) {
-						// process messages here
-						}
-					}
-				};
-			}
-		}
+	protected final void verifyCaller()
+	{
+		if(!(Thread.currentThread() instanceof CameraThread))
+			throw new RuntimeException("Only use this method from Camera thread.");
+	}
 	
+    class SaveMediaThread extends HandlerThread {
+    	private static final String TAG = "SaveMediaThread";
+		private Handler mHandler;
+
+		public SaveMediaThread(String name) {
+			super(name);
+		}
+
+		public Handler getHandler() {
+			return mHandler;
+		}
+
+		@Override
+		public void start() {
+			super.start();
+			Looper looper = getLooper(); // will block until thread¡¦s Looper object initialized 
+			mHandler = new Handler(looper) {
+				@Override
+				public void handleMessage(Message msg) {
+					switch (msg.what) {
+					// process messages here
+					}
+				}
+			};
+		}
+	}
 }
 
