@@ -237,6 +237,52 @@ public class Settings extends HandlerBaseObject
 	
 	
 	/**
+	 * Get long value.
+	 * @param key Key.
+	 * @return Value of given key, or default value if key does not exists.
+	 */
+	public final long getLong(String key)
+	{
+		Object obj = this.getDefaultValue(key);
+		long defaultValue;
+		if(obj instanceof Long)
+			defaultValue =  (Long)obj;
+		if(obj instanceof Integer)
+			defaultValue =  (Integer)obj;
+		else
+			defaultValue = 0L;
+		return this.getLong(key, defaultValue);
+	}
+	
+	
+	/**
+	 * Get long value.
+	 * @param key Key.
+	 * @param defaultValue Default value.
+	 * @return Value of given key, or default value if key does not exists.
+	 */
+	public final long getLong(String key, long defaultValue)
+	{
+		synchronized(PRIVATE_KEYS)
+		{
+			if(!PRIVATE_KEYS.contains(key))
+				return m_GlobalPreferences.getLong(key, defaultValue);
+			if(!m_IsVolatile)
+				return m_PrivatePreferences.getLong(key, defaultValue);
+		}
+		synchronized(m_PrivateVolatileValues)
+		{
+			Object value = m_PrivateVolatileValues.get(key);
+			if(value instanceof Long)
+				return (Long)value;
+			if(value instanceof Integer)
+				return (Integer)value;
+			return defaultValue;
+		}
+	}
+	
+	
+	/**
 	 * Get string value.
 	 * @param key Key.
 	 * @return Value of given key, or default value if key does not exists.
@@ -348,7 +394,7 @@ public class Settings extends HandlerBaseObject
 		}
 		synchronized(m_PrivateVolatileValues)
 		{
-			if(value instanceof Integer)
+			if(value instanceof Integer || value instanceof Long)
 				m_PrivateVolatileValues.put(key, value);
 			else if(value != null)
 				m_PrivateVolatileValues.put(key, value.toString());
@@ -367,6 +413,8 @@ public class Settings extends HandlerBaseObject
 	{
 		if(value instanceof Integer)
 			editor.putInt(key, (Integer)value);
+		if(value instanceof Long)
+			editor.putLong(key, (Long)value);
 		else if(value != null)
 			editor.putString(key, value.toString());
 		else
