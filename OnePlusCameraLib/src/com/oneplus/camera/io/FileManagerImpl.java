@@ -47,7 +47,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 
 	@Override
 	public Handle saveMedia(final MediaSaveTask task, final int flags) {
-		verifyCaller();
+		verifyAccess();
 		if(task != null && isRunningOrInitializing()){
 			saveHandler.post(new Runnable() {
 				public void run() {
@@ -77,13 +77,6 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 			public void run() {
 				FileManagerImpl.this.raise(event,  new MediaEventArgs(task));
 			}});
-	}
-	
-
-	protected final void verifyCaller()
-	{
-		if(!(Thread.currentThread() instanceof CameraThread))
-			throw new RuntimeException("Only use this method from Camera thread.");
 	}
 	
     class SaveMediaThread extends HandlerThread {
