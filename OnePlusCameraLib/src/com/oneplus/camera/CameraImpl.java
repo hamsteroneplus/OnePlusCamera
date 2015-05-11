@@ -1417,7 +1417,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		
 		// apply new receiver
-		super.setReadOnly(PROP_PREVIEW_RECEIVER, receiver);
+		super.set(PROP_PREVIEW_RECEIVER, receiver);
 		
 		// complete
 		return true;
