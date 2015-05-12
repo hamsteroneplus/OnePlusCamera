@@ -18,7 +18,7 @@ public abstract class BasicBaseObject extends BasicThreadDependentObject impleme
 	/**
 	 * Flag to print log when property call-back changes.
 	 */
-	public static final int LOG_PROPERTY_CALLBACK_CHANGE = 0x1;
+	public static final int LOG_PROPERTY_CALLBACK_CHANGE = 0x2;
 	/**
 	 * Flag to print log when calling property changed call-backs.
 	 */
