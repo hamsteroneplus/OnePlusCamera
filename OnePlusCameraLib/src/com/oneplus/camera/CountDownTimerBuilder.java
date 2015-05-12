@@ -1,11 +1,11 @@
 package com.oneplus.camera;
 
 import com.oneplus.base.component.ComponentCreationPriority;
-import com.oneplus.camera.CameraThread;
-import com.oneplus.camera.CameraThreadComponent;
-import com.oneplus.camera.CameraThreadComponentBuilder;
+import com.oneplus.camera.CameraActivity;
+import com.oneplus.camera.CameraComponent;
+import com.oneplus.camera.UIComponentBuilder;
 
-public class CountDownTimerBuilder extends CameraThreadComponentBuilder
+public class CountDownTimerBuilder extends UIComponentBuilder
 {
 	public CountDownTimerBuilder()
 	{
@@ -13,8 +13,8 @@ public class CountDownTimerBuilder extends CameraThreadComponentBuilder
 	}
 
 	@Override
-	protected CameraThreadComponent create(CameraThread cameraThread)
+	protected CameraComponent create(CameraActivity cameraActivity)
 	{
-		return new CountDownTimerImpl(cameraThread);
+		return new CountDownTimerImpl(cameraActivity);
 	}
 }

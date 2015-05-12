@@ -15,10 +15,10 @@ final class ComponentBuilders
 	
 	static final ComponentBuilder[] BUILDERS_MAIN_ACTIVITY = new ComponentBuilder[]{
 		//new AudioManagerBuilder(),
-		new CountDownTimerBuilder(),
 		new CaptureBarBuilder(),
 		new CaptureModeManagerBuilder(),
 		new CaptureModeSwitcherBuilder(),
+		new CountDownTimerBuilder(),
 		new FlashControllerBuilder(),
 	};
 }

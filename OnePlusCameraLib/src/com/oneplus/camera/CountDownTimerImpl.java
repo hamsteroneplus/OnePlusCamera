@@ -6,16 +6,16 @@ import com.oneplus.base.EventArgs;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 
-public class CountDownTimerImpl extends CameraThreadComponent implements CountDownTimer {
+public class CountDownTimerImpl extends CameraComponent implements CountDownTimer {
 	// compute data
 	private final long interval = 1000;
 	private long countdownSecs = 0;
 	private long elapsedTime = 0;
 
 	// Constructor
-	CountDownTimerImpl(CameraThread cameraThread)
+	CountDownTimerImpl(CameraActivity cameraActivity)
 	{
-		super("CountDown Timer manager", cameraThread, true);
+		super("CountDown Timer manager", cameraActivity, true);
 	}	
 
 	@Override
@@ -33,8 +33,9 @@ public class CountDownTimerImpl extends CameraThreadComponent implements CountDo
 				  // repeat or finish
 				  if(countdownSecs != 0){
 					  // compensate timer deviation
-					  HandlerUtils.post(CountDownTimerImpl.this, this, interval - (SystemClock.elapsedRealtime() - elapsedTime - 1000));
-				      elapsedTime = SystemClock.elapsedRealtime();
+					  long currentTime = SystemClock.elapsedRealtime();
+					  HandlerUtils.post(CountDownTimerImpl.this, this, interval - (currentTime - elapsedTime - 1000));
+				      elapsedTime = currentTime;
 				  }else{
 					  // reset compute data
 					  elapsedTime = 0;
