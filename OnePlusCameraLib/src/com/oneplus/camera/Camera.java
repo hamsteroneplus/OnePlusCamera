@@ -41,6 +41,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<Boolean> PROP_IS_PREVIEW_RECEIVED = new PropertyKey<>("IsPreviewReceived", Boolean.class, Camera.class, false);
 	/**
+	 * Property to get or set whether camera is in recording mode or not.
+	 */
+	PropertyKey<Boolean> PROP_IS_RECORDING_MODE = new PropertyKey<>("IsRecordingMode", Boolean.class, Camera.class, PropertyKey.FLAG_NOT_NULL, false);
+	/**
 	 * Read-only property for camera device facing.
 	 */
 	PropertyKey<LensFacing> PROP_LENS_FACING = new PropertyKey<>("LensFacing", LensFacing.class, Camera.class, LensFacing.BACK);

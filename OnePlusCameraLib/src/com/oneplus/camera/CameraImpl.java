@@ -98,6 +98,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final String m_Id;
 	private boolean m_IsCaptureSequenceCompleted;
 	private volatile boolean m_IsPreviewReceived;
+	private boolean m_IsRecordingMode;
 	private final LensFacing m_LensFacing;
 	private final ImageReader.OnImageAvailableListener m_PictureAvailableListener = new ImageReader.OnImageAvailableListener()
 	{
@@ -591,6 +592,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_FlashMode;
 		if(key == PROP_ID)
 			return (TValue)m_Id;
+		if(key == PROP_IS_RECORDING_MODE)
+			return (TValue)(Boolean)m_IsRecordingMode;
 		if(key == PROP_LENS_FACING)
 			return (TValue)m_LensFacing;
 		if(key == PROP_PICTURE_SIZE)
@@ -1260,6 +1263,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		if(key == PROP_FLASH_MODE)
 			return this.setFlashModeProp((FlashMode)value);
+		if(key == PROP_IS_RECORDING_MODE)
+			return this.setRecordingModeProp((Boolean)value);
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
 		if(key == PROP_PREVIEW_SIZE)
@@ -1473,6 +1478,51 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Set PROP_IS_RECORDING_MODE property.
+	private boolean setRecordingModeProp(boolean isRecordingMode)
+	{
+		// check state
+		this.verifyAccess();
+		if(m_IsRecordingMode == isRecordingMode)
+			return false;
+		if(this.get(PROP_CAPTURE_STATE) != OperationState.STOPPED)
+		{
+			Log.e(TAG, "setRecordingModeProp() - Current capture state is " + this.get(PROP_CAPTURE_STATE));
+			throw new IllegalStateException("Cannot change recording mode due to current capture state.");
+		}
+		
+		Log.w(TAG, "setRecordingModeProp() - Recording mode : " + isRecordingMode);
+		
+		// stop preview first
+		boolean needRestartPreview;
+		switch(this.get(PROP_PREVIEW_STATE))
+		{
+			case STARTING:
+			case STARTED:
+				Log.w(TAG, "setRecordingModeProp() - Stop preview to change recording mode");
+				this.stopPreview(0);
+				needRestartPreview = true;
+				break;
+			default:
+				needRestartPreview = false;
+				break;
+		}
+		
+		// change mode
+		m_IsRecordingMode = isRecordingMode;
+		
+		// restart preview
+		if(needRestartPreview)
+		{
+			Log.w(TAG, "setRecordingModeProp() - Restart preview");
+			this.startPreview(0);
+		}
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_IS_RECORDING_MODE, !isRecordingMode, isRecordingMode);
+	}
+	
+	
 	// Set video surface.
 	private boolean setVideoSurface(Surface surface)
 	{
@@ -1495,9 +1545,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		{
 			case STARTING:
 			case STARTED:
-				Log.w(TAG, "setVideoSurface() - Stop preview to change video surface");
-				this.stopPreview(0);
-				needRestartPreview = true;
+				if(m_IsRecordingMode)
+				{
+					Log.w(TAG, "setVideoSurface() - Stop preview to change video surface");
+					this.stopPreview(0);
+					needRestartPreview = true;
+				}
+				else
+				{
+					Log.w(TAG, "setVideoSurface() - Set video surface in non-recording mode");
+					needRestartPreview = false;
+				}
 				break;
 			default:
 				needRestartPreview = false;
@@ -1590,7 +1648,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		surfaces.add(m_PictureSurface);
 		
 		// prepare video/preview call-back surface
-		if(m_VideoSurface != null)
+		if(m_IsRecordingMode && m_VideoSurface != null)
 		{
 			Log.v(TAG, "startCaptureSession() - Video surface : ", m_VideoSurface);
 			surfaces.add(m_VideoSurface);
@@ -1622,7 +1680,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		try
 		{
 			// create builder
-			if(m_VideoSurface == null)
+			if(!m_IsRecordingMode)
 				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
 			else
 			{
@@ -1632,7 +1690,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			
 			// prepare output surfaces
 			m_PreviewRequestBuilder.addTarget(m_PreviewSurface);
-			if(m_VideoSurface != null)
+			if(m_IsRecordingMode && m_VideoSurface != null)
 				m_PreviewRequestBuilder.addTarget(m_VideoSurface);
 			else// if(this.hasHandlers(EVENT_PREVIEW_RECEIVED) && m_PreviewCallbackSurface != null)
 			{

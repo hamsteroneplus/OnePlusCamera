@@ -3,6 +3,7 @@ package com.oneplus.camera;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 
 import com.oneplus.base.BaseActivity;
@@ -81,6 +82,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Read-only property to get root content view.
 	 */
 	public static final PropertyKey<View> PROP_CONTENT_VIEW = new PropertyKey<>("ContentView", View.class, CameraActivity.class, PropertyKey.FLAG_READONLY, null);
+	/**
+	 * Read-only property to check whether camera is locked (cannot to be switched) or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_CAMERA_LOCKED = new PropertyKey<>("IsCameraLocked", Boolean.class, CameraActivity.class, false);
 	/**
 	 * Read-only property to check whether camera thread is started or not.
 	 */
@@ -161,6 +166,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	// Private fields
 	private Rotation m_ActivityRotation = Rotation.LANDSCAPE;
+	private final LinkedList<CameraLockHandle> m_CameraLockHandles = new LinkedList<>();
 	private CameraThread m_CameraThread;
 	private OperationState m_CameraPreviewState = OperationState.STOPPED;
 	private ComponentManager m_ComponentManager;
@@ -179,7 +185,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private Viewfinder m_Viewfinder;
 	
 	
-	// Class capture handle.
+	// Class for capture handle.
 	private final class CaptureHandleImpl extends CaptureHandle
 	{
 		public final long creationTime;
@@ -235,6 +241,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		protected void onClose(int flags)
 		{
 			restoreSettings(this);
+		}
+	}
+	
+	
+	// Class for camera lock handle.
+	private final class CameraLockHandle extends Handle
+	{
+		public final LensFacing lensFacing;
+		
+		public CameraLockHandle(LensFacing lensFacing)
+		{
+			super("CameraLock");
+			this.lensFacing = lensFacing;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			unlockCamera(this);
 		}
 	}
 	
@@ -968,6 +993,53 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	/**
+	 * Lock camera with specific lens facing.
+	 * @param lensFacing Camera lens facing.
+	 * @return Handle to camera lock.
+	 */
+	public Handle lockCamera(LensFacing lensFacing)
+	{
+		// check state
+		this.verifyAccess();
+		if(this.get(PROP_STATE) == State.DESTROYED)
+		{
+			Log.e(TAG, "lockCamera() - Activity state is DESTROYED");
+			return null;
+		}
+		
+		// check parameter
+		if(lensFacing == null)
+		{
+			Log.e(TAG, "lockCamera() - No lens facing specified");
+			return null;
+		}
+		
+		// check with current lock
+		if(!m_CameraLockHandles.isEmpty() && m_CameraLockHandles.getLast().lensFacing != lensFacing)
+		{
+			Log.e(TAG, "lockCamera() - Camera is locked to " + m_CameraLockHandles.getLast().lensFacing);
+			return null;
+		}
+		
+		// lock camera
+		CameraLockHandle handle = new CameraLockHandle(lensFacing);
+		m_CameraLockHandles.addLast(handle);
+		Log.w(TAG, "lockCamera() - Lens facing : " + lensFacing + ", handle : " + handle);
+		if(m_CameraLockHandles.size() == 1)
+		{
+			if(!this.switchCamera(lensFacing))
+			{
+				Log.e(TAG, "lockCamera() - Fail to switch camera");
+				m_CameraLockHandles.clear();
+				return null;
+			}
+			this.setReadOnly(PROP_IS_CAMERA_LOCKED, true);
+		}
+		return handle;
+	}
+	
+	
+	/**
 	 * Called when available cameras list changes.
 	 * @param cameras Available cameras.
 	 */
@@ -993,9 +1065,13 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return;
 		
 		// select camera
-		LensFacing lensFacing = this.get(PROP_SETTINGS).getEnum(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.class);
+		LensFacing lensFacing;
+		if(m_CameraLockHandles.isEmpty())
+			lensFacing = this.get(PROP_SETTINGS).getEnum(SETTINGS_KEY_CAMERA_LENS_FACING, LensFacing.class);
+		else
+			lensFacing = m_CameraLockHandles.getLast().lensFacing;
 		camera = CameraUtils.findCamera(cameras, lensFacing, false);
-		if(camera == null)
+		if(camera == null && m_CameraLockHandles.isEmpty())
 		{
 			Log.e(TAG, "onAvailableCamerasChanged() - No camera with lens facing " + lensFacing + ", select another camera");
 			lensFacing = (lensFacing == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
@@ -2410,6 +2486,85 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		// check state
 		this.verifyAccess();
+		
+		// get current camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "switchCamera() - No primary camera");
+			return false;
+		}
+		
+		// check camera lock
+		if(!m_CameraLockHandles.isEmpty() && m_CameraLockHandles.getLast().lensFacing == camera.get(Camera.PROP_LENS_FACING))
+		{
+			Log.e(TAG, "switchCamera() - Camera is locked to " + m_CameraLockHandles.getLast().lensFacing);
+			return false;
+		}
+		
+		// select another camera
+		LensFacing lensFacing = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
+		Camera newCamera = CameraUtils.findCamera(this.get(PROP_AVAILABLE_CAMERAS), lensFacing, false);
+		if(newCamera == null)
+		{
+			Log.e(TAG, "switchCamera() - No camera to switch");
+			return false;
+		}
+		Log.w(TAG, "switchCamera() - Select " + newCamera);
+		
+		// switch
+		return this.switchCamera(newCamera);
+	}
+	
+	
+	/**
+	 * Switch to camera with specific lens facing.
+	 * @param lensFacing Camera lens facing.
+	 * @return Whether camera switched successfully or not.
+	 */
+	public boolean switchCamera(LensFacing lensFacing)
+	{
+		// check state
+		this.verifyAccess();
+		
+		// get current camera
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+			Log.w(TAG, "switchCamera() - No primary camera");
+		
+		// check camera lock
+		if(!m_CameraLockHandles.isEmpty() && m_CameraLockHandles.getLast().lensFacing != lensFacing)
+		{
+			Log.e(TAG, "switchCamera() - Camera is locked to " + m_CameraLockHandles.getLast().lensFacing);
+			return false;
+		}
+		
+		// select another camera
+		List<Camera> cameras = this.get(PROP_AVAILABLE_CAMERAS);
+		if(cameras.isEmpty())
+		{
+			Log.w(TAG, "switchCamera() - Camera list is not ready yet, switch camera later");
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, lensFacing);
+			return true;
+		}
+		Camera newCamera = CameraUtils.findCamera(cameras, lensFacing, false);
+		if(newCamera == null)
+		{
+			Log.e(TAG, "switchCamera() - No camera with lens facing " + lensFacing);
+			return false;
+		}
+		if(camera == newCamera)
+			return true;
+		
+		// switch
+		return this.switchCamera(newCamera);
+	}
+	
+	
+	// Switch to given camera
+	private boolean switchCamera(Camera newCamera)
+	{
+		// check state
 		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
 		{
 			case PREPARING:
@@ -2428,24 +2583,6 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				Log.e(TAG, "switchCamera() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
 				return false;
 		}
-		
-		// get current camera
-		Camera camera = this.get(PROP_CAMERA);
-		if(camera == null)
-		{
-			Log.e(TAG, "switchCamera() - No primary camera");
-			return false;
-		}
-		
-		// select another camera
-		LensFacing lensFacing = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? LensFacing.FRONT : LensFacing.BACK);
-		Camera newCamera = CameraUtils.findCamera(this.get(PROP_AVAILABLE_CAMERAS), lensFacing, false);
-		if(newCamera == null)
-		{
-			Log.e(TAG, "switchCamera() - No camera to switch");
-			return false;
-		}
-		Log.w(TAG, "switchCamera() - Select " + newCamera);
 		
 		// stop preview
 		boolean restartPreview;
@@ -2467,14 +2604,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// close camera
-		m_CameraThread.closeCamera(camera);
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera != null)
+			m_CameraThread.closeCamera(camera);
 		
 		// open camera
 		boolean success = m_CameraThread.openCamera(newCamera);
 		if(success)
 		{
 			this.setReadOnly(PROP_CAMERA, newCamera);
-			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, lensFacing);
+			this.get(PROP_SETTINGS).set(SETTINGS_KEY_CAMERA_LENS_FACING, newCamera.get(Camera.PROP_LENS_FACING));
 		}
 		else
 			Log.e(TAG, "switchCamera() - Fail to open camera by camera thread");
@@ -2485,6 +2624,21 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// complete
 		return success;
+	}
+	
+	
+	// Unlock camera.
+	private void unlockCamera(CameraLockHandle handle)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// unlock
+		if(m_CameraLockHandles.remove(handle) && m_CameraLockHandles.isEmpty())
+		{
+			Log.w(TAG, "unlockCamera()");
+			this.setReadOnly(PROP_IS_CAMERA_LOCKED, false);
+		}
 	}
 	
 	
