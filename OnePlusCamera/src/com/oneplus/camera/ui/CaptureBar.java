@@ -237,6 +237,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				updateSwitchCameraButton(e.getNewValue());
 			}
 		});
+		cameraActivity.addCallback(CameraActivity.PROP_IS_CAMERA_LOCKED, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				updateSwitchCameraButton();
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
 		{
 			@Override
@@ -561,6 +569,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	{
 		if(m_SwitchCameraButton == null)
 			return;
+		this.setViewVisibility(m_SwitchCameraButton, !this.getCameraActivity().get(CameraActivity.PROP_IS_CAMERA_LOCKED));
 		if(camera == null || camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK)
 			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera);
 		else
