@@ -1189,6 +1189,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			return false;
 		}
 		
+		// set recording mode
+		camera.set(Camera.PROP_IS_RECORDING_MODE, this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO);
+		
 		// update property
 		this.setReadOnly(PROP_CAMERA, camera);
 		
@@ -1313,6 +1316,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		// change media type
 		this.setReadOnly(PROP_MEDIA_TYPE, mediaType);
+		
+		// set recording mode
+		if(camera != null)
+			camera.set(Camera.PROP_IS_RECORDING_MODE, mediaType == MediaType.VIDEO);
 		
 		// start preview
 		if(needRestartPreview)
