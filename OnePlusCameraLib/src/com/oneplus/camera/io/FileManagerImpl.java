@@ -71,11 +71,11 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	}
 	
 	private boolean notifyCameraThread(final EventKey<MediaEventArgs> event, final MediaSaveTask task){
-		return HandlerUtils.post(getCameraThread(), new Runnable(){
+		return HandlerUtils.post(this, new Runnable(){
 
 			@Override
 			public void run() {
-				FileManagerImpl.this.raise(event,  new MediaEventArgs(task));
+				raise(event,  new MediaEventArgs(task));
 			}});
 	}
 	

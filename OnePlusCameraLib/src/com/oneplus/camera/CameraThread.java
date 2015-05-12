@@ -40,6 +40,7 @@ import com.oneplus.camera.io.FileManager;
 import com.oneplus.camera.io.FileManagerBuilder;
 import com.oneplus.camera.io.PhotoSaveTask;
 import com.oneplus.camera.media.AudioManager;
+import com.oneplus.camera.media.MediaEventArgs;
 import com.oneplus.camera.media.MediaType;
 
 /**
@@ -49,7 +50,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
-		new CameraDeviceManagerBuilder(), new FileManagerBuilder() , new CountDownTimerBuilder()
+		new CameraDeviceManagerBuilder(), new FileManagerBuilder()
 	};
 	
 	
