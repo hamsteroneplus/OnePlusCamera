@@ -3,12 +3,14 @@ package com.oneplus.camera;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
 import android.content.Context;
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -18,6 +20,7 @@ import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -40,6 +43,7 @@ import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.renderscript.RenderScriptManager;
+import com.oneplus.util.AspectRatio;
 
 class CameraImpl extends HandlerBaseObject implements Camera
 {
@@ -48,6 +52,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Private fields
+	@SuppressWarnings("unchecked")
+	private List<MeteringRect> m_AeRegions = Collections.EMPTY_LIST;
+	@SuppressWarnings("unchecked")
+	private List<MeteringRect> m_AfRegions = Collections.EMPTY_LIST;
 	private Handle m_CaptureHandle;
 	private CameraCaptureSession m_CaptureSession;
 	private final CameraCaptureSession.StateCallback m_CaptureSessionCallback = new CameraCaptureSession.StateCallback()
@@ -95,6 +103,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 	};
 	private FlashMode m_FlashMode = FlashMode.OFF;
+	private FocusMode m_FocusMode = FocusMode.DISABLED;
 	private final String m_Id;
 	private boolean m_IsCaptureSequenceCompleted;
 	private volatile boolean m_IsPreviewReceived;
@@ -169,6 +178,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private Surface m_PreviewCallbackSurface;
 	private final CameraCaptureSession.CaptureCallback m_PreviewCaptureCallback = new CameraCaptureSession.CaptureCallback()
 	{
+		public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) 
+		{
+			onPreviewCaptureCompleted(result);
+		}
 	};
 	private CaptureRequest.Builder m_PreviewRequestBuilder;
 	private Size m_PreviewSize = new Size(0, 0);
@@ -182,8 +195,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private RenderScript m_RenderScript;
 	private Handle m_RenderScriptHandle;
 	private final int m_SensorOrientation;
+	private final Size m_SensorSize;
 	private volatile State m_State = State.CLOSED;
 	private int m_TargetCapturedFrameCount;
+	@SuppressWarnings("rawtypes")
+	private final List m_TempList = new ArrayList();
 	private final List<Surface> m_TempSurfaces = new ArrayList<>();
 	private Surface m_VideoSurface;
 	
@@ -194,7 +210,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// call super
 		super(true);
 		
-		// save characteristics
+		// save info
 		m_Context = context;
 		m_CameraManager = cameraManager;
 		m_Characteristics = cameraChar;
@@ -212,6 +228,28 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			default:
 				throw new RuntimeException("Unknown lens facing : " + cameraChar.get(CameraCharacteristics.LENS_FACING));
 		}
+		
+		// check capabilities
+		boolean isManualSupported = false;
+		int[] capabilities = cameraChar.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+		for(int i = capabilities.length - 1 ; i >= 0 ; --i)
+		{
+			switch(capabilities[i])
+			{
+				case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR:
+					isManualSupported = true;
+					this.setReadOnly(PROP_IS_MANUAL_CONTROL_SUPPORTED, true);
+					break;
+				case CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW:
+					this.setReadOnly(PROP_IS_RAW_CAPTURE_SUPPORTED, true);
+					break;
+			}
+		}
+		this.setReadOnly(PROP_IS_BURST_CAPTURE_SUPPORTED, true);
+		
+		// get sensor size
+		Rect sensorRect = cameraChar.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+		m_SensorSize = new Size(sensorRect.width(), sensorRect.height());
 		
 		// get preview sizes
 		StreamConfigurationMap streamConfigMap = cameraChar.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -232,8 +270,42 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// check flash
 		this.setReadOnly(PROP_HAS_FLASH, cameraChar.get(CameraCharacteristics.FLASH_INFO_AVAILABLE));
 		
+		// check AE region count
+		this.setReadOnly(PROP_MAX_AE_REGION_COUNT, cameraChar.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE));
+		
+		// check AF region count
+		this.setReadOnly(PROP_MAX_AF_REGION_COUNT, cameraChar.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF));
+		
+		// check focus modes
+		int[] afModes = cameraChar.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+		List<FocusMode> focusModes = new ArrayList<>();
+		for(int i = afModes.length - 1 ; i >= 0 ; --i)
+		{
+			switch(afModes[i])
+			{
+				case CameraCharacteristics.CONTROL_AF_MODE_AUTO:
+					focusModes.add(FocusMode.NORMAL_AF);
+					break;
+				case CameraCharacteristics.CONTROL_AF_MODE_CONTINUOUS_PICTURE:
+				case CameraCharacteristics.CONTROL_AF_MODE_CONTINUOUS_VIDEO:
+					if(!focusModes.contains(FocusMode.CONTINUOUS_AF))
+						focusModes.add(FocusMode.CONTINUOUS_AF);
+					m_FocusMode = FocusMode.CONTINUOUS_AF;
+					break;
+				case CameraCharacteristics.CONTROL_AF_MODE_OFF:
+					if(isManualSupported)
+						focusModes.add(FocusMode.MANUAL);
+					break;
+			}
+		}
+		focusModes.add(FocusMode.DISABLED);
+		this.setReadOnly(PROP_FOCUS_MODES, Collections.unmodifiableList(focusModes));
+		if(m_FocusMode == FocusMode.DISABLED && focusModes.contains(FocusMode.NORMAL_AF))
+			m_FocusMode = FocusMode.NORMAL_AF;
+		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_FOCUS_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_STATE, LOG_PROPERTY_CHANGE);
 	}
@@ -263,6 +335,90 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
 				this.startPreviewRequestDirectly();
 		}
+	}
+	
+	
+	// Apply AF regions to preview.
+	@SuppressWarnings("unchecked")
+	private void applyAfRegions()
+	{
+		// check focus mode
+		switch(this.get(PROP_FOCUS_MODE))
+		{
+			case CONTINUOUS_AF:
+			case NORMAL_AF:
+				break;
+			default:
+				return;
+		}
+		
+		// check preview state
+		if(m_PreviewRequestBuilder == null)
+			return;
+		
+		// create region list
+		m_TempList.clear();
+		List<MeteringRectangle> regionList = (List<MeteringRectangle>)m_TempList;
+		for(int i = m_AfRegions.size() - 1 ; i >= 0 ; --i)
+		{
+			MeteringRectangle rect = this.createMeteringRectangle(m_AfRegions.get(i));
+			if(rect != null)
+				regionList.add(rect);
+		}
+		MeteringRectangle[] regionArray = new MeteringRectangle[regionList.size()];
+		regionList.toArray(regionArray);
+		
+		// apply regions
+		m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, regionArray);
+		this.applyToPreview();
+	}
+	
+	
+	// Apply focus mode to preview.
+	private void applyFocusMode()
+	{
+		// prepare values
+		int afModeValue;
+		switch(m_FocusMode)
+		{
+			case DISABLED:
+				afModeValue = CaptureRequest.CONTROL_AF_MODE_OFF;
+				break;
+			case NORMAL_AF:
+				afModeValue = CaptureRequest.CONTROL_AF_MODE_AUTO;
+				break;
+			case CONTINUOUS_AF:
+				if(m_IsRecordingMode)
+					afModeValue = CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO;
+				else
+					afModeValue = CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+				break;
+			case MANUAL:
+				afModeValue = CaptureRequest.CONTROL_AF_MODE_OFF;
+				break;
+			default:
+				Log.e(TAG, "applyFocusMode() - Unknown focus mode : " + m_FocusMode);
+				return;
+		}
+		
+		// apply to preview
+		if(m_PreviewRequestBuilder != null)
+		{
+			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeValue);
+			this.applyToPreview();
+		}
+	}
+	
+	
+	// Apply changed request to preview.
+	private boolean applyToPreview()
+	{
+		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
+		{
+			if(!this.startPreviewRequestDirectly())
+				Log.e(TAG, "applyToPreview() - Fail to apply new request to preview");
+		}
+		return true;
 	}
 	
 	
@@ -514,6 +670,28 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Close camera device.
+	private void close(CameraDevice camera)
+	{
+		if(camera != null)
+		{
+			try
+			{
+				Log.w(TAG, "close() - Close '" + m_Id + "' [start]");
+				camera.close();
+			}
+			catch(Throwable ex)
+			{
+				Log.e(TAG, "close() - Fail to close '" + m_Id + "'", ex);
+			}
+			finally
+			{
+				Log.w(TAG, "close() - Close '" + m_Id + "' [end]");
+			}
+		}
+	}
+	
+	
 	// Copy image to byte array.
 	private byte[] copyImage(Image image)
 	{
@@ -561,25 +739,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
-	// Close camera device.
-	private void close(CameraDevice camera)
+	// Create MeteringRectangle instance.
+	private MeteringRectangle createMeteringRectangle(MeteringRect rect)
 	{
-		if(camera != null)
-		{
-			try
-			{
-				Log.w(TAG, "close() - Close '" + m_Id + "' [start]");
-				camera.close();
-			}
-			catch(Throwable ex)
-			{
-				Log.e(TAG, "close() - Fail to close '" + m_Id + "'", ex);
-			}
-			finally
-			{
-				Log.w(TAG, "close() - Close '" + m_Id + "' [end]");
-			}
-		}
+		if(rect.isIgnorable())
+			return null;
+		int left = (int)(rect.getLeft() * m_SensorSize.getWidth() + 0.5f);
+		int top = (int)(rect.getTop() * m_SensorSize.getHeight() + 0.5f);
+		int right = (int)(rect.getRight() * m_SensorSize.getWidth() + 0.5f);
+		int bottom = (int)(rect.getBottom() * m_SensorSize.getHeight() + 0.5f);
+		int weight = (MeteringRectangle.METERING_WEIGHT_MIN + (int)((MeteringRectangle.METERING_WEIGHT_MAX - MeteringRectangle.METERING_WEIGHT_MIN) * rect.getWeight()));
+		return new MeteringRectangle(left, top, (right - left), (bottom - top), weight);
 	}
 	
 	
@@ -588,8 +758,14 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	@Override
 	public <TValue> TValue get(PropertyKey<TValue> key)
 	{
+		if(key == PROP_AE_REGIONS)
+			return (TValue)m_AeRegions;
+		if(key == PROP_AF_REGIONS)
+			return (TValue)m_AfRegions;
 		if(key == PROP_FLASH_MODE)
 			return (TValue)m_FlashMode;
+		if(key == PROP_FOCUS_MODE)
+			return (TValue)m_FocusMode;
 		if(key == PROP_ID)
 			return (TValue)m_Id;
 		if(key == PROP_IS_RECORDING_MODE)
@@ -600,6 +776,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_PictureSize;
 		if(key == PROP_PREVIEW_SIZE)
 			return (TValue)m_PreviewSize;
+		if(key == PROP_SENSOR_RATIO)
+			return (TValue)AspectRatio.get(m_SensorSize);
+		if(key == PROP_SENSOR_SIZE)
+			return (TValue)m_SensorSize;
 		if(key == PROP_STATE)
 			return (TValue)m_State;
 		if(key == PROP_VIDEO_SURFACE)
@@ -1086,6 +1266,35 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Called when preview capture completed.
+	private void onPreviewCaptureCompleted(CaptureResult result)
+	{
+		// check focus state
+		int afState = result.get(CaptureResult.CONTROL_AF_STATE);
+		switch(afState)
+		{
+			case CaptureResult.CONTROL_AF_STATE_INACTIVE:
+				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
+				break;
+			case CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED:
+			case CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED:
+				this.setReadOnly(PROP_FOCUS_STATE, FocusState.FOCUSED);
+				break;
+			case CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED:
+			case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
+				this.setReadOnly(PROP_FOCUS_STATE, FocusState.UNFOCUSED);
+				break;
+			case CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN:
+				this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING);
+				break;
+			default:
+				Log.w(TAG, "onPreviewCaptureCompleted() - Unknown AF state : " + afState);
+				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
+				break;
+		}
+	}
+	
+	
 	// Called when preview frame received.
 	private void onPreviewFrameReceived()
 	{
@@ -1258,11 +1467,18 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	
 	// Set property value.
+	@SuppressWarnings("unchecked")
 	@Override
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
+		if(key == PROP_AE_REGIONS)
+			;
+		if(key == PROP_AF_REGIONS)
+			return this.setAfRegionsProp((List<MeteringRect>)value);
 		if(key == PROP_FLASH_MODE)
 			return this.setFlashModeProp((FlashMode)value);
+		if(key == PROP_FOCUS_MODE)
+			return this.setFocusModeProp((FocusMode)value);
 		if(key == PROP_IS_RECORDING_MODE)
 			return this.setRecordingModeProp((Boolean)value);
 		if(key == PROP_PICTURE_SIZE)
@@ -1274,6 +1490,31 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		if(key == PROP_VIDEO_SURFACE)
 			return this.setVideoSurface((Surface)value);
 		return super.set(key, value);
+	}
+	
+	
+	// Set PROP_AF_REGIONS property.
+	@SuppressWarnings("unchecked")
+	private boolean setAfRegionsProp(List<MeteringRect> regions)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// check parameter
+		if(regions == null)
+			regions = Collections.EMPTY_LIST;
+		else if(regions.size() > this.get(PROP_MAX_AF_REGION_COUNT))
+			throw new IllegalArgumentException("Too many AF regions");
+		else
+			regions = Collections.unmodifiableList(regions);
+		
+		// apply regions
+		List<MeteringRect> oldRegions = m_AfRegions;
+		m_AfRegions = regions;
+		this.applyAfRegions();
+		
+		// update property
+		return this.notifyPropertyChanged(PROP_AF_REGIONS, oldRegions, regions);
 	}
 	
 	
@@ -1334,14 +1575,43 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		this.setFlashMode(flashMode, m_PreviewRequestBuilder);
 		
 		// apply to preview
-		if(m_CaptureSessionState == OperationState.STARTED)
-		{
-			if(!this.startPreviewRequestDirectly())
-				Log.e(TAG, "setFlashModeProp() - Fail to apply " + flashMode + " to preview");
-		}
+		this.applyToPreview();
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_FLASH_MODE, oldFlashMode, flashMode);
+	}
+	
+	
+	// Set PROP_FOCUS_MODE property.
+	private boolean setFocusModeProp(FocusMode focusMode)
+	{
+		// check state
+		this.verifyAccess();
+		
+		// check value
+		if(focusMode == null)
+			throw new IllegalArgumentException("No focus mode specified");
+		List<FocusMode> focusModes = this.get(PROP_FOCUS_MODES);
+		if(!focusModes.contains(focusMode))
+		{
+			if(focusModes.contains(FocusMode.CONTINUOUS_AF))
+				focusMode = FocusMode.CONTINUOUS_AF;
+			else if(focusModes.contains(FocusMode.NORMAL_AF))
+				focusMode = FocusMode.NORMAL_AF;
+			else
+				focusMode = FocusMode.DISABLED;
+			Log.e(TAG, "setFocusModeProp() - Invalid focus mode, change to " + focusMode);
+		}
+		if(m_FocusMode == focusMode)
+			return false;
+		
+		// update focus mode
+		FocusMode oldMode = m_FocusMode;
+		m_FocusMode = focusMode;
+		this.applyFocusMode();
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_FOCUS_MODE, oldMode, focusMode);
 	}
 	
 	
@@ -1700,6 +1970,28 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			
 			// setup flash mode
 			this.setFlashMode(m_FlashMode, m_PreviewRequestBuilder);
+			
+			// setup AE states
+			//
+			
+			// setup AF states
+			this.applyFocusMode();
+			this.applyAfRegions();
+			
+			// TEST
+			/*
+			try
+			{
+				Field field = CaptureRequest.class.getField("ONEPLUS_REC_TIME_MULTIPLE");
+				CaptureRequest.Key<Boolean> key = (CaptureRequest.Key<Boolean>)field.get(null);
+				m_PreviewRequestBuilder.set(key, m_IsRecordingMode);
+				Log.w(TAG, "[TEST] Set ONEPLUS_REC_TIME_MULTIPLE to " + m_IsRecordingMode);
+			}
+			catch(Throwable ex)
+			{
+				Log.w(TAG, "[TEST] No ONEPLUS_REC_TIME_MULTIPLE key to use");
+			}
+			*/
 		}
 		catch(Throwable ex)
 		{
