@@ -15,8 +15,8 @@ import com.oneplus.camera.media.MediaEventArgs;
 
 final class FileManagerImpl extends CameraThreadComponent implements FileManager
 {
-	SaveMediaThread thread = null ;
-	Handler saveHandler;
+	SaveMediaThread m_Thread = null ;
+	Handler m_SaveHandler;
 
 	// Constructor
 	FileManagerImpl(CameraThread cameraThread)
@@ -29,9 +29,9 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	 */
 	protected void onInitialize()
 	{
-		thread = new SaveMediaThread("save media thread");
-		thread.start();
-		saveHandler = thread.getHandler();
+		m_Thread = new SaveMediaThread("save media thread");
+		m_Thread.start();
+		m_SaveHandler = m_Thread.getHandler();
 	}
 	
 	/**
@@ -40,16 +40,16 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	protected void onDeinitialize()
 	{
 		super.onDeinitialize();
-		thread.quitSafely();
-		thread = null;
-		saveHandler = null;
+		m_Thread.quitSafely();
+		m_Thread = null;
+		m_SaveHandler = null;
 	}
 
 	@Override
 	public Handle saveMedia(final MediaSaveTask task, final int flags) {
 		verifyAccess();
 		if(task != null && isRunningOrInitializing()){
-			saveHandler.post(new Runnable() {
+			m_SaveHandler.post(new Runnable() {
 				public void run() {
 					//save file
 					if(task.saveMediaToFile()){

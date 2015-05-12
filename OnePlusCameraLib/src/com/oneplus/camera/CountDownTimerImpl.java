@@ -7,10 +7,41 @@ import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 
 public class CountDownTimerImpl extends CameraComponent implements CountDownTimer {
+	
+	private final long m_Interval = 1000;
 	// compute data
-	private final long interval = 1000;
-	private long countdownSecs = 0;
-	private long elapsedTime = 0;
+	private long m_CountdownSecs = 0;
+	private long m_ElapsedTime = 0;
+	private Handle m_CurrentHandle = null;
+	// operations
+	private Handle m_CloseHandle = new Handle("CountDownTimer"){
+		// handle user cancel
+		@Override
+		protected void onClose(int flags) {
+			if(m_CurrentHandle != null && this == m_CurrentHandle){
+				raise(EVENT_CANCELLED,  EventArgs.EMPTY);
+				// stop timer
+				HandlerUtils.removeCallbacks(CountDownTimerImpl.this, m_Timer);
+				// reset compute data
+				resetComputeData();
+			}
+		}};;
+	private Runnable m_Timer = new Runnable() {
+		   @Override
+		   public void run() {
+			  // notify count down
+			  setReadOnly(PROP_REMAINING_SECONDS, --m_CountdownSecs);
+			  // repeat or finish
+			  if(m_CountdownSecs != 0){
+				  // compensate timer deviation
+				  long currentTime = SystemClock.elapsedRealtime();
+				  HandlerUtils.post(CountDownTimerImpl.this, this, m_Interval - (currentTime - m_ElapsedTime - 1000));
+			      m_ElapsedTime = currentTime;
+			  }else{
+				  // reset compute data
+				  resetComputeData();
+			  }
+		   }};
 
 	// Constructor
 	CountDownTimerImpl(CameraActivity cameraActivity)
@@ -20,35 +51,27 @@ public class CountDownTimerImpl extends CameraComponent implements CountDownTime
 
 	@Override
 	public Handle start(long seconds, int flags) {
+		if(m_CurrentHandle != null){
+			return null;
+		}
 		verifyAccess();
-		setReadOnly(PROP_IS_STARTED, Boolean.valueOf(true));
-		elapsedTime = SystemClock.elapsedRealtime();
-		countdownSecs = seconds;
+		//init count down
+		m_CurrentHandle = m_CloseHandle;
+		m_CountdownSecs = seconds;
+		setReadOnly(PROP_IS_STARTED, true);
+		setReadOnly(PROP_REMAINING_SECONDS, m_CountdownSecs);
+		m_ElapsedTime = SystemClock.elapsedRealtime();	
 		//start timer
-		HandlerUtils.post(CountDownTimerImpl.this, new Runnable() {
-			   @Override
-			   public void run() {
-				  // notify count down
-				  setReadOnly(PROP_REMAINING_SECONDS, Long.valueOf(--countdownSecs));
-				  // repeat or finish
-				  if(countdownSecs != 0){
-					  // compensate timer deviation
-					  long currentTime = SystemClock.elapsedRealtime();
-					  HandlerUtils.post(CountDownTimerImpl.this, this, interval - (currentTime - elapsedTime - 1000));
-				      elapsedTime = currentTime;
-				  }else{
-					  // reset compute data
-					  elapsedTime = 0;
-					  countdownSecs = 0;
-				  }
-			   }}, interval);
+		HandlerUtils.post(CountDownTimerImpl.this, m_Timer, m_Interval);
 		
-		
-		return new Handle("CountDownTimer"){
-			// handle user cancel
-			@Override
-			protected void onClose(int flags) {
-				raise(EVENT_CANCELLED,  EventArgs.EMPTY);
-			}};
+		return m_CurrentHandle;
+	}
+	
+	// reset compute data
+	void resetComputeData(){
+		setReadOnly(PROP_IS_STARTED, false);
+		m_CurrentHandle = null;
+		m_ElapsedTime = 0;
+		m_CountdownSecs = 0;
 	}
 }
