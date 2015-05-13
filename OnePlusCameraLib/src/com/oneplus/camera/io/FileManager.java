@@ -1,5 +1,7 @@
 package com.oneplus.camera.io;
 
+import java.util.List;
+
 import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.component.Component;
@@ -35,4 +37,9 @@ public interface FileManager extends Component
 	 * @return Handle to media saving.
 	 */
 	Handle saveMedia(MediaSaveTask task, int flags);
+	/**
+	 * get all medias asynchronously.
+	 * @return all medias.
+	 */
+	List<?> getMediaFiles();
 }
