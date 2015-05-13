@@ -371,6 +371,14 @@ public interface Camera extends BaseObject, HandlerObject
 	
 	
 	/**
+	 * Start auto focus.
+	 * @param flags Flags, reserved.
+	 * @return Whether auto focus starts successfully or not.
+	 */
+	boolean startAutoFocus(int flags);
+	
+	
+	/**
 	 * Start preview.
 	 * @param flags Flags, reserved.
 	 * @return Whether preview starts successfully or not.

@@ -94,5 +94,6 @@ public class PropertyChangeEventArgs<TValue> extends EventArgs
 		e.m_OldValue = null;
 		e.m_NewValue = null;
 		e.m_IsAvailable = true;
+		e.clearHandledState();
 	}
 }

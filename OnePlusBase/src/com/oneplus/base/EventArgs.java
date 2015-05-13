@@ -11,11 +11,24 @@ public class EventArgs implements Cloneable
 	public static final EventArgs EMPTY = new EventArgs();
 	
 	
+	// Private fields.
+	private volatile boolean m_IsHandled;
+	
+	
 	/**
 	 * Initialize new EventArgs instance.
 	 */
 	protected EventArgs()
 	{}
+	
+	
+	/**
+	 * Set handled state back to False.
+	 */
+	protected final void clearHandledState()
+	{
+		m_IsHandled = false;
+	}
 	
 	
 	/**
@@ -31,5 +44,24 @@ public class EventArgs implements Cloneable
 		{
 			throw new RuntimeException(ex);
 		}
+	}
+	
+	
+	/**
+	 * Check whether event is handled or not.
+	 * @return Whether event is handled or not.
+	 */
+	public final boolean isHandled()
+	{
+		return m_IsHandled;
+	}
+	
+	
+	/**
+	 * Mark that event has been handled.
+	 */
+	public final void setHandled()
+	{
+		m_IsHandled = true;
 	}
 }

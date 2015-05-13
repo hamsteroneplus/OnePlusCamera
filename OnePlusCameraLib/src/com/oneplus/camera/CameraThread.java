@@ -40,7 +40,6 @@ import com.oneplus.camera.io.FileManager;
 import com.oneplus.camera.io.FileManagerBuilder;
 import com.oneplus.camera.io.PhotoSaveTask;
 import com.oneplus.camera.media.AudioManager;
-import com.oneplus.camera.media.MediaEventArgs;
 import com.oneplus.camera.media.MediaType;
 
 /**
@@ -50,7 +49,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
-		new CameraDeviceManagerBuilder(), new FileManagerBuilder()
+		new CameraDeviceManagerBuilder(), 
+		new FileManagerBuilder(),
+		new FocusControllerBuilder(),
 	};
 	
 	
@@ -124,6 +125,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private Handle m_DefaultShutterSoundHandle;
 	private final VideoCaptureHandlerHandle m_DefaultVideoCaptureHandlerHandle = new VideoCaptureHandlerHandle(null);
 	private boolean m_IsCapturingBurstPhotos;
+	private boolean m_IsNormalComponentsCreated;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private volatile MediaType m_InitialMediaType;
 	private volatile ScreenSize m_InitialScreenSize;
@@ -1490,6 +1492,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			Log.e(TAG, "startCameraPreviewInternal() - Fail to start preview for camera " + camera);
 			return false;
+		}
+		
+		// create component with NORMAL priority
+		if(!m_IsNormalComponentsCreated)
+		{
+			m_IsNormalComponentsCreated = true;
+			m_ComponentManager.createComponents(ComponentCreationPriority.NORMAL, this);
 		}
 		
 		// complete

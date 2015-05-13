@@ -6,6 +6,10 @@ import android.graphics.PointF;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
+
+import com.oneplus.base.EventHandler;
+import com.oneplus.base.EventKey;
+import com.oneplus.base.EventSource;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
@@ -45,12 +49,12 @@ class CaptureModeSwitcher extends UIComponent
 	
 	
 	// Handle touch event on base view.
-	private boolean onBaseViewTouch(MotionEvent event)
+	private boolean onBaseViewTouch(MotionEventArgs e)
 	{
-		switch(event.getAction())
+		switch(e.getAction())
 		{
 			case MotionEvent.ACTION_DOWN:
-				m_BaseViewTouchDownPosition = new PointF(event.getX(), event.getY());
+				m_BaseViewTouchDownPosition = new PointF(e.getX(), e.getY());
 				m_BaseViewTouchDownTime = SystemClock.elapsedRealtime();
 				return true;
 				
@@ -66,8 +70,8 @@ class CaptureModeSwitcher extends UIComponent
 					}
 					
 					// check direction
-					float diffX = (event.getX() - m_BaseViewTouchDownPosition.x);
-					float diffY = (event.getY() - m_BaseViewTouchDownPosition.y);
+					float diffX = (e.getX() - m_BaseViewTouchDownPosition.x);
+					float diffY = (e.getY() - m_BaseViewTouchDownPosition.y);
 					Rotation activityRotation = this.getCameraActivityRotation();
 					Rotation rotation = this.getRotation();
 					if(rotation.isLandscape() == activityRotation.isLandscape())
@@ -89,6 +93,7 @@ class CaptureModeSwitcher extends UIComponent
 							direction = -direction;
 						if(direction != 0)
 						{
+							e.setHandled();
 							m_BaseViewTouchDownPosition = null;
 							this.switchCaptureMode(direction);
 							break;
@@ -129,6 +134,7 @@ class CaptureModeSwitcher extends UIComponent
 						}
 						if(direction != 0)
 						{
+							e.setHandled();
 							m_BaseViewTouchDownPosition = null;
 							this.switchCaptureMode(direction);
 							break;
@@ -159,12 +165,14 @@ class CaptureModeSwitcher extends UIComponent
 		// setup base view
 		CameraActivity cameraActivity = this.getCameraActivity();
 		m_BaseView = ((MainActivity)cameraActivity).getCaptureUIContainer().findViewById(R.id.capture_mode_switcher_container);
-		m_BaseView.setOnTouchListener(new View.OnTouchListener()
+		
+		// add event handlers
+		cameraActivity.addHandler(CameraActivity.EVENT_TOUCH, new EventHandler<MotionEventArgs>()
 		{
 			@Override
-			public boolean onTouch(View v, MotionEvent event)
+			public void onEventReceived(EventSource source, EventKey<MotionEventArgs> key, MotionEventArgs e)
 			{
-				return onBaseViewTouch(event);
+				onBaseViewTouch(e);
 			}
 		});
 		

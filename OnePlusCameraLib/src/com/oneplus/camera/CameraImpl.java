@@ -49,6 +49,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 {
 	// Constants
 	private static final int MSG_PREVIEW_FRAME_RECEIVED = 10000;
+	private static final int MSG_START_AF = 10010;
 	
 	
 	// Private fields
@@ -804,6 +805,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				this.onPreviewFrameReceived();
 				break;
 				
+			case MSG_START_AF:
+				this.startAutoFocus();
+				break;
+				
 			default:
 				super.handleMessage(msg);
 				break;
@@ -943,6 +948,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				m_TempSurfaces.get(i).release();
 			m_TempSurfaces.clear();
 		}
+		
+		// cancel AF
+		this.getHandler().removeMessages(MSG_START_AF);
 		
 		// reset state
 		m_PreviewSurface = null;
@@ -1519,6 +1527,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_AfRegions = regions;
 		this.applyAfRegions();
 		
+		// start AF later
+		if(!this.getHandler().hasMessages(MSG_START_AF))
+			this.getHandler().sendEmptyMessage(MSG_START_AF);
+		
 		// update property
 		return this.notifyPropertyChanged(PROP_AF_REGIONS, oldRegions, regions);
 	}
@@ -1615,6 +1627,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		FocusMode oldMode = m_FocusMode;
 		m_FocusMode = focusMode;
 		this.applyFocusMode();
+		
+		// start AF later
+		if(!this.getHandler().hasMessages(MSG_START_AF))
+			this.getHandler().sendEmptyMessage(MSG_START_AF);
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_FOCUS_MODE, oldMode, focusMode);
@@ -1854,6 +1870,56 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// complete
 		return true;
+	}
+	
+	
+	// Start auto focus.
+	@Override
+	public boolean startAutoFocus(int flags)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
+		{
+			Log.w(TAG, "startAutoFocus() - Preview state is " + this.get(PROP_PREVIEW_STATE));
+			return false;
+		}
+		
+		// start AF later
+		if(!this.getHandler().hasMessages(MSG_START_AF))
+			this.getHandler().sendEmptyMessage(MSG_START_AF);
+		
+		// complete
+		return true;
+	}
+	private void startAutoFocus()
+	{
+		// check state
+		if(m_PreviewRequestBuilder == null)
+			return;
+		
+		// cancel current focus lock
+		boolean isPreviewStarted = (this.get(PROP_PREVIEW_STATE) == OperationState.STARTED);
+		if(isPreviewStarted)
+		{
+			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+			this.startPreviewRequestDirectly();
+		}
+		
+		// start AF
+		if(m_FocusMode == FocusMode.NORMAL_AF)
+		{
+			if(isPreviewStarted)
+			{
+				Log.v(TAG, "startAutoFocus() - Trigger single AF");
+				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+				this.startPreviewRequestDirectly();
+				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+			}
+			else
+				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+		}
 	}
 	
 	

@@ -31,6 +31,7 @@ import com.oneplus.camera.Camera.LensFacing;
 import com.oneplus.camera.media.MediaType;
 import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.media.ResolutionManagerBuilder;
+import com.oneplus.camera.ui.MotionEventArgs;
 import com.oneplus.camera.ui.Viewfinder;
 import com.oneplus.camera.ui.ViewfinderBuilder;
 
@@ -41,6 +42,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
 import android.util.Size;
+import android.view.MotionEvent;
 import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
@@ -52,6 +54,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
+		new FocusControllerBuilder(),
 		new ResolutionManagerBuilder(),
 		new ViewfinderBuilder(),
 	};
@@ -148,6 +151,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Event raised when media capture starts.
 	 */
 	public static final EventKey<CaptureEventArgs> EVENT_CAPTURE_STARTED = new EventKey<>("CaptureStarted", CaptureEventArgs.class, CameraActivity.class);
+	/**
+	 * Event raised when handling touch input.
+	 */
+	public static final EventKey<MotionEventArgs> EVENT_TOUCH = new EventKey<>("Touch", MotionEventArgs.class, CameraActivity.class);
 	
 	
 	// Constants
@@ -1789,6 +1796,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// notify property change
 		this.notifyPropertyChanged(PROP_ROTATION, prevRotation, newRotation);
+	}
+	
+	
+	// Handle touch event
+	@Override
+	public boolean onTouchEvent(MotionEvent event)
+	{
+		// raise event
+		MotionEventArgs e = MotionEventArgs.obtain(event);
+		this.raise(EVENT_TOUCH, e);
+		if(e.isHandled())
+		{
+			e.recycle();
+			return true;
+		}
+		e.recycle();
+		
+		// call super
+		return super.onTouchEvent(event);
 	}
 	
 	
