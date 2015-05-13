@@ -11,6 +11,9 @@
         android:layout_height="match_parent"
         android:layout="@layout/layout_capture_ui"/>
     
+    <!-- Preview Gallery -->
+    <include layout="@layout/layout_preview_gallery"/>
+    
     <!-- Capture bar -->
     <include layout="@layout/layout_capture_bar"/>
 

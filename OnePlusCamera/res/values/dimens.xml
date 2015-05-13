@@ -9,5 +9,6 @@
     <dimen name="capture_bar_primary_button_margin_right">0dp</dimen>
     <dimen name="capture_bar_height">160dp</dimen>
     <dimen name="capture_bar_width">0dp</dimen>
-
+    <!-- Preview Gallery -->
+	<dimen name="preview_gallery_height">480dp</dimen>
 </resources>
