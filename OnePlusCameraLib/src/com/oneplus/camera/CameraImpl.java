@@ -365,8 +365,14 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(rect != null)
 				regionList.add(rect);
 		}
-		MeteringRectangle[] regionArray = new MeteringRectangle[regionList.size()];
-		regionList.toArray(regionArray);
+		MeteringRectangle[] regionArray;
+		if(regionList.isEmpty())
+			regionArray = null;
+		else
+		{
+			regionArray = new MeteringRectangle[regionList.size()];
+			regionList.toArray(regionArray);
+		}
 		
 		// apply regions
 		m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, regionArray);
