@@ -3,7 +3,6 @@ package com.oneplus.camera.ui;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 
 import android.app.Fragment;
@@ -13,7 +12,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.RectF;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -25,102 +23,40 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 
-import com.oneplus.base.Handle;
-import com.oneplus.base.HandlerUtils;
-import com.oneplus.base.Log;
-import com.oneplus.base.Rotation;
-import com.oneplus.camera.Camera;
 import com.oneplus.camera.CameraActivity;
-import com.oneplus.camera.CaptureHandle;
-import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
-import com.oneplus.camera.VideoCaptureState;
-import com.oneplus.camera.Camera.LensFacing;
 import com.oneplus.camera.io.FileManager;
-import com.oneplus.util.ListUtils;
 
-final class PreviewGallery extends UIComponent implements CaptureButtons
+final class PreviewGallery extends UIComponent
 {
 	// Constants
-	private static final int MSG_START_BURST_CAPTURE = 10000;
-	private static final long BURST_TRIGGER_THRESHOLD = 500;
 	
 	
 	// Private fields
 	private View m_PreviewGallery;
 	private ViewPager m_ViewPager;
-	private Button m_PrimaryButton;
-	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
-	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
 	
-	FileManager m_FileManager;
-	
-	
-	// Constants for capture button function.
-	private enum CaptureButtonFunction
-	{
-		CAPTURE_PHOTO,
-		CAPTURE_VIDEO,
-		PAUSE_RESUME_VIDEO,
-	}
-	
-	
-	// Class for button drawable.
-	private final class ButtonDrawableHandle extends Handle
-	{
-		public final Drawable drawable;
-		public final int flags;
-		
-		public ButtonDrawableHandle(Drawable drawable, int flags)
-		{
-			super("CaptureButtonDrawable");
-			this.drawable = drawable;
-			this.flags = flags;
-		}
+	private FileManager m_FileManager;
 
-		@Override
-		protected void onClose(int flags)
-		{
-			restorePrimaryButtonBackground(this);
-		}
-	}
-	
-	
 	// Constructor
-	PreviewGallery(CameraActivity cameraActivity)
-	{
+	PreviewGallery(CameraActivity cameraActivity) {
 		super("Preview Gallery", cameraActivity, true);
 	}
-	
-	
+
 	// Handle message.
 	@Override
-	protected void handleMessage(Message msg)
-	{
-		switch(msg.what)
-		{
-			case MSG_START_BURST_CAPTURE:
-				this.startBurstCapture();
-				break;
-				
-			default:
-				super.handleMessage(msg);
-				break;
+	protected void handleMessage(Message msg) {
+		switch (msg.what) {
+		default:
+			super.handleMessage(msg);
+			break;
 		}
 	}
-	
-	
 
-	
-
-	
 	// Initialize.
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	protected void onInitialize()
 	{
@@ -133,6 +69,9 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 		// setup UI
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
+		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
+		final View orignalTop = parent.getChildAt(parent.getChildCount() - 1);
+		
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
 		m_ViewPager.setOffscreenPageLimit(3);
@@ -160,8 +99,10 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 			public void onPageSelected(int position) {
 				if(position == 0){
 					m_PreviewGallery.setBackgroundDrawable(null);
+					orignalTop.bringToFront();
 				}else{
 					m_PreviewGallery.setBackgroundColor(cameraActivity.getResources().getColor(R.color.Previerw_gallery_background));
+					m_PreviewGallery.bringToFront();
 				}
 			}});
 		m_ViewPager.setOnTouchListener(new View.OnTouchListener() {
@@ -169,142 +110,11 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
 				cameraActivity.onTouchEvent(event);
-//				cameraActivity.findViewById(R.id.capture_bar).onTouchEvent(event);
 				return false;
 			}
 		});
+	}
 
-	}
-	
-
-	
-	
-	// Called when rotation changed.
-	@Override
-	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
-	{
-		// call super
-		super.onRotationChanged(prevRotation, newRotation);
-		
-		// rotate buttons
-		this.rotateView(m_PrimaryButton, newRotation);
-	}
-	
-	
-	// Restore background of primary capture button.
-	private void restorePrimaryButtonBackground(ButtonDrawableHandle handle)
-	{
-		// check thread
-		this.verifyAccess();
-		
-		// remove handle
-		boolean isLastHandle = ListUtils.isLastObject(m_PrimaryButtonBackgroundHandles, handle);
-		if(!m_PrimaryButtonBackgroundHandles.remove(handle))
-			return;
-		
-		// update buttons
-		if(isLastHandle)
-			this.updateButtonBackgrounds();
-	}
-	
-	
-	// Change background of primary capture button.
-	@Override
-	public Handle setPrimaryButtonBackground(Drawable drawable, int flags)
-	{
-		// check state
-		this.verifyAccess();
-		if(!this.isRunningOrInitializing())
-		{
-			Log.e(TAG, "setPrimaryButtonBackground() - Component is not running");
-			return null;
-		}
-		
-		// create handle
-		ButtonDrawableHandle handle = new ButtonDrawableHandle(drawable, flags);
-		
-		// update button
-		this.updateButtonBackgrounds();
-		return handle;
-	}
-	
-	
-	// Start burst capture.
-	private void startBurstCapture()
-	{
-		// check state
-		CameraActivity cameraActivity = this.getCameraActivity();
-		PhotoCaptureState photoCaptureState = cameraActivity.get(CameraActivity.PROP_PHOTO_CAPTURE_STATE);
-		VideoCaptureState videoCaptureState = cameraActivity.get(CameraActivity.PROP_VIDEO_CAPTURE_STATE);
-		if(photoCaptureState != PhotoCaptureState.READY)
-		{
-			Log.e(TAG, "startBurstCapture() - Photo capture state is " + photoCaptureState);
-			return;
-		}
-		if(videoCaptureState != VideoCaptureState.READY && videoCaptureState != VideoCaptureState.PREPARING)
-		{
-			Log.e(TAG, "startBurstCapture() - Video capture state is " + videoCaptureState);
-			return;
-		}
-		
-		Log.v(TAG, "startBurstCapture()");
-		
-	}
-	
-	
-	// Update capture button background.
-	private void updateButtonBackgrounds()
-	{
-		// update primary button
-		if(m_PrimaryButton != null)
-		{
-			if(m_PrimaryButtonBackgroundHandles.isEmpty())
-			{
-				switch(m_PrimaryButtonFunction)
-				{
-					case CAPTURE_PHOTO:
-						m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_background);
-						break;
-					case CAPTURE_VIDEO:
-						switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
-						{
-							case CAPTURING:
-							case STOPPING:
-								m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_video_recording);
-								break;
-							default:
-								m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_video);
-								break;
-						}
-						break;
-					case PAUSE_RESUME_VIDEO:
-						//
-						break;
-				}
-			}
-			else
-				m_PrimaryButton.setBackground(m_PrimaryButtonBackgroundHandles.getLast().drawable);
-		}
-	}
-	
-	
-	// Update capture button functions.
-	private void updateButtonFunctions(boolean updateBackground)
-	{
-		//CameraActivity cameraActivity = this.getCameraActivity();
-		switch(this.getMediaType())
-		{
-			case PHOTO:
-				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
-				break;
-			case VIDEO:
-				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_VIDEO;
-				break;
-		}
-		if(updateBackground)
-			this.updateButtonBackgrounds();
-	}
-	
 	private static class ImageFragment extends Fragment {
 		
 		private	File	m_File;
@@ -347,59 +157,63 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 			return view;
 		}
 		
-		public Bitmap scaleCenterCrop(Bitmap source,int newWidth, int newHeight) {
-		    int sourceWidth = source.getWidth();
-		    int sourceHeight = source.getHeight();
+		public Bitmap scaleCenterCrop(Bitmap source, int newWidth, int newHeight) {
+			int sourceWidth = source.getWidth();
+			int sourceHeight = source.getHeight();
 
-		    // Compute the scaling factors to fit the new height and width, respectively.
-		    // To cover the final image, the final scaling will be the bigger 
-		    // of these two.
-		    float xScale = (float) newWidth / sourceWidth;
-		    float yScale = (float) newHeight / sourceHeight;
-		    float scale = Math.max(xScale, yScale);
+			// Compute the scaling factors to fit the new height and width,
+			// respectively.
+			// To cover the final image, the final scaling will be the bigger
+			// of these two.
+			float xScale = (float) newWidth / sourceWidth;
+			float yScale = (float) newHeight / sourceHeight;
+			float scale = Math.max(xScale, yScale);
 
-		    // Now get the size of the source bitmap when scaled
-		    float scaledWidth = scale * sourceWidth;
-		    float scaledHeight = scale * sourceHeight;
+			// Now get the size of the source bitmap when scaled
+			float scaledWidth = scale * sourceWidth;
+			float scaledHeight = scale * sourceHeight;
 
-		    // Let's find out the upper left coordinates if the scaled bitmap
-		    // should be centered in the new size give by the parameters
-		    float left = (newWidth - scaledWidth) / 2;
-		    float top = (newHeight - scaledHeight) / 2;
+			// Let's find out the upper left coordinates if the scaled bitmap
+			// should be centered in the new size give by the parameters
+			float left = (newWidth - scaledWidth) / 2;
+			float top = (newHeight - scaledHeight) / 2;
 
-		    // The target rectangle for the new, scaled version of the source bitmap will now
-		    // be
-		    RectF targetRect = new RectF(left, top, left + scaledWidth, top + scaledHeight);
+			// The target rectangle for the new, scaled version of the source
+			// bitmap will now
+			// be
+			RectF targetRect = new RectF(left, top, left + scaledWidth, top + scaledHeight);
 
-		    // Finally, we create a new bitmap of the specified size and draw our new,
-		    // scaled bitmap onto it.
-		    Bitmap dest = Bitmap.createBitmap(newWidth, newHeight, source.getConfig());
-		    Canvas canvas = new Canvas(dest);
-		    canvas.drawBitmap(source, null, targetRect, null);
+			// Finally, we create a new bitmap of the specified size and draw
+			// our new,
+			// scaled bitmap onto it.
+			Bitmap dest = Bitmap.createBitmap(newWidth, newHeight, source.getConfig());
+			Canvas canvas = new Canvas(dest);
+			canvas.drawBitmap(source, null, targetRect, null);
 
-		    return dest;
+			return dest;
 		}
 		
 		public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
-	    // Raw height and width of image
-	    final int height = options.outHeight;
-	    final int width = options.outWidth;
-	    int inSampleSize = 1;
+			// Raw height and width of image
+			final int height = options.outHeight;
+			final int width = options.outWidth;
+			int inSampleSize = 1;
 
-	    if (height > reqHeight || width > reqWidth) {
+			if (height > reqHeight || width > reqWidth) {
 
-	        final int halfHeight = height / 2;
-	        final int halfWidth = width / 2;
+				final int halfHeight = height / 2;
+				final int halfWidth = width / 2;
 
-	        // Calculate the largest inSampleSize value that is a power of 2 and keeps both
-	        // height and width larger than the requested height and width.
-	        while ((halfHeight / inSampleSize) > reqHeight && (halfWidth / inSampleSize) > reqWidth) {
-	            inSampleSize *= 2;
-	        }
-	    }
+				// Calculate the largest inSampleSize value that is a power of 2
+				// and keeps both
+				// height and width larger than the requested height and width.
+				while ((halfHeight / inSampleSize) > reqHeight && (halfWidth / inSampleSize) > reqWidth) {
+					inSampleSize *= 2;
+				}
+			}
 
-	    return inSampleSize;
-	}
+			return inSampleSize;
+		}
 	}
 	
     private static class PagerAdapter extends FragmentStatePagerAdapter {
@@ -437,6 +251,4 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
         }
 
     }
-
-
 }
