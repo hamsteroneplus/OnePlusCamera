@@ -48,8 +48,10 @@ import com.oneplus.util.AspectRatio;
 class CameraImpl extends HandlerBaseObject implements Camera
 {
 	// Constants
+	private static final long TIMEOUT_AF_COMPLETE = 5000;
 	private static final int MSG_PREVIEW_FRAME_RECEIVED = 10000;
 	private static final int MSG_START_AF = 10010;
+	private static final int MSG_AF_TIMEOUT = 10011;
 	
 	
 	// Private fields
@@ -106,6 +108,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private FlashMode m_FlashMode = FlashMode.OFF;
 	private FocusMode m_FocusMode = FocusMode.DISABLED;
 	private final String m_Id;
+	private boolean m_IsAutoFocusTimeout;
 	private boolean m_IsCaptureSequenceCompleted;
 	private volatile boolean m_IsPreviewReceived;
 	private boolean m_IsRecordingMode;
@@ -801,6 +804,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		switch(msg.what)
 		{
+			case MSG_AF_TIMEOUT:
+				this.onAutoFocusTimeout();
+				break;
+				
 			case MSG_PREVIEW_FRAME_RECEIVED:
 				this.onPreviewFrameReceived();
 				break;
@@ -812,6 +819,27 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			default:
 				super.handleMessage(msg);
 				break;
+		}
+	}
+	
+	
+	// Called when AF timeout.
+	private void onAutoFocusTimeout()
+	{
+		if(this.get(PROP_FOCUS_STATE) == FocusState.SCANNING)
+		{
+			Log.e(TAG, "onAutoFocusTimeout()");
+			
+			// cancel AF
+			if(m_PreviewRequestBuilder != null)
+			{
+				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+				this.startPreviewRequestDirectly();
+			}
+			
+			// update state
+			m_IsAutoFocusTimeout = true;
+			this.setReadOnly(PROP_FOCUS_STATE, FocusState.UNFOCUSED);
 		}
 	}
 	
@@ -956,6 +984,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_PreviewSurface = null;
 		m_CaptureSession = null;
 		m_CaptureSessionState = OperationState.STOPPED;
+		m_IsAutoFocusTimeout = false;
 		m_PreviewCallbackData = null;
 		if(m_IsPreviewReceived)
 		{
@@ -1288,22 +1317,31 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		switch(afState)
 		{
 			case CaptureResult.CONTROL_AF_STATE_INACTIVE:
+				m_IsAutoFocusTimeout = false;
+				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED:
+				m_IsAutoFocusTimeout = false;
+				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.FOCUSED);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
+				m_IsAutoFocusTimeout = false;
+				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.UNFOCUSED);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN:
-				this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING);
+				if(!m_IsAutoFocusTimeout && this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING))
+					this.getHandler().sendEmptyMessageDelayed(MSG_AF_TIMEOUT, TIMEOUT_AF_COMPLETE);
 				break;
 			default:
 				Log.w(TAG, "onPreviewCaptureCompleted() - Unknown AF state : " + afState);
+				m_IsAutoFocusTimeout = false;
+				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
 				break;
 		}

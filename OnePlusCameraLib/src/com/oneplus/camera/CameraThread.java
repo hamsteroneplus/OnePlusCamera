@@ -128,6 +128,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private final PhotoCaptureHandlerHandle m_DefaultPhotoCaptureHandlerHandle = new PhotoCaptureHandlerHandle(null);
 	private Handle m_DefaultShutterSoundHandle;
 	private final VideoCaptureHandlerHandle m_DefaultVideoCaptureHandlerHandle = new VideoCaptureHandlerHandle(null);
+	private FocusController m_FocusController;
 	private boolean m_IsCapturingBurstPhotos;
 	private boolean m_IsNormalComponentsCreated;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
@@ -389,9 +390,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
-	// Bind to components.
+	// Bind to initial components.
 	@SuppressWarnings("unchecked")
-	private boolean bindToComponents()
+	private boolean bindToInitialComponents()
 	{
 		// bind to AudioManager
 		m_AudioManager = m_ComponentManager.findComponent(AudioManager.class, this);
@@ -408,7 +409,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			}
 		}
 		else
-			Log.w(TAG, "bindToComponents() - No AudioManager");
+			Log.w(TAG, "bindToInitialComponents() - No AudioManager");
 		
 		// bind to CameraDeviceManager
 		m_CameraDeviceManager = m_ComponentManager.findComponent(CameraDeviceManager.class);
@@ -426,12 +427,33 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		else
 		{
-			Log.e(TAG, "bindToComponents() - No CameraDeviceManager");
+			Log.e(TAG, "bindToInitialComponents() - No CameraDeviceManager");
 			return false;
 		}
 		
 		// complete
 		return true;
+	}
+	
+	
+	// Bind to normal components.
+	private void bindToNormalComponents()
+	{
+		// bind to FocusController
+		m_FocusController = m_ComponentManager.findComponent(FocusController.class, this);
+		if(m_FocusController != null)
+		{
+			m_FocusController.addCallback(FocusController.PROP_FOCUS_STATE, new PropertyChangedCallback<FocusState>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<FocusState> key, PropertyChangeEventArgs<FocusState> e)
+				{
+					onFocusStateChanged(e.getNewValue());
+				}
+			});
+		}
+		else
+			Log.w(TAG, "bindToNormalComponents() - No FocusController");
 	}
 	
 	
@@ -497,7 +519,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// capture
 		if(this.isDependencyThread())
 		{
-			if(this.capturePhotoInternal(handle))
+			if(this.capturePhotoInternal(handle, false))
 				return handle;
 			return null;
 		}
@@ -506,7 +528,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			@Override
 			public void run()
 			{
-				capturePhotoInternal(handle);
+				capturePhotoInternal(handle, false);
 			}
 		}))
 		{
@@ -519,16 +541,25 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Capture photo.
-	private boolean capturePhotoInternal(PhotoCaptureHandle handle)
+	private boolean capturePhotoInternal(PhotoCaptureHandle handle, boolean isFocusLocked)
 	{
+		// clear state
+		m_PhotoCaptureHandle = null;
+		
 		// check state
-		if(this.get(PROP_PHOTO_CAPTURE_STATE) != PhotoCaptureState.READY)
+		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
 		{
-			Log.e(TAG, "capturePhotoInternal() - Capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
-			return false;
+			case READY:
+				break;
+			case STARTING:
+				if(isFocusLocked)
+					break;
+			default:
+				Log.e(TAG, "capturePhotoInternal() - Capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
+				return false;
 		}
 		
-		Log.w(TAG, "capturePhotoInternal() - Handle : " + handle);
+		Log.w(TAG, "capturePhotoInternal() - Handle : " + handle + ", focus locked : " + isFocusLocked);
 		
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
@@ -540,6 +571,46 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		// change state
 		this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.STARTING);
+		
+		// lock focus
+		if(!isFocusLocked)
+		{
+			if(m_FocusController != null)
+			{
+				// check state
+				boolean lockFocus = false;
+				FocusState focusState = m_FocusController.get(FocusController.PROP_FOCUS_STATE);
+				if(focusState == FocusState.FOCUSED)
+				{
+					if(m_FocusController.get(FocusController.PROP_FOCUS_MODE) == FocusMode.CONTINUOUS_AF)
+						Log.v(TAG, "capturePhotoInternal() - No need to lock focus, because current focus mode is continuous AF");
+					else
+						lockFocus = true;
+				}
+				else if(focusState == FocusState.SCANNING)
+				{
+					Log.w(TAG, "capturePhotoInternal() - Waiting for focus complete");
+					m_PhotoCaptureHandle = handle;
+					return true;
+				}
+				else
+					lockFocus = true;
+				
+				// start locking focus
+				if(lockFocus)
+				{
+					Log.w(TAG, "capturePhotoInternal() - Start locking focus");
+					if(Handle.isValid(m_FocusController.startAutoFocus(m_FocusController.get(FocusController.PROP_AF_REGIONS), FocusController.FLAG_SINGLE_AF)))
+					{
+						m_PhotoCaptureHandle = handle;
+						return true;
+					}
+					Log.e(TAG, "capturePhotoInternal() - Fail to start locking focus");
+				}
+			}
+			else
+				Log.w(TAG, "capturePhotoInternal() - No FocusController to lock focus");
+		}
 		
 		// capture
 		PhotoCaptureHandlerHandle handlerHandle = null;
@@ -794,7 +865,15 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			return false;
 		}
 		
-		Log.w(TAG, "completeCapture() - Handle : " + handle);
+		// complete capture
+		return this.completeCaptureInternal(captureHandler, handle, true);
+	}
+	
+	
+	// Complete media capture process.
+	private boolean completeCaptureInternal(Handle captureHandler, CaptureHandle handle, boolean checkHandles)
+	{
+		Log.w(TAG, "completeCaptureInternal() - Handle : " + handle);
 		
 		// complete capture
 		switch(handle.getMediaType())
@@ -802,15 +881,18 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			case PHOTO:
 			{
 				// check handles
-				if(m_PhotoCaptureHandlerHandle != captureHandler)
+				if(checkHandles)
 				{
-					Log.e(TAG, "completeCapture() - Invalid capture handler : " + captureHandler);
-					return false;
-				}
-				if(handle != m_PhotoCaptureHandle)
-				{
-					Log.e(TAG, "completeCapture() - Invalid capture handle : " + handle);
-					return false;
+					if(m_PhotoCaptureHandlerHandle != captureHandler)
+					{
+						Log.e(TAG, "completeCaptureInternal() - Invalid capture handler : " + captureHandler);
+						return false;
+					}
+					if(handle != m_PhotoCaptureHandle)
+					{
+						Log.e(TAG, "completeCaptureInternal() - Invalid capture handle : " + handle);
+						return false;
+					}
 				}
 				
 				// clear states
@@ -820,7 +902,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				
 				// update property
 				if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO)
-					Log.w(TAG, "completeCapture() - Complete video snapshot");
+					Log.w(TAG, "completeCaptureInternal() - Complete video snapshot");
 				if(this.get(PROP_CAMERA_PREVIEW_STATE) == OperationState.STARTED)
 					this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
 				else
@@ -1016,6 +1098,20 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	// Called when focus state changes.
+	private void onFocusStateChanged(FocusState focusState)
+	{
+		// continue capture photo
+		if(focusState != FocusState.SCANNING 
+				&& this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.STARTING
+				&& Handle.isValid(m_PhotoCaptureHandle))
+		{
+			Log.w(TAG, "onFocusStateChanged() - Continue capturing photo");
+			this.capturePhotoInternal(m_PhotoCaptureHandle, true);
+		}
+	}
+	
+	
 	// Called when receiving captured picture.
 	private void onPictureReceived(CameraCaptureEventArgs e)
 	{
@@ -1057,7 +1153,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		m_ComponentManager.createComponents(ComponentCreationPriority.HIGH, this);
 		
 		// bind to components
-		if(!this.bindToComponents())
+		if(!this.bindToInitialComponents())
 			throw new RuntimeException("Fail to bind components.");
 		
 	}
@@ -1526,6 +1622,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			m_IsNormalComponentsCreated = true;
 			m_ComponentManager.createComponents(ComponentCreationPriority.NORMAL, this);
+			this.bindToNormalComponents();
 		}
 		
 		// complete
@@ -1715,6 +1812,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		
 		Log.v(TAG, "stopPhotoCaptureInternal() - Handle : ", handle);
+		
+		// cancel directly when locking focus
+		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.STARTING)
+		{
+			Log.w(TAG, "stopPhotoCaptureInternal() - Stop when locking focus");
+			this.completeCaptureInternal(null, null, false);
+			return;
+		}
 		
 		// check camera
 		Camera camera = this.get(PROP_CAMERA);
