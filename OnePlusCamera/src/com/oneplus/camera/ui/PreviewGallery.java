@@ -2,10 +2,18 @@ package com.oneplus.camera.ui;
 
 import java.util.LinkedList;
 
+import android.app.Fragment;
+import android.app.FragmentManager;
 import android.graphics.drawable.Drawable;
+import android.os.Bundle;
 import android.os.Message;
+import android.support.v13.app.FragmentPagerAdapter;
+import android.support.v4.view.ViewPager;
+import android.support.v4.view.ViewPager.OnPageChangeListener;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
 
@@ -43,7 +51,7 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 	
 	// Private fields
 	private View m_PreviewGallery;
-//	private ViewPager m_ViewPager;
+	private ViewPager m_ViewPager;
 	private Button m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
 	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
@@ -121,30 +129,58 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 		// find components
 		
 		// setup UI
-		CameraActivity cameraActivity = this.getCameraActivity();
+		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
-//		m_ViewPager.findViewById(R.id.preview_gallery_pager);
-//		new MyPagerAdapter(getSupportFragmentManager());
-		
-		m_PrimaryButton = (Button)m_PreviewGallery.findViewById(R.id.primary_capture_button);
-		m_PrimaryButton.setOnTouchListener(new View.OnTouchListener()
-		{
+		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
+		m_ViewPager.setAdapter(new PagerAdapter(cameraActivity.getFragmentManager()));
+		m_ViewPager.setOnPageChangeListener(new OnPageChangeListener(){
+
 			@Override
-			public boolean onTouch(View v, MotionEvent event)
-			{
-				switch(event.getAction())
-				{
-					case MotionEvent.ACTION_DOWN:
-						onPrimaryButtonPressed();
-						break;
-					case MotionEvent.ACTION_CANCEL:
-					case MotionEvent.ACTION_UP:
-						onPrimaryButtonReleased();
-						break;
+			public void onPageScrollStateChanged(int state) {
+				
+			}
+
+			@Override
+			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+				
+			}
+
+			@Override
+			public void onPageSelected(int position) {
+				if(position == 0){
+					m_PreviewGallery.setBackgroundDrawable(null);
+				}else{
+					m_PreviewGallery.setBackgroundColor(cameraActivity.getResources().getColor(R.color.Previerw_gallery_background));
 				}
+			}});
+		m_ViewPager.setOnTouchListener(new View.OnTouchListener() {
+			
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				cameraActivity.onTouchEvent(event);
 				return false;
 			}
 		});
+		
+//		m_PrimaryButton = (Button)m_PreviewGallery.findViewById(R.id.primary_capture_button);
+//		m_PrimaryButton.setOnTouchListener(new View.OnTouchListener()
+//		{
+//			@Override
+//			public boolean onTouch(View v, MotionEvent event)
+//			{
+//				switch(event.getAction())
+//				{
+//					case MotionEvent.ACTION_DOWN:
+//						onPrimaryButtonPressed();
+//						break;
+//					case MotionEvent.ACTION_CANCEL:
+//					case MotionEvent.ACTION_UP:
+//						onPrimaryButtonReleased();
+//						break;
+//				}
+//				return false;
+//			}
+//		});
 
 	}
 	
@@ -368,41 +404,53 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera_on);
 	}
 	
-//    public static class MyPagerAdapter extends FragmentPagerAdapter {
-//    private static int NUM_ITEMS = 3;
-//
-//        public MyPagerAdapter(FragmentManager fragmentManager) {
-//            super(fragmentManager);
-//        }
-//
-//        // Returns total number of pages
-//        @Override
-//        public int getCount() {
-//            return NUM_ITEMS;
-//        }
-//
-//        // Returns the fragment to display for that page
-//        @Override
-//        public Fragment getItem(int position) {
-//            switch (position) {
+	private static class ImageFragment extends Fragment {
+		@Override
+		public void onCreate(Bundle savedInstanceState)  
+		{
+		    super.onCreate(savedInstanceState);
+
+		}
+
+		@Override
+		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+			View view = inflater.inflate(android.R.layout.simple_gallery_item, container, false);
+
+			return view;
+		}
+	}
+	
+    private static class PagerAdapter extends FragmentPagerAdapter {
+    private static int NUM_ITEMS = 30;
+
+        public PagerAdapter(FragmentManager fragmentManager) {
+            super(fragmentManager);
+        }
+
+        // Returns total number of pages
+        @Override
+        public int getCount() {
+            return NUM_ITEMS;
+        }
+
+        // Returns the fragment to display for that page
+        @Override
+        public Fragment getItem(int position) {
+            switch (position) {
 //            case 0: // Fragment # 0 - This will show FirstFragment
 //                return new Fragment();
-//            case 1: // Fragment # 0 - This will show FirstFragment different title
-//                return new Fragment();
-//            case 2: // Fragment # 1 - This will show SecondFragment
-//                return new Fragment();
-//            default:
-//                return null;
-//            }
-//        }
-//
-//        // Returns the page title for the top indicator
-//        @Override
-//        public CharSequence getPageTitle(int position) {
-//            return "Page " + position;
-//        }
-//
-//    }
+            default:
+                return new ImageFragment();
+            }
+        }
+
+        // Returns the page title for the top indicator
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return "Page " + position;
+        }
+
+    }
 
 
 }

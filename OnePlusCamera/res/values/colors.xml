@@ -3,5 +3,7 @@
     
     <!-- Capture bar -->
     <color name="capture_bar_background">#1A101012</color>
+    <!-- Previerw gallery -->
+    <color name="Previerw_gallery_background">#CC000000</color>
     
 </resources>

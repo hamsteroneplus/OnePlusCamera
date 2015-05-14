@@ -2,26 +2,14 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/preview_gallery"
     android:layout_width="match_parent"
-    android:layout_height="@dimen/preview_gallery_height"
-    android:background="@color/capture_bar_background"
+    android:layout_height="match_parent"
     android:visibility="gone"
     android:layout_alignParentTop="true" >
-<!--  
+
     <android.support.v4.view.ViewPager
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/preview_gallery_pager"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent" />-->
-    
-    <!-- Primary button -->
-    <Button android:id="@+id/primary_capture_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@drawable/capture_button_background"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginBottom="@dimen/capture_bar_primary_button_margin_bottom"/>
-    
-  
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/preview_gallery_pager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
 </RelativeLayout>
