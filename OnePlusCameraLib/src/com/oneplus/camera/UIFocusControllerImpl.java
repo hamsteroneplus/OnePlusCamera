@@ -84,6 +84,15 @@ final class UIFocusControllerImpl extends CameraComponent implements FocusContro
 	}
 	
 	
+	// Called when AF regions changed.
+	private void onAfRegionsChanged(Camera camera, List<MeteringRect> regions)
+	{
+		if(this.getCamera() != camera)
+			return;
+		this.setReadOnly(PROP_AF_REGIONS, regions);
+	}
+	
+	
 	// Called when actual FocusController found.
 	private void onFocusControllerFound(final FocusController focusController)
 	{
@@ -143,12 +152,25 @@ final class UIFocusControllerImpl extends CameraComponent implements FocusContro
 	
 	
 	// Called when property in FocusController changed.
+	@SuppressWarnings("unchecked")
 	private void onFocusControllerPropertyChanged(Camera camera, PropertyKey<?> key, Object newValue)
 	{
 		if(this.getCamera() != camera)
 			return;
-		if(key == PROP_FOCUS_STATE)
+		if(key == PROP_AF_REGIONS)
+			this.onAfRegionsChanged(camera, (List<MeteringRect>)newValue);
+		else if(key == PROP_FOCUS_MODE)
+			this.onFocusModeChanged((FocusMode)newValue);
+		else if(key == PROP_FOCUS_STATE)
 			this.onFocusStateChanged((FocusState)newValue);
+	}
+	
+	
+	// Called when focus mode changed.
+	private void onFocusModeChanged(FocusMode focusMode)
+	{
+		Log.v(TAG, "onFocusModeChanged() - ", focusMode);
+		this.setReadOnly(PROP_FOCUS_MODE, focusMode);
 	}
 	
 	

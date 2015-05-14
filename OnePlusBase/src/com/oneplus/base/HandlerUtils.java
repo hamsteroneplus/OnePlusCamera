@@ -18,6 +18,23 @@ public final class HandlerUtils
 	
 	
 	/**
+	 * Check whether given message is contained in given handler object or not.
+	 * @param target Target {@link HandlerObject}.
+	 * @param what Message.
+	 * @return Whether message is contained in given handler object or not.
+	 */
+	public static boolean hasMessages(HandlerObject target, int what)
+	{
+		if(target == null)
+			return false;
+		Handler handler = target.getHandler();
+		if(handler == null)
+			return false;
+		return handler.hasMessages(what);
+	}
+	
+	
+	/**
 	 * Post call-back to given {@link HandlerObject}.
 	 * @param target Target {@link HandlerObject}.
 	 * @param r Call-back to post.

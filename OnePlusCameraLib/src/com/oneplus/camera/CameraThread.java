@@ -83,6 +83,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	 */
 	public static final PropertyKey<Rotation> PROP_CAPTURE_ROTATION = new PropertyKey<>("CaptureRotation", Rotation.class, CameraThread.class, PropertyKey.FLAG_NOT_NULL, Rotation.PORTRAIT);
 	/**
+	 * Read-only property to check whether first camera preview frame is received or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_CAMERA_PREVIEW_RECEIVED = new PropertyKey<>("IsCameraPreviewReceived", Boolean.class, CameraThread.class, false);
+	/**
 	 * Read-only property for current captured media type.
 	 */
 	public static final PropertyKey<MediaType> PROP_MEDIA_TYPE = new PropertyKey<>("MediaType", MediaType.class, CameraThread.class, MediaType.PHOTO);
@@ -154,6 +158,14 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Property call-backs.
+	private final PropertyChangedCallback<Boolean> m_CameraPreviewReceivedChangedCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onCameraPreviewReceivedStateChanged((Camera)source, e.getNewValue());
+		}
+	};
 	private final PropertyChangedCallback<OperationState> m_CameraPreviewStateChangedCallback = new PropertyChangedCallback<OperationState>()
 	{
 		@Override
@@ -875,6 +887,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			Camera camera = cameras.get(i);
 			if(!oldCameras.contains(camera))
 			{
+				camera.addCallback(Camera.PROP_IS_PREVIEW_RECEIVED, m_CameraPreviewReceivedChangedCallback);
 				camera.addCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
 				camera.addHandler(Camera.EVENT_ERROR, m_CameraErrorHandler);
 			}
@@ -884,6 +897,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			Camera camera = oldCameras.get(i);
 			if(!cameras.contains(camera))
 			{
+				camera.removeCallback(Camera.PROP_IS_PREVIEW_RECEIVED, m_CameraPreviewReceivedChangedCallback);
 				camera.removeCallback(Camera.PROP_PREVIEW_STATE, m_CameraPreviewStateChangedCallback);
 				camera.removeHandler(Camera.EVENT_ERROR, m_CameraErrorHandler);
 			}
@@ -902,6 +916,18 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			Log.e(TAG, "onCameraError() - Camera : " + camera);
 			this.raise(EVENT_CAMERA_ERROR, new CameraEventArgs(camera));
 		}
+	}
+	
+	
+	// Called when primary camera preview receiving state changes.
+	private void onCameraPreviewReceivedStateChanged(Camera camera, boolean isReceived)
+	{
+		// check camera
+		if(this.get(PROP_CAMERA) != camera)
+			return;
+		
+		// update property
+		this.setReadOnly(PROP_IS_CAMERA_PREVIEW_RECEIVED, isReceived);
 	}
 	
 	
@@ -1196,6 +1222,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		camera.set(Camera.PROP_IS_RECORDING_MODE, this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO);
 		
 		// update property
+		this.setReadOnly(PROP_IS_CAMERA_PREVIEW_RECEIVED, camera.get(Camera.PROP_IS_PREVIEW_RECEIVED));
 		this.setReadOnly(PROP_CAMERA, camera);
 		
 		// complete

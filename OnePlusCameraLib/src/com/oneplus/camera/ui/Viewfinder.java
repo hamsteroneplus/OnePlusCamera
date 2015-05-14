@@ -1,8 +1,8 @@
 package com.oneplus.camera.ui;
 
-import android.graphics.Rect;
+import android.graphics.PointF;
+import android.graphics.RectF;
 import android.util.Size;
-
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.component.Component;
 
@@ -12,13 +12,19 @@ import com.oneplus.base.component.Component;
 public interface Viewfinder extends Component
 {
 	/**
+	 * Flag to ignore bounds checking.
+	 */
+	int FLAG_NO_BOUNDS_CHECKING = 0x1;
+	
+	
+	/**
 	 * Read-only property for maximum preview container size on screen.
 	 */
 	PropertyKey<Size> PROP_PREVIEW_CONTAINER_SIZE = new PropertyKey<>("PreviewContainerSize", Size.class, Viewfinder.class, new Size(0, 0));
 	/**
 	 * Read-only property for current preview pixel bounds on screen.
 	 */
-	PropertyKey<Rect> PROP_PREVIEW_BOUNDS = new PropertyKey<>("PreviewBounds", Rect.class, Viewfinder.class, new Rect());
+	PropertyKey<RectF> PROP_PREVIEW_BOUNDS = new PropertyKey<>("PreviewBounds", RectF.class, Viewfinder.class, new RectF());
 	/**
 	 * Read-only property for prepared camera preview receiver.
 	 */
@@ -43,4 +49,32 @@ public interface Viewfinder extends Component
 		 */
 		OPENGL,
 	}
+	
+	
+	/**
+	 * Calculate position on screen from relative position in preview.
+	 * @param previewX Horizontal relative position in preview.
+	 * @param previewY Vertical relative position in preview.
+	 * @param result Result position on screen.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_NO_BOUNDS_CHECKING}</li>
+	 * </ul>
+	 * @return Whether position conversion succeeded or not.
+	 */
+	boolean pointFromPreview(float previewX, float previewY, PointF result, int flags);
+	
+	
+	/**
+	 * Calculate relative position in preview from screen position.
+	 * @param screenX Horizontal screen position.
+	 * @param screenY Vertical screen position.
+	 * @param result Result relative position in preview.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_NO_BOUNDS_CHECKING}</li>
+	 * </ul>
+	 * @return Whether position conversion succeeded or not.
+	 */
+	boolean pointToPreview(float screenX, float screenY, PointF result, int flags);
 }

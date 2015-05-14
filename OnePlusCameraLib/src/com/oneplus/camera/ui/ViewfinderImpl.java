@@ -1,7 +1,9 @@
 package com.oneplus.camera.ui;
 
 import android.content.res.Configuration;
+import android.graphics.PointF;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.Message;
 import android.util.Size;
 import android.view.SurfaceHolder;
@@ -323,6 +325,128 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	}
 	
 	
+	// Calculate position on screen from relative position in preview.
+	@SuppressWarnings("incomplete-switch")
+	@Override
+	public boolean pointFromPreview(float previewX, float previewY, PointF result, int flags)
+	{
+		// check parameter
+		if(result == null)
+			return false;
+		if((flags & FLAG_NO_BOUNDS_CHECKING) == 0)
+		{
+			if(previewX < 0 || previewX > 1 || previewY < 0 || previewY > 1)
+				return false;
+		}
+		
+		// get preview bounds
+		RectF previewBounds = this.get(PROP_PREVIEW_BOUNDS);
+		float containerWidth, containerHeight;
+		if(this.getCameraActivityRotation().isLandscape())
+		{
+			containerWidth = previewBounds.width();
+			containerHeight = previewBounds.height();
+		}
+		else
+		{
+			containerWidth = previewBounds.height();
+			containerHeight = previewBounds.width();
+		}
+		
+		// convert to position in preview container
+		float x = (containerWidth * previewX);
+		float y = (containerHeight * previewY);
+		
+		// rotate position
+		switch(this.getCameraActivityRotation())
+		{
+			case PORTRAIT:
+			{
+				float newX = (containerHeight - y);
+				y = x;
+				x = newX;
+				break;
+			}
+			case INVERSE_PORTRAIT:
+			{
+				float newY = (containerWidth - x);
+				x = y;
+				y = newY;
+				break;
+			}
+			case INVERSE_LANDSCAPE:
+			{
+				x = (containerWidth - x);
+				y = (containerHeight - y);
+				break;
+			}
+		}
+		
+		// complete
+		result.x = (previewBounds.left + x);
+		result.y = (previewBounds.top + y);
+		return true;
+	}
+	
+	
+	// Calculate relative position in preview from screen position.
+	@SuppressWarnings("incomplete-switch")
+	@Override
+	public boolean pointToPreview(float screenX, float screenY, PointF result, int flags)
+	{
+		// check parameter
+		if(result == null)
+			return false;
+		
+		// check bounds
+		RectF previewBounds = this.get(PROP_PREVIEW_BOUNDS);
+		if((flags & FLAG_NO_BOUNDS_CHECKING) == 0 && !previewBounds.contains(screenX, screenY))
+			return false;
+		
+		// rotate position
+		float containerWidth = previewBounds.width();
+		float containerHeight = previewBounds.height();
+		screenX -= previewBounds.left;
+		screenY -= previewBounds.top;
+		switch(this.getCameraActivityRotation())
+		{
+			case PORTRAIT:
+			{
+				float newY = (containerWidth - screenX);
+				screenX = screenY;
+				screenY = newY;
+				break;
+			}
+			case INVERSE_PORTRAIT:
+			{
+				float newX = (containerHeight - screenY);
+				screenY = screenX;
+				screenX = newX;
+				break;
+			}
+			case INVERSE_LANDSCAPE:
+			{
+				screenX = (containerWidth - screenX);
+				screenY = (containerHeight - screenY);
+				break;
+			}
+		}
+		
+		// complete
+		if(this.getCameraActivityRotation().isLandscape())
+		{
+			result.x = ((float)screenX / containerWidth);
+			result.y = ((float)screenY / containerHeight);
+		}
+		else
+		{
+			result.x = ((float)screenX / containerHeight);
+			result.y = ((float)screenY / containerWidth);
+		}
+		return true;
+	}
+	
+	
 	// Re-create direct output Surface.
 	private void recreateDirectOutputSurface()
 	{
@@ -364,6 +488,9 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 			layoutParams.leftMargin = previewBounds.left;
 			m_DirectOutputSurfaceView.requestLayout();
 		}
+		
+		// update property
+		this.setReadOnly(PROP_PREVIEW_BOUNDS, new RectF(previewBounds));
 	}
 	
 	

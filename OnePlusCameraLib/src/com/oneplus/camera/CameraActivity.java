@@ -37,6 +37,10 @@ import com.oneplus.camera.ui.ViewfinderBuilder;
 
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -60,6 +64,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	};
 	
 	
+	/**
+	 * Read-only property for current accelerometer (G-sensor) values.
+	 */
+	public static final PropertyKey<float[]> PROP_ACCELEROMETER_VALUES = new PropertyKey<>("AccelerometerValues", float[].class, CameraActivity.class, new float[3]);
 	/**
 	 * Read-only property for current activity rotation.
 	 */
@@ -90,13 +98,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_LOCKED = new PropertyKey<>("IsCameraLocked", Boolean.class, CameraActivity.class, false);
 	/**
+	 * Read-only property to check whether first camera preview frame is received or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_CAMERA_PREVIEW_RECEIVED = new PropertyKey<>("IsCameraPreviewReceived", Boolean.class, CameraActivity.class, false);
+	/**
 	 * Read-only property to check whether camera thread is started or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_THREAD_STARTED = new PropertyKey<>("IsCameraThreadStarted", Boolean.class, CameraActivity.class, false);
 	/**
+	 * Read-only property to check whether photo or video capture state is READY or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_READY_TO_CAPTURE = new PropertyKey<>("IsReadyToCapture", Boolean.class, CameraActivity.class, false);
+	/**
 	 * Read-only property to check whether self timer is started or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_SELF_TIMER_STARTED = new PropertyKey<>("IsSelfTimerStarted", Boolean.class, CameraActivity.class, false);
+	/**
+	 * Read-only property to check whether user is touching on screen or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_TOUCHING_ON_SCREEN = new PropertyKey<>("IsTouchingOnScreen", Boolean.class, CameraActivity.class, false);
 	/**
 	 * Read-only property for current device orientation.
 	 */
@@ -172,6 +192,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Private fields
+	private int m_AccelerometerValuesIndex;
+	private final float[][] m_AccelerometerValuesTable = new float[][]{ new float[3], new float[3] };
 	private Rotation m_ActivityRotation = Rotation.LANDSCAPE;
 	private final LinkedList<CameraLockHandle> m_CameraLockHandles = new LinkedList<>();
 	private CameraThread m_CameraThread;
@@ -179,6 +201,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private ComponentManager m_ComponentManager;
 	private CountDownTimer m_CountDownTimer;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
+	private boolean m_IsAccelerometerStarted;
 	private boolean m_IsCameraPreviewReceiverReady;
 	private boolean m_IsOrientationListenerStarted;
 	private OrientationEventListener m_OrientationListener;
@@ -187,9 +210,24 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private ResolutionManager m_ResolutionManager;
 	private Rotation m_Rotation = Rotation.PORTRAIT;
 	private Handle m_SelfTimerHandle;
+	private SensorManager m_SensorManager;
 	private final List<SettingsHandle> m_SettingsHandles = new ArrayList<>();
 	private CaptureHandleImpl m_VideoCaptureHandle;
 	private Viewfinder m_Viewfinder;
+	
+	// Call-backs.
+	private final SensorEventListener m_AcceleromaterListener = new SensorEventListener()
+	{
+		@Override
+		public void onSensorChanged(SensorEvent event)
+		{
+			onAccelerometerValuesChanged(event.values);
+		}
+		
+		@Override
+		public void onAccuracyChanged(Sensor sensor, int accuracy)
+		{}
+	};
 	
 	
 	// Class for capture handle.
@@ -720,6 +758,49 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Check PROP_IS_READY_TO_CAPTURE property.
+	private void checkReadyToCapture()
+	{
+		// check photo capture state
+		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
+		{
+			case READY:
+				this.setReadOnly(PROP_IS_READY_TO_CAPTURE, true);
+				return;
+			case STARTING:
+			{
+				// check self-timer
+				if(Handle.isValid(m_SelfTimerHandle))
+					break;
+				
+				// check video mode
+				if(this.get(PROP_MEDIA_TYPE) != MediaType.PHOTO)
+					break;
+				
+				// check service mode
+				if(this.isServiceMode())
+					break;
+				
+				// can capture now
+				this.setReadOnly(PROP_IS_READY_TO_CAPTURE, true);
+				return;
+			}
+			default:
+				break;
+		}
+		
+		// check video capture state
+		if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.READY)
+		{
+			this.setReadOnly(PROP_IS_READY_TO_CAPTURE, true);
+			return;
+		}
+		
+		// cannot capture now
+		this.setReadOnly(PROP_IS_READY_TO_CAPTURE, false);
+	}
+	
+	
 	/**
 	 * Complete media capture process.
 	 * @param handle Capture handle returned from {@link #capturePhoto(int, int) capturePhoto}.
@@ -815,6 +896,27 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// show review screen or complete process
 		//
 		this.onCaptureCompleted(handle);
+	}
+	
+	
+	// Dispatch touch event.
+	@Override
+	public boolean dispatchTouchEvent(MotionEvent ev)
+	{
+		// check ACTION_DOWN
+		int action = ev.getAction();
+		if(action == MotionEvent.ACTION_DOWN)
+			this.setReadOnly(PROP_IS_TOUCHING_ON_SCREEN, true);
+		
+		// dispatch touch event
+		boolean result = super.dispatchTouchEvent(ev);
+		
+		// check ACTION_DOWN
+		if(action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+			this.setReadOnly(PROP_IS_TOUCHING_ON_SCREEN, false);
+		
+		// complete
+		return result;
 	}
 	
 	
@@ -1046,6 +1148,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Called when accelerometer values changed.
+	private void onAccelerometerValuesChanged(float[] values)
+	{
+		float[] oldValues = m_AccelerometerValuesTable[m_AccelerometerValuesIndex];
+		m_AccelerometerValuesIndex = ((m_AccelerometerValuesIndex + 1) % 2);
+		float[] newValues = m_AccelerometerValuesTable[m_AccelerometerValuesIndex];
+		System.arraycopy(values, 0, newValues, 0, 3);
+		this.notifyPropertyChanged(PROP_ACCELEROMETER_VALUES, oldValues, newValues);
+	}
+	
+	
 	/**
 	 * Called when available cameras list changes.
 	 * @param cameras Available cameras.
@@ -1147,6 +1260,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	protected void onBindingToCameraThreadProperties(List<PropertyKey<?>> keys)
 	{
 		keys.add(CameraThread.PROP_AVAILABLE_CAMERAS);
+		keys.add(CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED);
 	}
 	
 	
@@ -1292,6 +1406,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		if(key == CameraThread.PROP_AVAILABLE_CAMERAS)
 			this.onAvailableCamerasChanged((List<Camera>)e.getNewValue());
+		if(key == CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED)
+			this.setReadOnly(PROP_IS_CAMERA_PREVIEW_RECEIVED, (Boolean)e.getNewValue());
 	}
 	
 	
@@ -1494,10 +1610,30 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// enable logs
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_SIZE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_IS_CAMERA_PREVIEW_RECEIVED, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_IS_READY_TO_CAPTURE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PHOTO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_ROTATION, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_SETTINGS, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_VIDEO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
+		
+		// add property changed call-backs
+		this.addCallback(PROP_PHOTO_CAPTURE_STATE, new PropertyChangedCallback<PhotoCaptureState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<PhotoCaptureState> key, PropertyChangeEventArgs<PhotoCaptureState> e)
+			{
+				checkReadyToCapture();
+			}
+		});
+		this.addCallback(PROP_VIDEO_CAPTURE_STATE, new PropertyChangedCallback<VideoCaptureState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<VideoCaptureState> key, PropertyChangeEventArgs<VideoCaptureState> e)
+			{
+				checkReadyToCapture();
+			}
+		});
 		
 		// check activity rotation
 		this.onRequestedOrientationChanged(this.getRequestedOrientation());
@@ -1658,6 +1794,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// close all cameras
 		if(m_CameraThread != null)
 			m_CameraThread.closeCameras();
+		
+		// stop accelerometer
+		this.stopAccelerometer();
 		
 		// stop orientation listener
 		this.stopOrientationListener();
@@ -2180,6 +2319,33 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Start accelerometer.
+	private void startAccelerometer()
+	{
+		// check state
+		if(m_IsAccelerometerStarted)
+			return;
+		switch(this.get(PROP_STATE))
+		{
+			case RESUMING:
+			case RUNNING:
+				break;
+			default:
+				return;
+		}
+		
+		Log.v(TAG, "startAccelerometer()");
+		
+		// get sensor manager
+		if(m_SensorManager == null)
+			m_SensorManager = (SensorManager)this.getSystemService(SENSOR_SERVICE);
+		
+		// register listener
+		m_SensorManager.registerListener(m_AcceleromaterListener, m_SensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_UI);
+		m_IsAccelerometerStarted = true;
+	}
+	
+	
 	/**
 	 * Start current primary camera preview.
 	 * @return Whether preview starts successfully or not.
@@ -2290,6 +2456,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			this.bindToNormalComponents();
 		}
 		
+		// start accelerometer
+		this.startAccelerometer();
+		
 		// complete
 		return true;
 	}
@@ -2327,6 +2496,24 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		Log.v(TAG, "startOrientationListener()");
 		m_OrientationListener.enable();
 		m_IsOrientationListenerStarted = true;
+	}
+	
+	
+	// Stop accelerometer.
+	private void stopAccelerometer()
+	{
+		// check state
+		if(!m_IsAccelerometerStarted)
+			return;
+		if(m_SensorManager == null)
+			return;
+		
+		Log.v(TAG, "stopAccelerometer()");
+		
+		// unregister
+		m_SensorManager.unregisterListener(m_AcceleromaterListener);
+		m_IsAccelerometerStarted = false;
+		this.onAccelerometerValuesChanged(PROP_ACCELEROMETER_VALUES.defaultValue);
 	}
 	
 	

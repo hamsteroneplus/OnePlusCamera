@@ -1298,6 +1298,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.UNFOCUSED);
 				break;
+			case CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN:
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING);
 				break;
@@ -1880,7 +1881,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// check state
 		this.verifyAccess();
 		this.verifyReleaseState();
-		if(this.get(PROP_PREVIEW_STATE) == OperationState.STARTED)
+		if(this.get(PROP_PREVIEW_STATE) != OperationState.STARTED)
 		{
 			Log.w(TAG, "startAutoFocus() - Preview state is " + this.get(PROP_PREVIEW_STATE));
 			return false;
