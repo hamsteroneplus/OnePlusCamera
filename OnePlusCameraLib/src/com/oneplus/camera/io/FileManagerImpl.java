@@ -121,8 +121,11 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						case MESSAGE_LOAD_IMAGES:
 						{
-							File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");      
-							m_FileList.addAll(Arrays.asList(directory.listFiles()));
+							File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
+							File[] files = directory.listFiles();
+							if(files != null && files.length > 0){
+								m_FileList.addAll(Arrays.asList(directory.listFiles()));
+							}
 						}
 					}
 				}

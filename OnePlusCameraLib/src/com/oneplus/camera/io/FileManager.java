@@ -1,5 +1,6 @@
 package com.oneplus.camera.io;
 
+import java.io.File;
 import java.util.List;
 
 import com.oneplus.base.EventKey;
@@ -41,5 +42,5 @@ public interface FileManager extends Component
 	 * get all medias asynchronously.
 	 * @return all medias.
 	 */
-	List<?> getMediaFiles();
+	List<File> getMediaFiles();
 }

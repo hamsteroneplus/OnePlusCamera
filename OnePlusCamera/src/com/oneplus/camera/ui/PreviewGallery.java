@@ -1,13 +1,24 @@
 package com.oneplus.camera.ui;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.List;
 
 import android.app.Fragment;
 import android.app.FragmentManager;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Message;
-import android.support.v13.app.FragmentPagerAdapter;
+import android.support.v13.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
 import android.view.LayoutInflater;
@@ -16,30 +27,21 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 
-import com.oneplus.base.EventHandler;
-import com.oneplus.base.EventKey;
-import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
-import com.oneplus.base.PropertyChangeEventArgs;
-import com.oneplus.base.PropertyChangedCallback;
-import com.oneplus.base.PropertyKey;
-import com.oneplus.base.PropertySource;
 import com.oneplus.base.Rotation;
 import com.oneplus.camera.Camera;
 import com.oneplus.camera.CameraActivity;
-import com.oneplus.camera.CaptureEventArgs;
 import com.oneplus.camera.CaptureHandle;
-import com.oneplus.camera.FlashController;
-import com.oneplus.camera.FlashMode;
 import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.VideoCaptureState;
 import com.oneplus.camera.Camera.LensFacing;
-import com.oneplus.camera.media.MediaType;
+import com.oneplus.camera.io.FileManager;
 import com.oneplus.util.ListUtils;
 
 final class PreviewGallery extends UIComponent implements CaptureButtons
@@ -55,9 +57,8 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 	private Button m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
 	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
-	private ImageButton m_SelfTimerButton;
-	private ImageButton m_SwitchCameraButton;
-	private CaptureHandle m_VideoCaptureHandle;
+	
+	FileManager m_FileManager;
 	
 	
 	// Constants for capture button function.
@@ -128,11 +129,21 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 		
 		// find components
 		
+		
 		// setup UI
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
-		m_ViewPager.setAdapter(new PagerAdapter(cameraActivity.getFragmentManager()));
+		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
+		m_ViewPager.setOffscreenPageLimit(3);
+		PagerAdapter adapter = new PagerAdapter(cameraActivity.getFragmentManager());
+		
+		File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");      
+		List<File> fileList = new ArrayList<>();
+		fileList.addAll(Arrays.asList(directory.listFiles()));
+		
+		adapter.initialize(fileList);
+		m_ViewPager.setAdapter(adapter);
 		m_ViewPager.setOnPageChangeListener(new OnPageChangeListener(){
 
 			@Override
@@ -158,93 +169,14 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
 				cameraActivity.onTouchEvent(event);
+//				cameraActivity.findViewById(R.id.capture_bar).onTouchEvent(event);
 				return false;
 			}
 		});
-		
-//		m_PrimaryButton = (Button)m_PreviewGallery.findViewById(R.id.primary_capture_button);
-//		m_PrimaryButton.setOnTouchListener(new View.OnTouchListener()
-//		{
-//			@Override
-//			public boolean onTouch(View v, MotionEvent event)
-//			{
-//				switch(event.getAction())
-//				{
-//					case MotionEvent.ACTION_DOWN:
-//						onPrimaryButtonPressed();
-//						break;
-//					case MotionEvent.ACTION_CANCEL:
-//					case MotionEvent.ACTION_UP:
-//						onPrimaryButtonReleased();
-//						break;
-//				}
-//				return false;
-//			}
-//		});
 
 	}
 	
-	
-	// Called when primary button pressed.
-	@SuppressWarnings("incomplete-switch")
-	private void onPrimaryButtonPressed()
-	{
-		switch(m_PrimaryButtonFunction)
-		{
-			case CAPTURE_PHOTO:
-				HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
-				break;
-		}
-	}
-	
-	
-	// Called when primary button released.
-	private void onPrimaryButtonReleased()
-	{
-		// cancel triggering burst shots
-		HandlerUtils.removeMessages(this, MSG_START_BURST_CAPTURE);
-		
-		// trigger capture
-		switch(m_PrimaryButtonFunction)
-		{
-			case CAPTURE_PHOTO:
-			{
-				// take single shot or stop burst shots
-//				if(!Handle.isValid(m_PhotoCaptureHandle))
-//				{
-//					m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto();
-//					if(!Handle.isValid(m_PhotoCaptureHandle))
-//						Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture photo");
-//				}
-//				else if(m_IsCapturingBurstPhotos)
-//				{
-//					Log.w(TAG, "onPrimaryButtonReleased() - Stop burst shots");
-//					m_IsCapturingBurstPhotos = false;
-//					m_PhotoCaptureHandle = Handle.close(m_PhotoCaptureHandle);
-//				}
-				break;
-			}
-			case CAPTURE_VIDEO:
-				switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
-				{
-					case READY:
-						m_VideoCaptureHandle = this.getCameraActivity().captureVideo();
-						if(!Handle.isValid(m_VideoCaptureHandle))
-							Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture video");
-						break;
-					case PAUSED:
-					case CAPTURING:
-						m_VideoCaptureHandle = Handle.close(m_VideoCaptureHandle);
-						break;
-					default:
-						break;
-				}
-				break;
-			case PAUSE_RESUME_VIDEO:
-				//
-				break;
-		}
-	}
+
 	
 	
 	// Called when rotation changed.
@@ -256,20 +188,6 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 		
 		// rotate buttons
 		this.rotateView(m_PrimaryButton, newRotation);
-		this.rotateView(m_SelfTimerButton, newRotation);
-		this.rotateView(m_SwitchCameraButton, newRotation);
-	}
-	
-	
-	// Called when camera switch button clicked.
-	private void onSwitchCameraButtonClicked()
-	{
-		// check state
-		//
-		
-		// switch camera
-		if(!this.getCameraActivity().switchCamera())
-			Log.e(TAG, "onSwitchCameraButtonClicked() - Fail to switch camera");
 	}
 	
 	
@@ -386,25 +304,14 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 		if(updateBackground)
 			this.updateButtonBackgrounds();
 	}
-
-
-	// Update switch camera button.
-	private void updateSwitchCameraButton()
-	{
-		this.updateSwitchCameraButton(this.getCamera());
-	}
-	private void updateSwitchCameraButton(Camera camera)
-	{
-		if(m_SwitchCameraButton == null)
-			return;
-		this.setViewVisibility(m_SwitchCameraButton, !this.getCameraActivity().get(CameraActivity.PROP_IS_CAMERA_LOCKED));
-		if(camera == null || camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK)
-			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera);
-		else
-			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera_on);
-	}
 	
 	private static class ImageFragment extends Fragment {
+		
+		private	File	m_File;
+		public ImageFragment(File file){
+			m_File = file;
+		}
+
 		@Override
 		public void onCreate(Bundle savedInstanceState)  
 		{
@@ -414,33 +321,112 @@ final class PreviewGallery extends UIComponent implements CaptureButtons
 
 		@Override
 		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-			View view = inflater.inflate(android.R.layout.simple_gallery_item, container, false);
+			View view = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
+			ImageView image = (ImageView) (view.findViewById(R.id.preview_image));
+			
+			int width = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_width);
+			int height = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_height);
+			
+			BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+			bmOptions.inSampleSize = calculateInSampleSize(bmOptions, width, height);
+			Bitmap bitmap = BitmapFactory.decodeFile(m_File.getAbsolutePath(), bmOptions);
+
+			bitmap = scaleCenterCrop(bitmap, width, height);
+			image.setImageBitmap(bitmap);
+			image.setOnClickListener(new View.OnClickListener() {
+
+				@Override
+				public void onClick(View v) {
+					Intent intent = new Intent();
+					intent.setAction(Intent.ACTION_VIEW);
+					intent.setDataAndType(Uri.fromFile(m_File), "image/*");
+					startActivity(intent);
+				}
+			});
 
 			return view;
 		}
+		
+		public Bitmap scaleCenterCrop(Bitmap source,int newWidth, int newHeight) {
+		    int sourceWidth = source.getWidth();
+		    int sourceHeight = source.getHeight();
+
+		    // Compute the scaling factors to fit the new height and width, respectively.
+		    // To cover the final image, the final scaling will be the bigger 
+		    // of these two.
+		    float xScale = (float) newWidth / sourceWidth;
+		    float yScale = (float) newHeight / sourceHeight;
+		    float scale = Math.max(xScale, yScale);
+
+		    // Now get the size of the source bitmap when scaled
+		    float scaledWidth = scale * sourceWidth;
+		    float scaledHeight = scale * sourceHeight;
+
+		    // Let's find out the upper left coordinates if the scaled bitmap
+		    // should be centered in the new size give by the parameters
+		    float left = (newWidth - scaledWidth) / 2;
+		    float top = (newHeight - scaledHeight) / 2;
+
+		    // The target rectangle for the new, scaled version of the source bitmap will now
+		    // be
+		    RectF targetRect = new RectF(left, top, left + scaledWidth, top + scaledHeight);
+
+		    // Finally, we create a new bitmap of the specified size and draw our new,
+		    // scaled bitmap onto it.
+		    Bitmap dest = Bitmap.createBitmap(newWidth, newHeight, source.getConfig());
+		    Canvas canvas = new Canvas(dest);
+		    canvas.drawBitmap(source, null, targetRect, null);
+
+		    return dest;
+		}
+		
+		public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+	    // Raw height and width of image
+	    final int height = options.outHeight;
+	    final int width = options.outWidth;
+	    int inSampleSize = 1;
+
+	    if (height > reqHeight || width > reqWidth) {
+
+	        final int halfHeight = height / 2;
+	        final int halfWidth = width / 2;
+
+	        // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+	        // height and width larger than the requested height and width.
+	        while ((halfHeight / inSampleSize) > reqHeight && (halfWidth / inSampleSize) > reqWidth) {
+	            inSampleSize *= 2;
+	        }
+	    }
+
+	    return inSampleSize;
+	}
 	}
 	
-    private static class PagerAdapter extends FragmentPagerAdapter {
-    private static int NUM_ITEMS = 30;
+    private static class PagerAdapter extends FragmentStatePagerAdapter {
+    	private List<File> m_Files;
 
         public PagerAdapter(FragmentManager fragmentManager) {
             super(fragmentManager);
+        }
+        
+        void initialize(List<File> fm){
+        	m_Files = fm;
         }
 
         // Returns total number of pages
         @Override
         public int getCount() {
-            return NUM_ITEMS;
+            return m_Files.size() + 1;
         }
 
         // Returns the fragment to display for that page
         @Override
         public Fragment getItem(int position) {
             switch (position) {
-//            case 0: // Fragment # 0 - This will show FirstFragment
-//                return new Fragment();
+            case 0: // Fragment # 0 - This will show FirstFragment
+                return new Fragment();
             default:
-                return new ImageFragment();
+                return new ImageFragment(m_Files.get(position - 1));
             }
         }
 
