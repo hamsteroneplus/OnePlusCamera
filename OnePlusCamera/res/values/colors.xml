@@ -3,6 +3,11 @@
     
     <!-- Capture bar -->
     <color name="capture_bar_background">#1A101012</color>
+    
+    <!-- Count-down timer -->
+    <color name="count_down_timer_text">#FFEA01</color>
+    <color name="count_down_timer_text_shadow">#99000000</color>
+    
     <!-- Previerw gallery -->
     <color name="Previerw_gallery_background">#AA000000</color>
     

@@ -1,16 +1,21 @@
 <resources>
 
     <!-- Capture bar -->
-    <dimen name="capture_bar_button_margin_bottom">24dp</dimen>
-    <dimen name="capture_bar_button_margin_left">30dp</dimen>
-    <dimen name="capture_bar_button_margin_right">30dp</dimen>
-    <dimen name="capture_bar_button_margin_top">24dp</dimen>
+    <dimen name="capture_bar_button_margin_bottom">14dp</dimen>
+    <dimen name="capture_bar_button_margin_left">20dp</dimen>
+    <dimen name="capture_bar_button_margin_right">20dp</dimen>
+    <dimen name="capture_bar_button_margin_top">14dp</dimen>
+    <dimen name="capture_bar_button_padding">10dp</dimen>
     <dimen name="capture_bar_primary_button_margin_bottom">35dp</dimen>
     <dimen name="capture_bar_primary_button_margin_right">0dp</dimen>
     <dimen name="capture_bar_height">160dp</dimen>
     <dimen name="capture_bar_width">0dp</dimen>
+
+    <!-- Count-down timer -->
+    <dimen name="count_down_timer_text_size">60sp</dimen>
+
     <!-- Preview Gallery -->
-	<dimen name="preview_gallery_height">480dp</dimen>
-	<dimen name="preview_item_width">270dp</dimen>
-	<dimen name="preview_item_height">480dp</dimen>
+    <dimen name="preview_item_width">270dp</dimen>
+    <dimen name="preview_item_height">480dp</dimen>
+
 </resources>

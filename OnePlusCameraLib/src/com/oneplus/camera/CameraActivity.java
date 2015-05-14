@@ -207,12 +207,15 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private OrientationEventListener m_OrientationListener;
 	private CaptureHandleImpl m_PendingPhotoCaptureHandle;
 	private CaptureHandleImpl m_PhotoCaptureHandle;
+	private Handle m_PhotoRotationLockHandle;
 	private ResolutionManager m_ResolutionManager;
 	private Rotation m_Rotation = Rotation.PORTRAIT;
+	private final LinkedList<RotationLockHandle> m_RotationLockHandles = new LinkedList<>();
 	private Handle m_SelfTimerHandle;
 	private SensorManager m_SensorManager;
 	private final List<SettingsHandle> m_SettingsHandles = new ArrayList<>();
 	private CaptureHandleImpl m_VideoCaptureHandle;
+	private Handle m_VideoRotationLockHandle;
 	private Viewfinder m_Viewfinder;
 	
 	// Call-backs.
@@ -267,6 +270,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 					stopVideoCapture(this);
 					break;
 			}
+		}
+	}
+	
+	
+	// Class for rotation lock handle.
+	private final class RotationLockHandle extends Handle
+	{
+		public final Rotation rotation;
+		
+		public RotationLockHandle(Rotation rotation)
+		{
+			super("RotationLock");
+			this.rotation = rotation;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			unlockRotation(this);
 		}
 	}
 	
@@ -576,10 +598,14 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// create handle
 		CaptureHandleImpl handle = new CaptureHandleImpl(frameCount);
 		
+		// lock rotation
+		m_PhotoRotationLockHandle = this.lockRotation(null);
+		
 		// capture
 		if(!this.capturePhoto(handle, false))
 		{
 			Log.e(TAG, "capturePhoto() - Fail to capture");
+			m_PhotoRotationLockHandle = Handle.close(m_PhotoRotationLockHandle);
 			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.READY);
 			return null;
 		}
@@ -623,6 +649,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 							m_SelfTimerHandle = m_CountDownTimer.start(seconds, 0);
 							if(Handle.isValid(m_SelfTimerHandle))
 							{
+								m_PhotoCaptureHandle = handle;
 								this.setReadOnly(PROP_IS_SELF_TIMER_STARTED, true);
 								return true;
 							}
@@ -712,6 +739,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		Log.v(TAG, "captureVideo() - Handle : ", handle);
 		
+		// lock rotation
+		m_VideoRotationLockHandle = this.lockRotation(null);
+		
 		// change state
 		this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.STARTING);
 		
@@ -732,6 +762,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}))
 		{
 			Log.e(TAG, "captureVideo() - Fail to perform cross-thread operation");
+			m_VideoRotationLockHandle = Handle.close(m_VideoRotationLockHandle);
 			this.resetVideoCaptureState();
 			return false;
 		}
@@ -1148,6 +1179,34 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Lock UI r
+	public Handle lockRotation(Rotation rotation)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// check parameter
+		if(rotation == null)
+			rotation = m_Rotation;
+		else if(!m_RotationLockHandles.isEmpty() && m_RotationLockHandles.getLast().rotation != rotation)
+		{
+			Log.e(TAG, "lockRotation() - Rotation is already locked in " + m_Rotation);
+			return null;
+		}
+		
+		// lock rotation
+		RotationLockHandle handle = new RotationLockHandle(rotation);
+		m_RotationLockHandles.addLast(handle);
+		if(m_RotationLockHandles.size() == 1)
+		{
+			Log.w(TAG, "lockRotation() - Rotation : " + rotation);
+			if(m_Rotation != rotation)
+				this.onRotationChanged(m_Rotation, rotation);
+		}
+		return handle;
+	}
+	
+	
 	// Called when accelerometer values changed.
 	private void onAccelerometerValuesChanged(float[] values)
 	{
@@ -1453,6 +1512,17 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// clear pending photo capture
 		CaptureHandleImpl pendingHandle = m_PendingPhotoCaptureHandle;
 		m_PendingPhotoCaptureHandle = null;
+		
+		// unlock rotation
+		switch(handle.getMediaType())
+		{
+			case PHOTO:
+				m_PhotoRotationLockHandle = Handle.close(m_PhotoRotationLockHandle);
+				break;
+			case VIDEO:
+				m_VideoRotationLockHandle = Handle.close(m_VideoRotationLockHandle);
+				break;
+		}
 		
 		// complete capture
 		if(this.get(PROP_STATE) == State.RUNNING)
@@ -1760,6 +1830,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return;
 		}
 		this.setReadOnly(PROP_DEVICE_ORIENTATION, orientation);
+		
+		// check rotation lock
+		if(!m_RotationLockHandles.isEmpty())
+			return;
 		
 		// check difference with current rotation
 		int diff = (orientation - m_Rotation.getDeviceOrientation());
@@ -2851,6 +2925,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		{
 			Log.w(TAG, "unlockCamera()");
 			this.setReadOnly(PROP_IS_CAMERA_LOCKED, false);
+		}
+	}
+	
+	
+	// Unlock UI rotation.
+	private void unlockRotation(RotationLockHandle handle)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// remove handle
+		if(!m_RotationLockHandles.remove(handle))
+			return;
+		
+		// unlock rotation
+		if(m_RotationLockHandles.isEmpty())
+		{
+			Log.w(TAG, "unlockRotation()");
+			this.onDeviceOrientationChanged(this.get(PROP_DEVICE_ORIENTATION));
 		}
 	}
 	

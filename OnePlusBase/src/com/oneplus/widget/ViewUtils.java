@@ -54,12 +54,17 @@ public final class ViewUtils
 	{
 		if(view == null)
 			return;
-		ViewPropertyAnimator animator = view.animate();
-		animator.rotation(toDegrees);
-		animator.setDuration(duration);
-		if(interpolator != null)
-			animator.setInterpolator(interpolator);
-		animator.start();
+		if(duration > 0)
+		{
+			ViewPropertyAnimator animator = view.animate();
+			animator.rotation(toDegrees);
+			animator.setDuration(duration);
+			if(interpolator != null)
+				animator.setInterpolator(interpolator);
+			animator.start();
+		}
+		else
+			view.setRotation(toDegrees);
 	}
 	
 	
