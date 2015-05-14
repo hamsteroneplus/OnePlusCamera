@@ -208,6 +208,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		});
 		m_MoreOptionsButton = (ImageButton)m_CaptureBar.findViewById(R.id.more_options_button);
 		m_SelfTimerButton = (ImageButton)m_CaptureBar.findViewById(R.id.self_timer_button);
+		m_SelfTimerButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v)
+			{
+				onSelfTimerButtonClicked();
+			}
+		});
 		m_SwitchCameraButton = (ImageButton)m_CaptureBar.findViewById(R.id.switch_camera_button);
 		m_SwitchCameraButton.setOnClickListener(new View.OnClickListener()
 		{
@@ -268,6 +276,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				}
 			}
 		});
+		cameraActivity.addCallback(CameraActivity.PROP_SELF_TIMER_INTERVAL, new PropertyChangedCallback<Long>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Long> key, PropertyChangeEventArgs<Long> e)
+			{
+				updateSelfTimerButton(e.getNewValue());
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_VIDEO_CAPTURE_STATE, new PropertyChangedCallback<VideoCaptureState>()
 		{
 			@Override
@@ -304,6 +320,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// setup button initial states
 		this.updateFlashButton();
+		this.updateSelfTimerButton();
 		this.updateSwitchCameraButton();
 	}
 	
@@ -315,7 +332,10 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		switch(m_PrimaryButtonFunction)
 		{
 			case CAPTURE_PHOTO:
-				HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
+				if(this.getCameraActivity().get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
+					Log.v(TAG, "onPrimaryButtonPressed() - Self timer is started");
+				else
+					HandlerUtils.sendMessage(this, MSG_START_BURST_CAPTURE, BURST_TRIGGER_THRESHOLD);
 				break;
 		}
 	}
@@ -343,6 +363,11 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				{
 					Log.w(TAG, "onPrimaryButtonReleased() - Stop burst shots");
 					m_IsCapturingBurstPhotos = false;
+					m_PhotoCaptureHandle = Handle.close(m_PhotoCaptureHandle);
+				}
+				else if(this.getCameraActivity().get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
+				{
+					Log.v(TAG, "onPrimaryButtonReleased() - Stop self timer");
 					m_PhotoCaptureHandle = Handle.close(m_PhotoCaptureHandle);
 				}
 				break;
@@ -383,6 +408,26 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		this.rotateView(m_MoreOptionsButton, newRotation);
 		this.rotateView(m_SelfTimerButton, newRotation);
 		this.rotateView(m_SwitchCameraButton, newRotation);
+	}
+	
+	
+	// Called when self timer button clicked.
+	private void onSelfTimerButtonClicked()
+	{
+		// check state
+		//
+		
+		// switch self timer
+		long seconds = this.getCameraActivity().get(CameraActivity.PROP_SELF_TIMER_INTERVAL);
+		if(seconds == 0L)
+			seconds = 3L;
+		else if(seconds == 3L)
+			seconds = 5L;
+		else if(seconds == 5L)
+			seconds = 10L;
+		else
+			seconds = 0L;
+		this.getCameraActivity().set(CameraActivity.PROP_SELF_TIMER_INTERVAL, seconds);
 	}
 	
 	
@@ -557,6 +602,33 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				m_FlashButton.setImageResource(R.drawable.flash_off);
 				break;
 		}
+	}
+	
+	
+	// Update self timer button.
+	private void updateSelfTimerButton()
+	{
+		this.updateSelfTimerButton(this.getCameraActivity().get(CameraActivity.PROP_SELF_TIMER_INTERVAL));
+	}
+	private void updateSelfTimerButton(long seconds)
+	{
+		// check state
+		if(m_SelfTimerButton == null)
+			return;
+		
+		// update icon
+		int resId;
+		if(seconds == 3L)
+			resId = R.drawable.self_timer_3s_on;
+		else if(seconds == 5L)
+			resId = R.drawable.self_timer_5s_on;
+		else if(seconds == 10L)
+			resId = R.drawable.self_timer_10s_on;
+		else if(seconds > 0)
+			resId = R.drawable.self_timer_on;
+		else
+			resId = R.drawable.self_timer_off;
+		m_SelfTimerButton.setImageResource(resId);
 	}
 	
 	

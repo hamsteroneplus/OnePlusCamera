@@ -183,7 +183,12 @@ final class FocusExposureIndicator extends UIComponent
 		}
 		
 		// check preview state
-		if(!this.getCameraActivity().get(CameraActivity.PROP_IS_CAMERA_PREVIEW_RECEIVED))
+		CameraActivity cameraActivity = this.getCameraActivity();
+		if(!cameraActivity.get(CameraActivity.PROP_IS_CAMERA_PREVIEW_RECEIVED))
+			return;
+		
+		// check self-timer
+		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
 			return;
 		
 		// setup drawable
