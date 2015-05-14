@@ -14,6 +14,7 @@ import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.RelativeLayout;
 
 import com.oneplus.base.BaseActivity;
+import com.oneplus.base.BaseActivity.State;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
@@ -32,6 +33,7 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	
 	
 	// Private fields
+	private int m_DirectOutputSurfaceFormat;
 	private SurfaceHolder m_DirectOutputSurfaceHolder;
 	private Size m_DirectOutputSurfaceSize;
 	private SurfaceView m_DirectOutputSurfaceView;
@@ -198,6 +200,7 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 		Log.w(TAG, "onDirectOutputSurfaceChanged() - Format : " + format + ", size : " + width + "x" + height);
 		
 		// save state
+		m_DirectOutputSurfaceFormat = format;
 		m_DirectOutputSurfaceSize = new Size(width, height);
 		
 		// update preview receiver state
@@ -246,6 +249,29 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 				}
 			});
 		}
+		
+		// check activity state
+		cameraActivity.addCallback(CameraActivity.PROP_STATE, new PropertyChangedCallback<State>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<State> key, PropertyChangeEventArgs<State> e)
+			{
+				if(e.getNewValue() == State.RESUMING)
+				{
+					switch(m_PreviewRenderingMode)
+					{
+						case DIRECT:
+							if(m_IsDirectOutputSurfaceCreated && get(PROP_PREVIEW_RECEIVER) == null)
+								onDirectOutputSurfaceChanged(m_DirectOutputSurfaceFormat, m_DirectOutputSurfaceSize.getWidth(), m_DirectOutputSurfaceSize.getHeight());
+							break;
+							
+						case OPENGL:
+							//
+							break;
+					}
+				}
+			}
+		});
 		
 		// check screen size
 		cameraActivity.addCallback(CameraActivity.PROP_SCREEN_SIZE, new PropertyChangedCallback<ScreenSize>()
