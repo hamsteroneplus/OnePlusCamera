@@ -46,6 +46,7 @@ final class PreviewGallery extends UIComponent
 	
 	private FileManager m_FileManager;
 	private PagerAdapter m_Adapter;
+	private View m_OrignalTop;
 
 	// Constructor
 	PreviewGallery(CameraActivity cameraActivity) {
@@ -60,6 +61,9 @@ final class PreviewGallery extends UIComponent
 			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
 			m_Adapter.initialize(m_FileManager.getMediaFiles());
 			m_ViewPager.setAdapter(m_Adapter);
+			m_ViewPager.requestLayout();
+			m_PreviewGallery.setBackgroundDrawable(null);
+			m_OrignalTop.bringToFront();
 			break;
 		}
 		default:
@@ -79,7 +83,7 @@ final class PreviewGallery extends UIComponent
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
-		final View orignalTop = parent.getChildAt(parent.getChildCount() - 1);
+		m_OrignalTop = parent.getChildAt(parent.getChildCount() - 1);
 		
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -130,7 +134,7 @@ final class PreviewGallery extends UIComponent
 			public void onPageSelected(int position) {
 				if(position == 0){
 					m_PreviewGallery.setBackgroundDrawable(null);
-					orignalTop.bringToFront();
+					m_OrignalTop.bringToFront();
 				}else{
 					m_PreviewGallery.setBackgroundColor(cameraActivity.getResources().getColor(R.color.Previerw_gallery_background));
 					m_PreviewGallery.bringToFront();

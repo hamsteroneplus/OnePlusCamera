@@ -151,10 +151,10 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						case MESSAGE_LOAD_IMAGES:
 						{
+							m_FileList.clear();
 							if(m_DefaultFolder.exists()){
 							File[] files = m_DefaultFolder.listFiles();
 								if(files != null && files.length > 0){
-									m_FileList.clear();
 									m_FileList.addAll(Arrays.asList(m_DefaultFolder.listFiles()));	
 								}
 								if(msg.arg1 == 1){
