@@ -5,6 +5,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.camera.scene.SceneManager;
 
 import android.os.Bundle;
 import android.view.ViewGroup;
@@ -66,6 +67,19 @@ public class MainActivity extends CameraActivity
 		resIdTable.videoStopSound = R.raw.record_end;
 		cameraThread.setResourceIdTable(resIdTable);
 		cameraThread.start(this.get(PROP_MEDIA_TYPE));
+		
+		// setup scene builders
+		final SceneManager sceneManager = this.findComponent(SceneManager.class);
+		if(sceneManager != null)
+		{
+			for(int i = 0, count = SceneBuilders.BUILDERS.length ; i < count ; ++i)
+				sceneManager.addBuilder(SceneBuilders.BUILDERS[i], 0);
+		}
+		else
+			Log.e(TAG, "onCreate() - No SceneManager");
+		
+		// setup effect builders
+		//
 		
 		// set content view
 		setContentView(R.layout.activity_main);

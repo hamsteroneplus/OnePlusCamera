@@ -44,6 +44,7 @@ import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.renderscript.RenderScriptManager;
 import com.oneplus.util.AspectRatio;
+import com.oneplus.util.ListUtils;
 
 class CameraImpl extends HandlerBaseObject implements Camera
 {
@@ -198,6 +199,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final Queue<byte[]> m_ReceivedPictures = new LinkedList<>();
 	private RenderScript m_RenderScript;
 	private Handle m_RenderScriptHandle;
+	private int m_SceneMode = CaptureRequest.CONTROL_SCENE_MODE_DISABLED;
+	private List<Integer> m_SceneModes;
 	private final int m_SensorOrientation;
 	private final Size m_SensorSize;
 	private volatile State m_State = State.CLOSED;
@@ -306,6 +309,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		this.setReadOnly(PROP_FOCUS_MODES, Collections.unmodifiableList(focusModes));
 		if(m_FocusMode == FocusMode.DISABLED && focusModes.contains(FocusMode.NORMAL_AF))
 			m_FocusMode = FocusMode.NORMAL_AF;
+		
+		// check scene modes
+		m_SceneModes = ListUtils.asList(cameraChar.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES));
+		this.setReadOnly(PROP_SCENE_MODES, m_SceneModes);
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
@@ -417,6 +424,26 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeValue);
 			this.applyToPreview();
 		}
+	}
+	
+	
+	// Apply scene mode.
+	private boolean applySceneMode(CaptureRequest.Builder builder, int sceneMode)
+	{
+		if(builder != null)
+		{
+			if(sceneMode == CaptureRequest.CONTROL_SCENE_MODE_DISABLED)
+			{
+				builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+			}
+			else
+			{
+				builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_USE_SCENE_MODE);
+			}
+			builder.set(CaptureRequest.CONTROL_SCENE_MODE, sceneMode);
+			return true;
+		}
+		return false;
 	}
 	
 	
@@ -560,6 +587,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(m_LensFacing == LensFacing.FRONT)
 				deviceOrientation = -deviceOrientation;
 			builder.set(CaptureRequest.JPEG_ORIENTATION, (m_SensorOrientation + deviceOrientation + 360) % 360);
+			
+			// set scene mode
+			this.applySceneMode(builder, m_SceneMode);
 			
 			// create request
 			m_PictureCaptureRequest = builder.build();
@@ -786,6 +816,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_PictureSize;
 		if(key == PROP_PREVIEW_SIZE)
 			return (TValue)m_PreviewSize;
+		if(key == PROP_SCENE_MODE)
+			return (TValue)(Integer)m_SceneMode;
 		if(key == PROP_SENSOR_RATIO)
 			return (TValue)AspectRatio.get(m_SensorSize);
 		if(key == PROP_SENSOR_SIZE)
@@ -1540,6 +1572,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return this.setPreviewSizeProp((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
 			return this.setPreviewReceiver(value);
+		if(key == PROP_SCENE_MODE)
+			return this.setSceneModeProp((Integer)value);
 		if(key == PROP_VIDEO_SURFACE)
 			return this.setVideoSurface((Surface)value);
 		return super.set(key, value);
@@ -1854,6 +1888,33 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Set PROP_SCENE_MODE property.
+	private boolean setSceneModeProp(int sceneMode)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		if(m_SceneMode == sceneMode)
+			return true;
+		if(!m_SceneModes.contains(sceneMode))
+		{
+			Log.e(TAG, "setSceneModeProp() - Invalid scene mode : " + sceneMode);
+			return false;
+		}
+		
+		Log.v(TAG, "setSceneModeProp() - Scene mode : ", sceneMode);
+		
+		// apply scene mode
+		if(m_PreviewRequestBuilder != null && this.applySceneMode(m_PreviewRequestBuilder, sceneMode))
+			this.applyToPreview();
+		
+		// complete
+		int oldSceneMode = m_SceneMode;
+		m_SceneMode = sceneMode;
+		return this.notifyPropertyChanged(PROP_SCENE_MODE, oldSceneMode, sceneMode);
+	}
+	
+	
 	// Set video surface.
 	private boolean setVideoSurface(Surface surface)
 	{
@@ -2088,6 +2149,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			// setup AF states
 			this.applyFocusMode();
 			this.applyAfRegions();
+			
+			// setup effect
+			//
+			
+			// setup scene mode
+			this.applySceneMode(m_PreviewRequestBuilder, m_SceneMode);
 			
 			// TEST
 			/*

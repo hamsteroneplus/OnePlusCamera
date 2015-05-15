@@ -3,6 +3,7 @@ package com.oneplus.camera;
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.camera.media.MediaType;
 
 /**
  * Base implementation of {@link Mode} interface.
@@ -15,7 +16,7 @@ public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject imp
 	
 	
 	/**
-	 * Initialize new BaseMode instance.
+	 * Initialize new BasicMode instance.
 	 * @param cameraActivity Camera activity.
 	 * @param id Mode ID.
 	 */
@@ -171,12 +172,32 @@ public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject imp
 	
 	
 	/**
+	 * Get current primary camera.
+	 * @return Primary camera.
+	 */
+	protected final Camera getCamera()
+	{
+		return m_CameraActivity.get(CameraActivity.PROP_CAMERA);
+	}
+	
+	
+	/**
 	 * Get related camera activity.
 	 * @return Camera activity.
 	 */
 	public final CameraActivity getCameraActivity()
 	{
 		return m_CameraActivity;
+	}
+	
+	
+	/**
+	 * Get current capture media type.
+	 * @return Capture media type.
+	 */
+	protected final MediaType getMediaType()
+	{
+		return m_CameraActivity.get(CameraActivity.PROP_MEDIA_TYPE);
 	}
 	
 	

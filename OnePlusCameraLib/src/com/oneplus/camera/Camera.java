@@ -5,6 +5,7 @@ import java.util.List;
 
 import android.graphics.ImageFormat;
 import android.graphics.RectF;
+import android.hardware.camera2.CaptureRequest;
 import android.util.Size;
 import android.view.Surface;
 
@@ -127,6 +128,15 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Read-only property to check current preview state.
 	 */
 	PropertyKey<OperationState> PROP_PREVIEW_STATE = new PropertyKey<>("PreviewState", OperationState.class, Camera.class, OperationState.STOPPED);
+	/**
+	 * Property to get or set scene mode defined in {@link CaptureRequest}.
+	 */
+	PropertyKey<Integer> PROP_SCENE_MODE = new PropertyKey<>("SceneMode", Integer.class, Camera.class, PropertyKey.FLAG_NOT_NULL, CaptureRequest.CONTROL_SCENE_MODE_DISABLED);
+	/**
+	 * Read-only property to get all supported scene modes.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	PropertyKey<List<Integer>> PROP_SCENE_MODES = new PropertyKey<List<Integer>>("SceneModes", (Class)List.class, Camera.class, Collections.EMPTY_LIST);
 	/**
 	 * Read-only property to get sensor aspect ratio.
 	 */

@@ -3,6 +3,7 @@ package com.oneplus.camera;
 import com.oneplus.base.component.ComponentBuilder;
 import com.oneplus.camera.capturemode.CaptureModeManagerBuilder;
 import com.oneplus.camera.media.AudioManagerBuilder;
+import com.oneplus.camera.scene.SceneManagerBuilder;
 import com.oneplus.camera.ui.CaptureBarBuilder;
 import com.oneplus.camera.ui.CaptureModeSwitcherBuilder;
 import com.oneplus.camera.ui.CountDownTimerIndicatorBuilder;
@@ -27,6 +28,7 @@ final class ComponentBuilders
 		new FlashControllerBuilder(),
 		new FocusExposureIndicatorBuilder(),
 		new PreviewGalleryBuilder(),
+		new SceneManagerBuilder(),
 		new SensorFocusControllerBuilder(),
 		new TouchFocusExposureUIBuilder(),
 	};

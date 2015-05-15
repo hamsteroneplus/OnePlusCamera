@@ -1,5 +1,7 @@
 package com.oneplus.util;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,6 +14,21 @@ public final class ListUtils
 	// Constructor
 	private ListUtils()
 	{}
+	
+	
+	/**
+	 * Convert int array to Integer list.
+	 * @param values int array.
+	 * @return Integer list.
+	 */
+	public static List<Integer> asList(int... values)
+	{
+		int size = values.length;
+		ArrayList<Integer> list = new ArrayList<>(size);
+		for(int i = 0 ; i < size ; ++i)
+			list.add(values[i]);
+		return Collections.unmodifiableList(list);
+	}
 	
 	
 	/**

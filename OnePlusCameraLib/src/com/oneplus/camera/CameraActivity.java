@@ -483,7 +483,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return false;
 		
 		// check orientation
-		if(this.get(PROP_ACTIVITY_ROTATION).isLandscape())
+		if(m_ActivityRotation.isLandscape())
 		{
 			if(this.get(PROP_CONFIG_ORIENTATION) != Configuration.ORIENTATION_LANDSCAPE)
 				return false;
@@ -1179,7 +1179,11 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
-	// Lock UI r
+	/**
+	 * Lock UI rotation.
+	 * @param rotation Rotation to lock, or Null to lock in current rotation.
+	 * @return Handle to UI rotation lock.
+	 */
 	public Handle lockRotation(Rotation rotation)
 	{
 		// check thread
