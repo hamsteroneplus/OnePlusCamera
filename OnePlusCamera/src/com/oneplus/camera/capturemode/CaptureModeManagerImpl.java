@@ -11,8 +11,8 @@ import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CameraComponent;
+import com.oneplus.camera.Mode.State;
 import com.oneplus.camera.Settings;
-import com.oneplus.camera.capturemode.CaptureMode.State;
 
 final class CaptureModeManagerImpl extends CameraComponent implements CaptureModeManager
 {
