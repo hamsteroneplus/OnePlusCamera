@@ -253,6 +253,17 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				updateSwitchCameraButton();
 			}
 		});
+		cameraActivity.addCallback(CameraActivity.PROP_IS_SELF_TIMER_STARTED, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				updateButtonBackgrounds();
+				updateFlashButton();
+				updateSelfTimerButton();
+				updateSwitchCameraButton();
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
 		{
 			@Override
@@ -523,7 +534,10 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				switch(m_PrimaryButtonFunction)
 				{
 					case CAPTURE_PHOTO:
-						m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_background);
+						if(this.getCameraActivity().get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
+							m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_stop_self_timer);
+						else
+							m_PrimaryButton.setBackgroundResource(R.drawable.capture_button_background);
 						break;
 					case CAPTURE_VIDEO:
 						switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
@@ -579,8 +593,11 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			return;
 		}
 		
-		// check flash function
-		if(!m_FlashController.get(FlashController.PROP_HAS_FLASH) || m_FlashController.get(FlashController.PROP_IS_FLASH_DISABLED))
+		// update visibility
+		CameraActivity cameraActivity = this.getCameraActivity();
+		if(!m_FlashController.get(FlashController.PROP_HAS_FLASH) 
+				|| m_FlashController.get(FlashController.PROP_IS_FLASH_DISABLED)
+				|| cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
 		{
 			this.setViewVisibility(m_FlashButton, false);
 			return;
@@ -616,6 +633,16 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		if(m_SelfTimerButton == null)
 			return;
 		
+		// update visibility
+		CameraActivity cameraActivity = this.getCameraActivity();
+		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
+		{
+			this.setViewVisibility(m_SelfTimerButton, false);
+			return;
+		}
+		else
+			this.setViewVisibility(m_SelfTimerButton, true);
+		
 		// update icon
 		int resId;
 		if(seconds == 3L)
@@ -641,7 +668,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	{
 		if(m_SwitchCameraButton == null)
 			return;
-		this.setViewVisibility(m_SwitchCameraButton, !this.getCameraActivity().get(CameraActivity.PROP_IS_CAMERA_LOCKED));
+		CameraActivity cameraActivity = this.getCameraActivity();
+		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED)
+				|| cameraActivity.get(CameraActivity.PROP_IS_CAMERA_LOCKED))
+		{
+			this.setViewVisibility(m_SwitchCameraButton, false);
+		}
+		else
+			this.setViewVisibility(m_SwitchCameraButton, true);
 		if(camera == null || camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK)
 			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera);
 		else
