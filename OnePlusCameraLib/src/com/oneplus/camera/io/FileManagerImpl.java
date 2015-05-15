@@ -6,11 +6,14 @@ import java.util.Arrays;
 import java.util.List;
 
 import android.os.Environment;
+import android.os.FileObserver;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
 
+import com.oneplus.base.EventArgs;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
@@ -26,6 +29,8 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	private final int MESSAGE_SAVE_MEDIA = 1000;
 	private final int MESSAGE_LOAD_IMAGES = 1001;
 	private final List<File> m_FileList = new ArrayList<>();
+	private FileObserver m_FileObserver;
+	private final File m_DefaultFolder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
 
 	// Constructor
 	FileManagerImpl(CameraThread cameraThread)
@@ -42,6 +47,17 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		m_Thread.start();
 		m_FileHandler = m_Thread.getHandler();
 		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_LOAD_IMAGES));
+		m_FileObserver = new FileObserver(m_DefaultFolder.getAbsolutePath()) { // set up a file observer to watch this directory on sd card
+
+			@Override
+			public void onEvent(int event, String file) {
+				Log.d(TAG, "charles event: " + event + " file: " + file);
+				if (event == FileObserver.DELETE) {
+					m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_LOAD_IMAGES, 1, 0));
+				}
+			}
+		};
+		m_FileObserver.startWatching(); // START OBSERVING 
 	}
 	
 	/**
@@ -54,6 +70,8 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		m_Thread = null;
 		m_FileHandler = null;
 		m_FileList.clear();
+		m_FileObserver.stopWatching();
+		m_FileObserver = null;
 	}
 
 	@Override
@@ -71,13 +89,24 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		return m_FileList;
 	}
 	
-	private boolean notifyCameraThread(final EventKey<MediaEventArgs> event, final MediaSaveTask task){
-		return HandlerUtils.post(this, new Runnable(){
+	private boolean notifyCameraThread(final EventKey<MediaEventArgs> event, final MediaSaveTask task) {
+		return HandlerUtils.post(this, new Runnable() {
 
 			@Override
 			public void run() {
-				raise(event,  new MediaEventArgs(task));
-			}});
+				raise(event, new MediaEventArgs(task));
+			}
+		});
+	}
+
+	private boolean notifyCameraThread(final EventKey<EventArgs> event, final EventArgs args) {
+		return HandlerUtils.post(this, new Runnable() {
+
+			@Override
+			public void run() {
+				raise(event, args);
+			}
+		});
 	}
 	
     class FileManageerThread extends HandlerThread {
@@ -106,8 +135,9 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 							MediaSaveTask task = (MediaSaveTask) msg.obj;
 							//save file
 							if(task.saveMediaToFile()){
+								m_FileList.add(0, new File(task.getFilePath()));
 								notifyCameraThread(EVENT_MEDIA_FILE_SAVED, task);
-								m_FileList.add(new File(task.getFilePath()));
+								notifyCameraThread(EVENT_MEDIA_FILES_UPDATED,  EventArgs.EMPTY);
 								//insert MediaStore
 								if(task.insertToMediaStore()){
 									notifyCameraThread(EVENT_MEDIA_SAVED, task);
@@ -121,10 +151,15 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						case MESSAGE_LOAD_IMAGES:
 						{
-							File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
-							File[] files = directory.listFiles();
-							if(files != null && files.length > 0){
-								m_FileList.addAll(Arrays.asList(directory.listFiles()));
+							if(m_DefaultFolder.exists()){
+							File[] files = m_DefaultFolder.listFiles();
+								if(files != null && files.length > 0){
+									m_FileList.clear();
+									m_FileList.addAll(Arrays.asList(m_DefaultFolder.listFiles()));	
+								}
+								if(msg.arg1 == 1){
+									notifyCameraThread(EVENT_MEDIA_FILES_UPDATED,  EventArgs.EMPTY);
+								}
 							}
 						}
 					}

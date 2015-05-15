@@ -431,6 +431,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			return false;
 		}
 		
+		// bind to FileManager
+		m_ComponentManager.findComponent(FileManager.class , this);
+		
 		// complete
 		return true;
 	}

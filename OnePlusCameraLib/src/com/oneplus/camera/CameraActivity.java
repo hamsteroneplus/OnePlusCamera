@@ -1987,6 +1987,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// start orientation listener
 		this.startOrientationListener();
+		
+		// reload file folder
 	}
 	
 	

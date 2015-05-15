@@ -3,6 +3,7 @@ package com.oneplus.camera.io;
 import java.io.File;
 import java.util.List;
 
+import com.oneplus.base.EventArgs;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
 import com.oneplus.base.component.Component;
@@ -13,6 +14,10 @@ import com.oneplus.camera.media.MediaEventArgs;
  */
 public interface FileManager extends Component
 {
+	/**
+	 * Event raised when media file saving completed.
+	 */
+	EventKey<EventArgs> EVENT_MEDIA_FILES_UPDATED = new EventKey<>("MediaFileUpdated", EventArgs.class, FileManager.class);
 	/**
 	 * Event raised when media file saving completed.
 	 */

@@ -1,8 +1,6 @@
 package com.oneplus.camera.ui;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import android.app.Fragment;
@@ -14,17 +12,24 @@ import android.graphics.Canvas;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Message;
 import android.support.v13.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
+import com.oneplus.base.EventArgs;
+import com.oneplus.base.EventHandler;
+import com.oneplus.base.EventKey;
+import com.oneplus.base.EventSource;
+import com.oneplus.base.HandlerUtils;
+import com.oneplus.base.component.ComponentSearchCallback;
+import com.oneplus.base.component.ComponentUtils;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
@@ -33,13 +38,14 @@ import com.oneplus.camera.io.FileManager;
 final class PreviewGallery extends UIComponent
 {
 	// Constants
-	
+	static private final int MESSAGE_UPDATE_FILES = 1000;
 	
 	// Private fields
 	private View m_PreviewGallery;
 	private ViewPager m_ViewPager;
 	
 	private FileManager m_FileManager;
+	private PagerAdapter m_Adapter;
 
 	// Constructor
 	PreviewGallery(CameraActivity cameraActivity) {
@@ -50,6 +56,12 @@ final class PreviewGallery extends UIComponent
 	@Override
 	protected void handleMessage(Message msg) {
 		switch (msg.what) {
+		case MESSAGE_UPDATE_FILES:{
+			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
+			m_Adapter.initialize(m_FileManager.getMediaFiles());
+			m_ViewPager.setAdapter(m_Adapter);
+			break;
+		}
 		default:
 			super.handleMessage(msg);
 			break;
@@ -63,9 +75,6 @@ final class PreviewGallery extends UIComponent
 		// call super
 		super.onInitialize();
 		
-		// find components
-		
-		
 		// setup UI
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
@@ -75,14 +84,36 @@ final class PreviewGallery extends UIComponent
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
 		m_ViewPager.setOffscreenPageLimit(3);
-		PagerAdapter adapter = new PagerAdapter(cameraActivity.getFragmentManager());
-		
-		File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");      
-		List<File> fileList = new ArrayList<>();
-		fileList.addAll(Arrays.asList(directory.listFiles()));
-		
-		adapter.initialize(fileList);
-		m_ViewPager.setAdapter(adapter);
+		m_Adapter = new PagerAdapter(cameraActivity.getFragmentManager());
+
+		// find components
+		ComponentUtils.findComponent(getCameraThread(), FileManager.class, this, new ComponentSearchCallback<FileManager>() {
+
+			@Override
+			public void onComponentFound(FileManager component) {
+				Log.d(TAG, "onComponentFound");
+				m_FileManager = component;
+				HandlerUtils.post(m_FileManager, new Runnable() {
+
+					@Override
+					public void run() {
+						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILES_UPDATED, new EventHandler<EventArgs>() {
+
+							@Override
+							public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e) {
+								HandlerUtils.sendMessage(PreviewGallery.this, MESSAGE_UPDATE_FILES);
+								
+							}
+
+						});
+
+					}
+				});
+
+				m_Adapter.initialize(m_FileManager.getMediaFiles());
+			}
+		});
+		m_ViewPager.setAdapter(m_Adapter);
 		m_ViewPager.setOnPageChangeListener(new OnPageChangeListener(){
 
 			@Override
@@ -133,26 +164,28 @@ final class PreviewGallery extends UIComponent
 		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 			View view = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
 			ImageView image = (ImageView) (view.findViewById(R.id.preview_image));
-			
+
 			int width = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_width);
 			int height = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_height);
-			
+
 			BitmapFactory.Options bmOptions = new BitmapFactory.Options();
 			bmOptions.inSampleSize = calculateInSampleSize(bmOptions, width, height);
 			Bitmap bitmap = BitmapFactory.decodeFile(m_File.getAbsolutePath(), bmOptions);
 
-			bitmap = scaleCenterCrop(bitmap, width, height);
-			image.setImageBitmap(bitmap);
-			image.setOnClickListener(new View.OnClickListener() {
+			if (bitmap != null) {
+				bitmap = scaleCenterCrop(bitmap, width, height);
+				image.setImageBitmap(bitmap);
+				image.setOnClickListener(new View.OnClickListener() {
 
-				@Override
-				public void onClick(View v) {
-					Intent intent = new Intent();
-					intent.setAction(Intent.ACTION_VIEW);
-					intent.setDataAndType(Uri.fromFile(m_File), "image/*");
-					startActivity(intent);
-				}
-			});
+					@Override
+					public void onClick(View v) {
+						Intent intent = new Intent();
+						intent.setAction(Intent.ACTION_VIEW);
+						intent.setDataAndType(Uri.fromFile(m_File), "image/*");
+						startActivity(intent);
+					}
+				});
+			}
 
 			return view;
 		}
