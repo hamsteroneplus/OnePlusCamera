@@ -15,6 +15,7 @@ import android.os.Message;
 import android.support.v13.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
+import android.support.v4.view.ViewPager.PageTransformer;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -47,7 +48,6 @@ final class PreviewGallery extends UIComponent
 	
 	private FileManager m_FileManager;
 	private PagerAdapter m_Adapter;
-	private View m_OrignalTop;
 
 	// Constructor
 	PreviewGallery(CameraActivity cameraActivity) {
@@ -63,7 +63,7 @@ final class PreviewGallery extends UIComponent
 			m_Adapter.initialize(m_FileManager);
 			m_ViewPager.setAdapter(m_Adapter);
 			m_PreviewGallery.setBackgroundDrawable(null);
-			m_OrignalTop.bringToFront();
+			bringToBack();
 			break;
 		}
 		case MESSAGE_UPDATE_ADDED:{
@@ -92,8 +92,6 @@ final class PreviewGallery extends UIComponent
 		// setup UI
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
-		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
-		m_OrignalTop = parent.getChildAt(parent.getChildCount() - 1);
 		
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -154,20 +152,58 @@ final class PreviewGallery extends UIComponent
 			public void onPageSelected(int position) {
 				if(position == 0){
 					m_PreviewGallery.setBackgroundDrawable(null);
-					m_OrignalTop.bringToFront();
+					bringToBack();
 				}else{
 					m_PreviewGallery.setBackgroundColor(cameraActivity.getResources().getColor(R.color.Previerw_gallery_background));
 					m_PreviewGallery.bringToFront();
 				}
 			}});
-		m_ViewPager.setOnTouchListener(new View.OnTouchListener() {
-			
+
+		m_ViewPager.setPageTransformer(false, new PageTransformer(){
+
 			@Override
-			public boolean onTouch(View v, MotionEvent event) {
-				cameraActivity.onTouchEvent(event);
-				return false;
-			}
-		});
+			public void transformPage(View view, float position) {
+			    final float MIN_SCALE = 0.85f;
+			    final float MIN_ALPHA = 0.5f;
+			      int pageWidth = view.getWidth();
+			        int pageHeight = view.getHeight();
+
+			        if (position < -1) { // [-Infinity,-1)
+			            // This page is way off-screen to the left.
+			            view.setAlpha(0);
+
+			        } else if (position <= 1) { // [-1,1]
+			            // Modify the default slide transition to shrink the page as well
+			            float scaleFactor = Math.max(MIN_SCALE, 1 - Math.abs(position));
+			            float vertMargin = pageHeight * (1 - scaleFactor) / 2;
+			            float horzMargin = pageWidth * (1 - scaleFactor) / 2;
+			            if (position < 0) {
+			                view.setTranslationX(horzMargin - vertMargin / 2);
+			            } else {
+			                view.setTranslationX(-horzMargin + vertMargin / 2);
+			            }
+
+			            // Scale the page down (between MIN_SCALE and 1)
+			            view.setScaleX(scaleFactor);
+			            view.setScaleY(scaleFactor);
+
+			            // Fade the page relative to its size.
+			            view.setAlpha(MIN_ALPHA +
+			                    (scaleFactor - MIN_SCALE) /
+			                    (1 - MIN_SCALE) * (1 - MIN_ALPHA));
+
+			        } else { // (1,+Infinity]
+			            // This page is way off-screen to the right.
+			            view.setAlpha(0);
+			        }
+				
+			}});
+	}
+	
+	void bringToBack(){
+		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
+		parent.removeView(m_PreviewGallery);
+		parent.addView(m_PreviewGallery, 1);
 	}
 
 	private static class ImageFragment extends Fragment {
