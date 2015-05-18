@@ -1,10 +1,5 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- Main window style -->
-    <style name="CameraWindowStyle" parent="@android:style/Theme.NoTitleBar.Fullscreen">
-        <item name="android:windowAnimationStyle">@null</item>
-    </style>
-    
     <!-- Count-down timer -->
     <style name="CountDownTimerText">
         <item name="android:fontFamily">sans-serif</item>
@@ -12,6 +7,21 @@
         <item name="android:shadowColor">@color/count_down_timer_text_shadow</item>
         <item name="android:shadowRadius">10</item>
         <item name="android:textSize">@dimen/count_down_timer_text_size</item>
+    </style>
+    
+    <!-- Main window style -->
+    <style name="CameraWindowStyle" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+    
+    <!-- Options panel -->
+    <style name="OptionsPanelItemText">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/options_panel_item_text</item>
+        <item name="android:textSize">@dimen/options_panel_item_text_size</item>
+    </style>
+    <style name="OptionsPanelItemText.Selected" parent="OptionsPanelItemText">
+        <item name="android:textColor">@color/options_panel_item_text_selected</item>
     </style>
 
 </resources>

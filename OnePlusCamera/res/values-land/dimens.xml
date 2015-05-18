@@ -10,5 +10,11 @@
     <dimen name="capture_bar_primary_button_margin_right">35dp</dimen>
     <dimen name="capture_bar_height">0dp</dimen>
     <dimen name="capture_bar_width">160dp</dimen>
+    
+    <!-- Options panel -->
+    <dimen name="options_panel_height">0dp</dimen>
+    <dimen name="options_panel_margin_bottom">0dp</dimen>
+    <dimen name="options_panel_margin_right">@dimen/capture_bar_width</dimen>
+    <dimen name="options_panel_width">70dp</dimen>
 
 </resources>

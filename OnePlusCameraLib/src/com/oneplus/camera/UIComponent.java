@@ -1,5 +1,8 @@
 package com.oneplus.camera;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import android.animation.TimeInterpolator;
 import android.view.View;
 import android.view.animation.PathInterpolator;
@@ -42,7 +45,20 @@ public abstract class UIComponent extends CameraComponent
 	public static final TimeInterpolator INTERPOLATOR_ROTATION = new PathInterpolator(0.8f, 0, 0.2f, 1);
 	
 	
+	// Private fields.
+	private List<View> m_AutoRotateViews;
+	private Rotation m_Rotation = Rotation.LANDSCAPE;
+	
+	
 	// Call-backs.
+	private final PropertyChangedCallback<Boolean> m_CaptureUIEnabledChangedCallback = new PropertyChangedCallback<Boolean>()
+	{
+		@Override
+		public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+		{
+			onCaptureUIEnabledStateChanged(e.getNewValue());
+		}
+	};
 	private final PropertyChangedCallback<Rotation> m_RotationChangedCallback = new PropertyChangedCallback<Rotation>()
 	{
 		@Override
@@ -71,6 +87,20 @@ public abstract class UIComponent extends CameraComponent
 	
 	
 	/**
+	 * Add view to auto rotate list.
+	 * @param view View to add.
+	 */
+	protected void addAutoRotateView(View view)
+	{
+		this.verifyAccess();
+		if(m_AutoRotateViews == null)
+			m_AutoRotateViews = new ArrayList<>();
+		m_AutoRotateViews.add(view);
+		this.rotateView(view, m_Rotation, 0);
+	}
+	
+	
+	/**
 	 * Get current camera activity rotation.
 	 * @return Current activity rotation.
 	 */
@@ -94,8 +124,20 @@ public abstract class UIComponent extends CameraComponent
 	@Override
 	protected void onDeinitialize()
 	{
-		this.getCameraActivity().removeCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
+		CameraActivity cameraActivity = this.getCameraActivity();
+		cameraActivity.removeCallback(CameraActivity.PROP_IS_CAPTURE_UI_ENABLED, m_CaptureUIEnabledChangedCallback);
+		cameraActivity.removeCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
 		super.onDeinitialize();
+	}
+	
+	
+	/**
+	 * Check whether capture UI is enabled or not.
+	 * @return Capture UI state.
+	 */
+	protected final boolean isCaptureUIEnabled()
+	{
+		return this.getCameraActivity().get(CameraActivity.PROP_IS_CAPTURE_UI_ENABLED);
 	}
 	
 	
@@ -104,8 +146,19 @@ public abstract class UIComponent extends CameraComponent
 	protected void onInitialize()
 	{
 		super.onInitialize();
-		this.getCameraActivity().addCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
+		CameraActivity cameraActivity = this.getCameraActivity();
+		cameraActivity.addCallback(CameraActivity.PROP_IS_CAPTURE_UI_ENABLED, m_CaptureUIEnabledChangedCallback);
+		cameraActivity.addCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
+		m_Rotation = this.getRotation();
 	}
+	
+	
+	/**
+	 * Called when capture UI enabled state changes.
+	 * @param isEnabled Whether capture UI isaenabled or not.
+	 */
+	protected void onCaptureUIEnabledStateChanged(boolean isEnabled)
+	{}
 	
 	
 	/**
@@ -114,7 +167,26 @@ public abstract class UIComponent extends CameraComponent
 	 * @param newRotation New rotation.
 	 */
 	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
-	{}
+	{
+		m_Rotation = newRotation;
+		if(m_AutoRotateViews != null)
+		{
+			for(int i = m_AutoRotateViews.size() - 1 ; i >= 0 ; --i)
+				this.rotateView(m_AutoRotateViews.get(i), newRotation);
+		}
+	}
+	
+	
+	/**
+	 * Remove view from auto rotate list.
+	 * @param view View to remove.
+	 */
+	protected void removedAutoRotateView(View view)
+	{
+		this.verifyAccess();
+		if(m_AutoRotateViews != null)
+			m_AutoRotateViews.remove(view);
+	}
 	
 	
 	/**

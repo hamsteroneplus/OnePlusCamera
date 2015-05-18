@@ -15,7 +15,7 @@ public interface SceneManager extends Component
 	/**
 	 * Read-only property to get current scene.
 	 */
-	PropertyKey<Scene> PROP_SCENE = new PropertyKey<>("Scene", Scene.class, SceneManager.class, Scene.INVALID);
+	PropertyKey<Scene> PROP_SCENE = new PropertyKey<>("Scene", Scene.class, SceneManager.class, Scene.NO_SCENE);
 	/**
 	 * Read-only property to get all available scenes.
 	 */
@@ -44,7 +44,7 @@ public interface SceneManager extends Component
 	
 	/**
 	 * Change current scene.
-	 * @param scene Scene to change.
+	 * @param scene Scene to change, or {@link Scene#NO_SCENE} to clear.
 	 * @param flags Flags, reserved.
 	 * @return Whether scene changes successfully or not.
 	 */

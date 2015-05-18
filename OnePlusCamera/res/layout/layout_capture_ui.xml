@@ -32,5 +32,8 @@
         android:layout_alignParentLeft="true"
         android:layout_alignParentTop="true"
         android:layout="@layout/layout_count_down_timer"/>
+    
+    <!-- Options panel -->
+    <include layout="@layout/layout_options_panel"/>
 
 </RelativeLayout>

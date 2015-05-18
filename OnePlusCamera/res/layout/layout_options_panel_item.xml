@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/options_panel_item_width"
+    android:layout_height="@dimen/options_panel_item_height" >
+    
+    <!-- Icon -->
+    <ImageView android:id="@+id/options_panel_item_image"
+        android:layout_width="@dimen/options_panel_item_icon_width"
+        android:layout_height="@dimen/options_panel_item_icon_height"
+        android:layout_centerHorizontal="true"
+        android:layout_alignParentTop="true"
+        android:scaleType="centerInside"/>
+    
+    <!-- Text -->
+    <TextView android:id="@+id/options_panel_item_text"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/options_panel_item_text_container_height"
+        android:layout_alignParentBottom="true"
+        android:gravity="center"
+        android:ellipsize="end"
+        style="@style/OptionsPanelItemText"/>
+
+</RelativeLayout>

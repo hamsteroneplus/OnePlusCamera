@@ -18,7 +18,7 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 {
 	// Private fields.
 	private final List<Scene> m_ActiveScenes = new ArrayList<>();
-	private Scene m_Scene = Scene.INVALID;
+	private Scene m_Scene = Scene.NO_SCENE;
 	private final List<SceneBuilder> m_SceneBuilders = new ArrayList<>();
 	private final List<Scene> m_Scenes = new ArrayList<>();
 	
@@ -140,7 +140,7 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 			if(m_Scene == scene)
 			{
 				Log.w(TAG, "onSceneDisabled() - Scene '" + scene + "' has been disabled when using, exit from this scene");
-				this.setScene(Scene.INVALID, 0);
+				this.setScene(Scene.NO_SCENE, 0);
 			}
 			
 			// raise event
@@ -184,7 +184,7 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 			if(m_Scene == scene)
 			{
 				Log.w(TAG, "onSceneReleased() - Scene '" + scene + "' has been released when using, exit from this scene");
-				this.setScene(Scene.INVALID, 0);
+				this.setScene(Scene.NO_SCENE, 0);
 			}
 			
 			// raise event
@@ -213,7 +213,7 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 			Log.e(TAG, "setScene() - No scene to change");
 			return false;
 		}
-		if(scene != Scene.INVALID && !m_ActiveScenes.contains(scene))
+		if(scene != Scene.NO_SCENE && !m_ActiveScenes.contains(scene))
 		{
 			Log.e(TAG, "setScene() - Scene '" + scene + "' is not contained in list");
 			return false;
@@ -246,7 +246,7 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 		{
 			// enter next scene
 			Log.v(TAG, "setScene() - Enter to '", scene, "'");
-			if(scene != Scene.INVALID && !scene.enter(m_Scene, Scene.FLAG_PRESERVE_CAMERA_PREVIEW_STATE))
+			if(scene != Scene.NO_SCENE && !scene.enter(m_Scene, Scene.FLAG_PRESERVE_CAMERA_PREVIEW_STATE))
 			{
 				Log.e(TAG, "setScene() - Fail to enter '" + scene + "', go back to previous scene");
 				if(!this.setScene(m_Scene, 0))

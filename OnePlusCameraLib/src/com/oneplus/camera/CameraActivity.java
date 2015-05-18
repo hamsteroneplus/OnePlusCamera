@@ -65,6 +65,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	/**
+	 * Flag to indicate UI can be enabled automatically when pausing activity.
+	 */
+	public static final int FLAG_ENABLE_WHEN_PAUSING = 0x1;
+	
+	
+	/**
 	 * Read-only property for current accelerometer (G-sensor) values.
 	 */
 	public static final PropertyKey<float[]> PROP_ACCELEROMETER_VALUES = new PropertyKey<>("AccelerometerValues", float[].class, CameraActivity.class, new float[3]);
@@ -105,6 +111,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Read-only property to check whether camera thread is started or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_THREAD_STARTED = new PropertyKey<>("IsCameraThreadStarted", Boolean.class, CameraActivity.class, false);
+	/**
+	 * Read-only property to check whether capture UI is enabled or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_CAPTURE_UI_ENABLED = new PropertyKey<>("IsCaptureUIEnabled", Boolean.class, CameraActivity.class, true);
 	/**
 	 * Read-only property to check whether photo or video capture state is READY or not.
 	 */
@@ -196,8 +206,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private final float[][] m_AccelerometerValuesTable = new float[][]{ new float[3], new float[3] };
 	private Rotation m_ActivityRotation = Rotation.LANDSCAPE;
 	private final LinkedList<CameraLockHandle> m_CameraLockHandles = new LinkedList<>();
-	private CameraThread m_CameraThread;
+	private Handle m_CameraPreviewStartCUDHandle;
 	private OperationState m_CameraPreviewState = OperationState.STOPPED;
+	private CameraThread m_CameraThread;
+	private final LinkedList<UIDisableHandle> m_CaptureUIDisableHandles = new LinkedList<>();
 	private ComponentManager m_ComponentManager;
 	private CountDownTimer m_CountDownTimer;
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
@@ -308,6 +320,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		protected void onClose(int flags)
 		{
 			restoreSettings(this);
+		}
+	}
+	
+	
+	// Class for UI disabling handle.
+	private final class UIDisableHandle extends Handle
+	{
+		public final int flags;
+		
+		public UIDisableHandle(int flags)
+		{
+			super("DisableCaptureUI");
+			this.flags = flags;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			enableCaptureUI(this);
 		}
 	}
 	
@@ -930,6 +961,58 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	/**
+	 * Disable capture UI.
+	 * @return Handle to capture UI disable.
+	 */
+	public Handle disableCaptureUI()
+	{
+		return this.disableCaptureUI(0);
+	}
+	
+	
+	/**
+	 * Disable capture UI.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_ENABLE_WHEN_PAUSING}.</li>
+	 * </ul>
+	 * @return Handle to capture UI disable.
+	 */
+	public Handle disableCaptureUI(int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if((flags & FLAG_ENABLE_WHEN_PAUSING) != 0)
+		{
+			switch(this.get(PROP_STATE))
+			{
+				case NEW:
+				case CREATING:
+				case NEW_INTENT:
+				case RESUMING:
+				case RUNNING:
+					break;
+				default:
+					Log.w(TAG, "disableCaptureUI() - Activity state is " + this.get(PROP_STATE));
+					return null;
+			}
+		}
+		
+		// create handle
+		UIDisableHandle handle = new UIDisableHandle(flags);
+		m_CaptureUIDisableHandles.add(handle);
+		Log.w(TAG, "disableCaptureUI() - Handle : " + handle + ", handle count : " + m_CaptureUIDisableHandles.size());
+		
+		// disable capture UI
+		if(m_CaptureUIDisableHandles.size() == 1)
+			this.setReadOnly(PROP_IS_CAPTURE_UI_ENABLED, false);
+		
+		// complete
+		return handle;
+	}
+	
+	
 	// Dispatch touch event.
 	@Override
 	public boolean dispatchTouchEvent(MotionEvent ev)
@@ -948,6 +1031,18 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// complete
 		return result;
+	}
+	
+	
+	// Enable capture UI.
+	private void enableCaptureUI(UIDisableHandle handle)
+	{
+		this.verifyAccess();
+		if(!m_CaptureUIDisableHandles.remove(handle))
+			return;
+		Log.w(TAG, "enableCaptureUI() - Handle : " + handle + ", handle count : " + m_CaptureUIDisableHandles.size());
+		if(m_CaptureUIDisableHandles.isEmpty())
+			this.setReadOnly(PROP_IS_CAPTURE_UI_ENABLED, true);
 	}
 	
 	
@@ -1386,6 +1481,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		Log.w(TAG, "onCameraPreviewStarted()");
 		
+		// enable capture UI
+		m_CameraPreviewStartCUDHandle = Handle.close(m_CameraPreviewStartCUDHandle);
+		
 		// change capture state
 		if(this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.PREPARING)
 			this.resetVideoCaptureState();
@@ -1685,6 +1783,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_SIZE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_IS_CAMERA_PREVIEW_RECEIVED, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_IS_CAPTURE_UI_ENABLED, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_IS_READY_TO_CAPTURE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_PHOTO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_ROTATION, LOG_PROPERTY_CHANGE);
@@ -1730,6 +1829,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// update screen size
 		this.updateScreenSize();
+		
+		// disable capture UI to wait camera preview start
+		m_CameraPreviewStartCUDHandle = this.disableCaptureUI();
 		
 		// create component manager
 		m_ComponentManager = new ComponentManager();
@@ -1878,6 +1980,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// stop orientation listener
 		this.stopOrientationListener();
+		
+		// enable capture UI
+		if(!m_CaptureUIDisableHandles.isEmpty())
+		{
+			UIDisableHandle[] handles = new UIDisableHandle[m_CaptureUIDisableHandles.size()];
+			m_CaptureUIDisableHandles.toArray(handles);
+			for(int i = handles.length - 1 ; i >= 0 ; --i)
+			{
+				UIDisableHandle handle = handles[i];
+				if((handle.flags & FLAG_ENABLE_WHEN_PAUSING) != 0)
+				{
+					Log.w(TAG, "onPause() - Remove capture UI disable handle : " + handle);
+					m_CaptureUIDisableHandles.remove(handle);
+				}
+			}
+			Log.w(TAG, "onPause() - Capture UI disable handle count : " + m_CaptureUIDisableHandles.size());
+			if(m_CaptureUIDisableHandles.isEmpty())
+				this.setReadOnly(PROP_IS_CAPTURE_UI_ENABLED, true);
+		}
 	}
 	
 	
@@ -2529,6 +2650,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return false;
 		}
 		
+		// disable capture UI to wait camera preview start
+		if(!Handle.isValid(m_CameraPreviewStartCUDHandle))
+			m_CameraPreviewStartCUDHandle = this.disableCaptureUI();
+		
 		// change state and create components with NORMAL priority
 		if(this.setReadOnly(PROP_IS_LAUNCHING, false))
 		{
@@ -2633,6 +2758,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			this.changeCameraPreviewState(OperationState.STOPPED);
 			return;
 		}
+		
+		// disable capture UI to wait camera preview start
+		if(!Handle.isValid(m_CameraPreviewStartCUDHandle))
+			m_CameraPreviewStartCUDHandle = this.disableCaptureUI();
 		
 		// change capture state
 		if(this.get(PROP_PHOTO_CAPTURE_STATE) == PhotoCaptureState.READY)

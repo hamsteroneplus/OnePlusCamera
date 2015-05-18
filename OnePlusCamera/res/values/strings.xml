@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- Application -->
     <string name="app_name">OnePlusCamera</string>
+    
+    <!-- Scene -->
+    <string name="scene_clear_shot">Clear shot</string>
+    <string name="scene_hdr">HDR</string>
+    <string name="scene_face_beauty_photo">Beauty</string>
 
 </resources>

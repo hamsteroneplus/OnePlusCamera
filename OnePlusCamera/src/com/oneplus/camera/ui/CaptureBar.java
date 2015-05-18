@@ -19,7 +19,6 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
-import com.oneplus.base.Rotation;
 import com.oneplus.camera.Camera;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CaptureEventArgs;
@@ -47,6 +46,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	private FlashController m_FlashController;
 	private boolean m_IsCapturingBurstPhotos;
 	private ImageButton m_MoreOptionsButton;
+	private OptionsPanel m_OptionsPanel;
 	private CaptureHandle m_PhotoCaptureHandle;
 	private Button m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
@@ -113,11 +113,16 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	// Called when flash button clicked.
 	private void onFlashButtonClicked()
 	{
+		// check state
 		if(m_FlashController == null)
 		{
 			Log.e(TAG, "onFlashButtonClicked() - No flash controller");
 			return;
 		}
+		if(!this.isCaptureUIEnabled())
+			return;
+		
+		// switch flash mode
 		FlashMode flashMode;
 		switch(m_FlashController.get(FlashController.PROP_FLASH_MODE))
 		{
@@ -174,6 +179,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// find components
 		m_FlashController = this.findComponent(FlashController.class);
+		m_OptionsPanel = this.findComponent(OptionsPanel.class);
 		
 		// setup UI
 		CameraActivity cameraActivity = this.getCameraActivity();
@@ -207,6 +213,14 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			}
 		});
 		m_MoreOptionsButton = (ImageButton)m_CaptureBar.findViewById(R.id.more_options_button);
+		m_MoreOptionsButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v)
+			{
+				onMoreOptionsButtonClicked();
+			}
+		});
 		m_SelfTimerButton = (ImageButton)m_CaptureBar.findViewById(R.id.self_timer_button);
 		m_SelfTimerButton.setOnClickListener(new View.OnClickListener()
 		{
@@ -260,6 +274,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			{
 				updateButtonBackgrounds();
 				updateFlashButton();
+				updateMoreOptionsButton();
 				updateSelfTimerButton();
 				updateSwitchCameraButton();
 			}
@@ -270,6 +285,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			public void onPropertyChanged(PropertySource source, PropertyKey<MediaType> key, PropertyChangeEventArgs<MediaType> e)
 			{
 				updateButtonFunctions(true);
+				updateSelfTimerButton();
 			}
 		});
 		cameraActivity.addCallback(CameraActivity.PROP_PHOTO_CAPTURE_STATE, new PropertyChangedCallback<PhotoCaptureState>()
@@ -317,22 +333,58 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			m_FlashController.addCallback(FlashController.PROP_HAS_FLASH, callback);
 			m_FlashController.addCallback(FlashController.PROP_IS_FLASH_DISABLED, callback);
 		}
+		if(m_OptionsPanel != null)
+		{
+			m_OptionsPanel.addCallback(OptionsPanel.PROP_HAS_ITEMS, new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					updateMoreOptionsButton();
+				}
+			});
+			m_OptionsPanel.addCallback(OptionsPanel.PROP_IS_VISIBLE, new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					updateMoreOptionsButton(e.getNewValue());
+				}
+			});
+		}
 		
 		// setup initial button states
 		this.updateButtonFunctions(true);
 		
 		// setup initial UI rotation
-		Rotation rotation = this.getRotation();
-		this.rotateView(m_PrimaryButton, rotation, 0);
-		this.rotateView(m_FlashButton, rotation, 0);
-		this.rotateView(m_MoreOptionsButton, rotation, 0);
-		this.rotateView(m_SelfTimerButton, rotation, 0);
-		this.rotateView(m_SwitchCameraButton, rotation, 0);
+		this.addAutoRotateView(m_PrimaryButton);
+		this.addAutoRotateView(m_FlashButton);
+		this.addAutoRotateView(m_MoreOptionsButton);
+		this.addAutoRotateView(m_SelfTimerButton);
+		this.addAutoRotateView(m_SwitchCameraButton);
 		
 		// setup button initial states
 		this.updateFlashButton();
+		this.updateMoreOptionsButton();
 		this.updateSelfTimerButton();
 		this.updateSwitchCameraButton();
+	}
+	
+	
+	// Called when more options button clicked.
+	private void onMoreOptionsButtonClicked()
+	{
+		// check state
+		if(m_OptionsPanel == null)
+			return;
+		if(!this.isCaptureUIEnabled())
+			return;
+		
+		// open or close panel
+		if(m_OptionsPanel.get(OptionsPanel.PROP_IS_VISIBLE))
+			m_OptionsPanel.closeOptionsPanel(0);
+		else
+			m_OptionsPanel.openOptionsPanel(0);
 	}
 	
 	
@@ -406,27 +458,12 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	}
 	
 	
-	// Called when rotation changed.
-	@Override
-	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
-	{
-		// call super
-		super.onRotationChanged(prevRotation, newRotation);
-		
-		// rotate buttons
-		this.rotateView(m_PrimaryButton, newRotation);
-		this.rotateView(m_FlashButton, newRotation);
-		this.rotateView(m_MoreOptionsButton, newRotation);
-		this.rotateView(m_SelfTimerButton, newRotation);
-		this.rotateView(m_SwitchCameraButton, newRotation);
-	}
-	
-	
 	// Called when self timer button clicked.
 	private void onSelfTimerButtonClicked()
 	{
 		// check state
-		//
+		if(!this.isCaptureUIEnabled())
+			return;
 		
 		// switch self timer
 		long seconds = this.getCameraActivity().get(CameraActivity.PROP_SELF_TIMER_INTERVAL);
@@ -446,7 +483,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	private void onSwitchCameraButtonClicked()
 	{
 		// check state
-		//
+		if(!this.isCaptureUIEnabled())
+			return;
 		
 		// switch camera
 		if(!this.getCameraActivity().switchCamera())
@@ -622,6 +660,37 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	}
 	
 	
+	// Update more options button.
+	private void updateMoreOptionsButton()
+	{
+		this.updateMoreOptionsButton(m_OptionsPanel != null && m_OptionsPanel.get(OptionsPanel.PROP_IS_VISIBLE));
+	}
+	private void updateMoreOptionsButton(boolean isPanelVisible)
+	{
+		// check state
+		if(m_MoreOptionsButton == null)
+			return;
+		
+		// update visibility
+		CameraActivity cameraActivity = this.getCameraActivity();
+		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED)
+				|| m_OptionsPanel == null
+				|| !m_OptionsPanel.get(OptionsPanel.PROP_HAS_ITEMS))
+		{
+			this.setViewVisibility(m_MoreOptionsButton, false);
+			return;
+		}
+		else
+			this.setViewVisibility(m_MoreOptionsButton, true);
+		
+		// update icon
+		if(isPanelVisible)
+			m_MoreOptionsButton.setImageResource(R.drawable.more_options_on);
+		else
+			m_MoreOptionsButton.setImageResource(R.drawable.more_options);
+	}
+	
+	
 	// Update self timer button.
 	private void updateSelfTimerButton()
 	{
@@ -635,7 +704,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// update visibility
 		CameraActivity cameraActivity = this.getCameraActivity();
-		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED))
+		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED)
+				|| this.getMediaType() != MediaType.PHOTO)
 		{
 			this.setViewVisibility(m_SelfTimerButton, false);
 			return;
