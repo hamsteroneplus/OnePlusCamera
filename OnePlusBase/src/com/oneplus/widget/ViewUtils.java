@@ -1,11 +1,12 @@
 package com.oneplus.widget;
 
-import android.animation.Animator;
-import android.animation.TimeInterpolator;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.view.ViewPropertyAnimator;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.Interpolator;
 
 /**
  * Utility methods for {@link View}.
@@ -50,7 +51,7 @@ public final class ViewUtils
 	 * @param duration Animation duration in milliseconds.
 	 * @param interpolator Interpolator.
 	 */
-	public static void rotate(View view, float toDegrees, long duration, TimeInterpolator interpolator)
+	public static void rotate(View view, float toDegrees, long duration, Interpolator interpolator)
 	{
 		if(view == null)
 			return;
@@ -155,7 +156,7 @@ public final class ViewUtils
 	 * @param duration Animation duration in milliseconds.
 	 * @param interpolator Interpolator.
 	 */
-	public static void setVisibility(View view, boolean isVisible, long duration, TimeInterpolator interpolator)
+	public static void setVisibility(View view, boolean isVisible, long duration, Interpolator interpolator)
 	{
 		setVisibility(view, isVisible, duration, interpolator, null);
 	}
@@ -169,20 +170,17 @@ public final class ViewUtils
 	 * @param interpolator Interpolator.
 	 * @param callback Animation call-back.
 	 */
-	public static void setVisibility(final View view, boolean isVisible, long duration, TimeInterpolator interpolator, final AnimationCompletedCallback callback)
+	public static void setVisibility(final View view, boolean isVisible, long duration, Interpolator interpolator, final AnimationCompletedCallback callback)
 	{
 		if(view == null)
 			return;
-		ViewPropertyAnimator animator = null;
+		Animation animation = null;
 		if(isVisible)
 		{
 			if(view.getVisibility() != View.VISIBLE)
 			{
 				if(duration >= 0)
-				{
-					animator = view.animate();
-					animator.alpha(1);
-				}
+					animation = new AlphaAnimation(0, 1);
 				view.setVisibility(View.VISIBLE);
 			}
 			else
@@ -193,46 +191,37 @@ public final class ViewUtils
 			if(view.getVisibility() == View.VISIBLE)
 			{
 				if(duration >= 0)
-				{
-					animator = view.animate();
-					animator.alpha(0);
-				}
+					animation = new AlphaAnimation(1, 0);
 				view.setVisibility(View.INVISIBLE);
 			}
 			else 
 				return;
 		}
-		if(animator != null)
+		if(animation != null)
 		{
-			animator.setDuration(duration);
+			animation.setDuration(duration);
 			if(interpolator != null)
-				animator.setInterpolator(interpolator);
+				animation.setInterpolator(interpolator);
 			if(callback != null)
 			{
-				animator.setListener(new Animator.AnimatorListener()
+				animation.setAnimationListener(new Animation.AnimationListener()
 				{
 					@Override
-					public void onAnimationStart(Animator animation)
+					public void onAnimationStart(Animation animation)
 					{}
 					
 					@Override
-					public void onAnimationRepeat(Animator animation)
+					public void onAnimationRepeat(Animation animation)
 					{}
 					
 					@Override
-					public void onAnimationEnd(Animator animation)
+					public void onAnimationEnd(Animation animation)
 					{
 						callback.onAnimationCompleted(view, false);
 					}
-					
-					@Override
-					public void onAnimationCancel(Animator animation)
-					{
-						callback.onAnimationCompleted(view, true);
-					}
 				});
 			}
-			animator.start();
+			view.startAnimation(animation);
 		}
 	}
 	

@@ -1,5 +1,6 @@
 package com.oneplus.camera;
 
+import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.media.MediaType;
 
 /**
@@ -67,6 +68,16 @@ public abstract class CameraComponent extends CameraThreadComponent
 		if(m_IsCameraThreadComponent)
 			return super.getMediaType();
 		return m_CameraActivity.get(CameraActivity.PROP_MEDIA_TYPE);
+	}
+	
+	
+	// Get device screen size.
+	@Override
+	protected ScreenSize getScreenSize()
+	{
+		if(m_IsCameraThreadComponent)
+			return super.getScreenSize();
+		return m_CameraActivity.get(CameraActivity.PROP_SCREEN_SIZE);
 	}
 	
 	

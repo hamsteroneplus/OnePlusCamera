@@ -3,13 +3,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent" >
     
-    <!-- Capture mode switcher -->
-    <RelativeLayout android:id="@+id/capture_mode_switcher_container"
-        android:layout_width="match_parent"
-    	android:layout_height="match_parent">
-        
-    </RelativeLayout>
-    
     <!-- Focus/Exposure indicator -->
     <RelativeLayout android:id="@+id/focus_exposure_indicator_container"
         android:layout_width="match_parent"

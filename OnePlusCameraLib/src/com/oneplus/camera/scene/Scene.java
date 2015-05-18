@@ -28,13 +28,6 @@ public interface Scene extends Mode<Scene>
 	
 	
 	/**
-	 * Get string for display name.
-	 * @return Display name.
-	 */
-	String getDisplayName();
-	
-	
-	/**
 	 * Get related image.
 	 * @param usage Image usage.
 	 * @return Image related to this scene.

@@ -3,8 +3,8 @@ package com.oneplus.camera;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.animation.TimeInterpolator;
 import android.view.View;
+import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
 
 import com.oneplus.base.PropertyChangeEventArgs;
@@ -34,15 +34,15 @@ public abstract class UIComponent extends CameraComponent
 	/**
 	 * Interpolator for UI fade-in animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_FADE_IN = null;
+	public static final Interpolator INTERPOLATOR_FADE_IN = null;
 	/**
 	 * Interpolator for UI fade-out animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_FADE_OUT = null;
+	public static final Interpolator INTERPOLATOR_FADE_OUT = null;
 	/**
 	 * Interpolator for UI rotation animation.
 	 */
-	public static final TimeInterpolator INTERPOLATOR_ROTATION = new PathInterpolator(0.8f, 0, 0.2f, 1);
+	public static final Interpolator INTERPOLATOR_ROTATION = new PathInterpolator(0.8f, 0, 0.2f, 1);
 	
 	
 	// Private fields.
@@ -219,7 +219,7 @@ public abstract class UIComponent extends CameraComponent
 	 * @param duration Animation duration.
 	 * @param interpolator Animation interpolator.
 	 */
-	protected void rotateView(View view, Rotation toRotation, long duration, TimeInterpolator interpolator)
+	protected void rotateView(View view, Rotation toRotation, long duration, Interpolator interpolator)
 	{
 		if(view == null)
 			return;
@@ -264,7 +264,7 @@ public abstract class UIComponent extends CameraComponent
 	protected void setViewVisibility(View view, boolean isVisible, ViewUtils.AnimationCompletedCallback callback)
 	{
 		long duration;
-		TimeInterpolator interpolator;
+		Interpolator interpolator;
 		if(isVisible)
 		{
 			duration = DURATION_FADE_IN;
@@ -286,7 +286,7 @@ public abstract class UIComponent extends CameraComponent
 	 * @param duration Animation duration in milliseconds.
 	 * @param interpolator Interpolator.
 	 */
-	protected void setViewVisibility(View view, boolean isVisible, long duration, TimeInterpolator interpolator)
+	protected void setViewVisibility(View view, boolean isVisible, long duration, Interpolator interpolator)
 	{
 		ViewUtils.setVisibility(view, isVisible, duration, interpolator);
 	}
@@ -300,7 +300,7 @@ public abstract class UIComponent extends CameraComponent
 	 * @param interpolator Interpolator.
 	 * @param callback Animation call-back.
 	 */
-	protected void setViewVisibility(View view, boolean isVisible, long duration, TimeInterpolator interpolator, ViewUtils.AnimationCompletedCallback callback)
+	protected void setViewVisibility(View view, boolean isVisible, long duration, Interpolator interpolator, ViewUtils.AnimationCompletedCallback callback)
 	{
 		ViewUtils.setVisibility(view, isVisible, duration, interpolator, callback);
 	}

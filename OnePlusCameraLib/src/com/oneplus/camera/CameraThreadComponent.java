@@ -2,6 +2,7 @@ package com.oneplus.camera;
 
 import android.content.Context;
 
+import com.oneplus.base.ScreenSize;
 import com.oneplus.base.component.BasicComponent;
 import com.oneplus.base.component.ComponentOwner;
 import com.oneplus.camera.media.MediaType;
@@ -78,5 +79,15 @@ public abstract class CameraThreadComponent extends BasicComponent
 	protected MediaType getMediaType()
 	{
 		return m_CameraThread.get(CameraThread.PROP_MEDIA_TYPE);
+	}
+	
+	
+	/**
+	 * Get device screen size.
+	 * @return Screen size.
+	 */
+	protected ScreenSize getScreenSize()
+	{
+		return m_CameraThread.get(CameraThread.PROP_SCREEN_SIZE);
 	}
 }

@@ -1,5 +1,12 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     
+    <!-- Capture modes panel -->
+    <style name="CaptureModesPanelItemText">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/capture_modes_panel_title_text</item>
+        <item name="android:textSize">@dimen/capture_modes_panel_item_text</item>
+    </style>
+    
     <!-- Count-down timer -->
     <style name="CountDownTimerText">
         <item name="android:fontFamily">sans-serif</item>

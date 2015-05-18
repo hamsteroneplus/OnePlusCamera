@@ -8,8 +8,7 @@
     android:background="@color/options_panel_background"
     android:orientation="horizontal" 
     android:gravity="center"
-    android:visibility="gone"
-    android:alpha="0">
+    android:visibility="gone">
     
     <HorizontalScrollView
         android:layout_width="wrap_content"

@@ -5,6 +5,12 @@
     android:background="#000000"
     tools:context="com.oneplus.camera.MainActivity" >
     
+    <!-- Workaround for alpha animation issue -->
+    <View 
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#00000000"/>
+    
     <!-- Capture UI -->
     <ViewStub android:id="@+id/capture_ui_container"
         android:layout_width="match_parent"
@@ -16,5 +22,11 @@
     
     <!-- Capture bar -->
     <include layout="@layout/layout_capture_bar"/>
+    
+    <!-- Capture modes panel -->
+    <ViewStub android:id="@+id/capture_modes_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout="@layout/layout_capture_modes_panel"/>
 
 </RelativeLayout>

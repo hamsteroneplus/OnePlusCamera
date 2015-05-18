@@ -392,6 +392,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	@SuppressWarnings("incomplete-switch")
 	private void onPrimaryButtonPressed()
 	{
+		if(!this.isCaptureUIEnabled())
+			return;
 		switch(m_PrimaryButtonFunction)
 		{
 			case CAPTURE_PHOTO:
@@ -418,6 +420,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				// take single shot or stop burst shots
 				if(!Handle.isValid(m_PhotoCaptureHandle))
 				{
+					if(!this.isCaptureUIEnabled())
+						return;
 					m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto();
 					if(!Handle.isValid(m_PhotoCaptureHandle))
 						Log.e(TAG, "onPrimaryButtonReleased() - Fail to capture photo");
@@ -436,6 +440,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				break;
 			}
 			case CAPTURE_VIDEO:
+				if(!this.isCaptureUIEnabled())
+					return;
 				switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
 				{
 					case READY:

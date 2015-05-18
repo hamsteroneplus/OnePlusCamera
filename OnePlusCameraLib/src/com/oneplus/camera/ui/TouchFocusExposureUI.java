@@ -13,6 +13,11 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
+import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
+import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CameraComponent;
 import com.oneplus.camera.FocusController;
@@ -26,12 +31,14 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	private static final long DURATION_START_AF_THREAHOLD = 500;
 	private static final float AF_REGION_WIDTH = 0.25f;
 	private static final float AF_REGION_HEIGHT = 0.25f;
+	private static final float TOUCH_AF_DISTANCE_THRESHOLD = 0.2f;
 	private static final int MSG_START_AF = 10000;
 	private static final int MSG_LOCK_AF = 10001;
 	
 	
 	// Private fields.
 	private FocusController m_FocusController;
+	private float m_TouchAfDistanceThreshold;
 	private Handle m_TouchAfHandle;
 	private final PointF m_TouchDownPosition = new PointF(-1, -1);
 	
@@ -132,6 +139,19 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 				onTouch(e);
 			}
 		});
+		
+		// add property changed call-backs
+		cameraActivity.addCallback(CameraActivity.PROP_SCREEN_SIZE, new PropertyChangedCallback<ScreenSize>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<ScreenSize> key, PropertyChangeEventArgs<ScreenSize> e)
+			{
+				updateDistanceThresholds(e.getNewValue());
+			}
+		});
+		
+		// setup touch AF threshold
+		this.updateDistanceThresholds(this.getScreenSize());
 	}
 	
 	
@@ -160,8 +180,15 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 			}
 			
 			case MotionEvent.ACTION_MOVE:
-				
+			{
+				if(m_TouchDownPosition.x < 0 || m_TouchDownPosition.y < 0)
+					break;
+				float diffX = Math.abs(e.getX() - m_TouchDownPosition.x);
+				float diffY = Math.abs(e.getY() - m_TouchDownPosition.y);
+				if((diffX * diffX + diffY * diffY) > (m_TouchAfDistanceThreshold * m_TouchAfDistanceThreshold))
+					m_TouchDownPosition.set(-1, -1);
 				break;
+			}
 				
 			case MotionEvent.ACTION_CANCEL:
 				this.getHandler().removeMessages(MSG_START_AF);
@@ -223,5 +250,13 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		// raise event
 		this.raise(EVENT_TOUCH_AF, EventArgs.EMPTY);
 		this.raise(EVENT_TOUCH_AE, EventArgs.EMPTY);
+	}
+	
+	
+	// Update touch AF threshold.
+	private void updateDistanceThresholds(ScreenSize screenSize)
+	{
+		int length = Math.min(screenSize.getWidth(), screenSize.getHeight());
+		m_TouchAfDistanceThreshold = (length * TOUCH_AF_DISTANCE_THRESHOLD);
 	}
 }

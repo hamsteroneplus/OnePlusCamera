@@ -57,6 +57,13 @@ public interface Mode<T extends Mode<?>> extends BaseObject
 	
 	
 	/**
+	 * Get display name.
+	 * @return Display name of this mode.
+	 */
+	String getDisplayName();
+	
+	
+	/**
 	 * Enter to this mode.
 	 * @param prevMode Previous mode.
 	 * @param flags Flags:

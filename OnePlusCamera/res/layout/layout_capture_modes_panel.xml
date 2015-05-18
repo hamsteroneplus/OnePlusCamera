@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/capture_modes_panel_background"
+    android:paddingLeft="@dimen/capture_modes_panel_padding_left"
+    android:paddingTop="@dimen/capture_modes_panel_padding_top"
+    android:paddingRight="@dimen/capture_modes_panel_padding_right"
+    android:paddingBottom="@dimen/capture_modes_panel_padding_bottom"
+    android:visibility="gone">
+    
+    <!-- Capture modes -->
+    <LinearLayout android:id="@+id/capture_modes_panel_items_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentLeft="true"
+        android:orientation="vertical"
+        android:gravity="center_vertical|start"/>
+    
+    <!-- Advanced settings -->
+    <ImageButton android:id="@+id/advanced_settings_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:background="@null"
+        android:padding="@dimen/capture_modes_panel_adv_settings_padding"
+        android:src="@drawable/advanced_settings"/>
+
+</RelativeLayout>

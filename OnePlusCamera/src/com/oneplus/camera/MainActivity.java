@@ -5,6 +5,7 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.camera.capturemode.CaptureModeManager;
 import com.oneplus.camera.scene.SceneManager;
 
 import android.os.Bundle;
@@ -58,6 +59,20 @@ public class MainActivity extends CameraActivity
 			}
 		});
 		
+		// setup capture modes
+		CaptureModeManager captureModeManager = this.findComponent(CaptureModeManager.class);
+		if(captureModeManager != null)
+		{
+			for(int i = 0, count = CaptureModeBuilders.BUILDERS.length ; i < count ; ++i)
+				captureModeManager.addBuilder(CaptureModeBuilders.BUILDERS[i], 0);
+		}
+		else
+			Log.e(TAG, "onCreate() - No CaptureModeManager");
+		
+		// change to initial capture mode
+		if(captureModeManager != null)
+			captureModeManager.changeToInitialCaptureMode(0);
+		
 		// start camera thread
 		CameraThread.ResourceIdTable resIdTable = new CameraThread.ResourceIdTable();
 		CameraThread cameraThread = this.getCameraThread();
@@ -69,7 +84,7 @@ public class MainActivity extends CameraActivity
 		cameraThread.start(this.get(PROP_MEDIA_TYPE));
 		
 		// setup scene builders
-		final SceneManager sceneManager = this.findComponent(SceneManager.class);
+		SceneManager sceneManager = this.findComponent(SceneManager.class);
 		if(sceneManager != null)
 		{
 			for(int i = 0, count = SceneBuilders.BUILDERS.length ; i < count ; ++i)

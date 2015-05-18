@@ -4,6 +4,10 @@
     <!-- Capture bar -->
     <color name="capture_bar_background">#1A101012</color>
     
+    <!-- Capture modes panel -->
+    <color name="capture_modes_panel_background">#B2000000</color>
+    <color name="capture_modes_panel_title_text">#FFFFFF</color>
+    
     <!-- Count-down timer -->
     <color name="count_down_timer_text">#FFEA01</color>
     <color name="count_down_timer_text_shadow">#99000000</color>
