@@ -3,6 +3,8 @@ package com.oneplus.camera.io;
 import java.io.File;
 import java.util.List;
 
+import android.graphics.Bitmap;
+
 import com.oneplus.base.EventArgs;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.Handle;
@@ -15,9 +17,13 @@ import com.oneplus.camera.media.MediaEventArgs;
 public interface FileManager extends Component
 {
 	/**
-	 * Event raised when media file saving completed.
+	 * Event raised when media file deleted or initial.
 	 */
-	EventKey<EventArgs> EVENT_MEDIA_FILES_UPDATED = new EventKey<>("MediaFileUpdated", EventArgs.class, FileManager.class);
+	EventKey<EventArgs> EVENT_MEDIA_FILES_RESET = new EventKey<>("MediaFileUpdated", EventArgs.class, FileManager.class);
+	/**
+	 * Event raised when media file added.
+	 */
+	EventKey<EventArgs> EVENT_MEDIA_FILES_ADDED = new EventKey<>("MediaFileUpdated", EventArgs.class, FileManager.class);
 	/**
 	 * Event raised when media file saving completed.
 	 */
@@ -35,7 +41,15 @@ public interface FileManager extends Component
 	 */
 	EventKey<MediaEventArgs> EVENT_MEDIA_SAVED = new EventKey<>("MediaSaved", MediaEventArgs.class, FileManager.class);
 	
-	
+	public interface PhotoCallback
+	{
+		/**
+		 * Called when bitmap load.
+		 */
+		void onBitmapLoad(Bitmap bitmap);
+	}
+
+	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback);
 	/**
 	 * Start media saving asynchronously.
 	 * @param task Media save task.

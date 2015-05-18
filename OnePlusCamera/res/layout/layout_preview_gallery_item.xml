@@ -6,8 +6,10 @@
 
     <ImageView
         android:id="@+id/preview_image"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="@dimen/preview_item_width"
+        android:layout_height="@dimen/preview_item_height"
+        android:src="@drawable/loading"
+        android:scaleType="center"
         android:layout_centerInParent="true" />
 
 </RelativeLayout>
