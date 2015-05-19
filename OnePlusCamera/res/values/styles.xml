@@ -1,34 +1,41 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
-    
-    <!-- Capture modes panel -->
-    <style name="CaptureModesPanelItemText">
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textColor">@color/capture_modes_panel_title_text</item>
-        <item name="android:textSize">@dimen/capture_modes_panel_item_text</item>
-    </style>
-    
-    <!-- Count-down timer -->
-    <style name="CountDownTimerText">
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textColor">@color/count_down_timer_text</item>
-        <item name="android:shadowColor">@color/count_down_timer_text_shadow</item>
-        <item name="android:shadowRadius">10</item>
-        <item name="android:textSize">@dimen/count_down_timer_text_size</item>
-    </style>
-    
-    <!-- Main window style -->
-    <style name="CameraWindowStyle" parent="@android:style/Theme.NoTitleBar.Fullscreen">
-        <item name="android:windowAnimationStyle">@null</item>
-    </style>
-    
-    <!-- Options panel -->
+	
+	<!-- Capture modes panel -->
+	<style name="CaptureModesPanelItemText">
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/capture_modes_panel_title_text</item>
+		<item name="android:textSize">@dimen/capture_modes_panel_item_text</item>
+	</style>
+	
+	<!-- Count-down timer -->
+	<style name="CountDownTimerText">
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/count_down_timer_text</item>
+		<item name="android:shadowColor">@color/count_down_timer_text_shadow</item>
+		<item name="android:shadowRadius">10</item>
+		<item name="android:textSize">@dimen/count_down_timer_text_size</item>
+	</style>
+	
+	<!-- Main window style -->
+	<style name="CameraWindowStyle" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+		<item name="android:windowAnimationStyle">@null</item>
+	</style>
+	
+	<!-- Options panel -->
     <style name="OptionsPanelItemText">
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textColor">@color/options_panel_item_text</item>
-        <item name="android:textSize">@dimen/options_panel_item_text_size</item>
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/options_panel_item_text</item>
+		<item name="android:textSize">@dimen/options_panel_item_text_size</item>
     </style>
-    <style name="OptionsPanelItemText.Selected" parent="OptionsPanelItemText">
-        <item name="android:textColor">@color/options_panel_item_text_selected</item>
-    </style>
+	<style name="OptionsPanelItemText.Selected" parent="OptionsPanelItemText">
+		<item name="android:textColor">@color/options_panel_item_text_selected</item>
+	</style>
+    
+	<!-- Recording timer -->
+	<style name="RecordingTimerText">
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/recording_timer_text</item>
+		<item name="android:textSize">@dimen/recording_timer_text_size</item>
+	</style>
 
 </resources>

@@ -1,52 +1,58 @@
 <resources>
 
-    <!-- Capture bar -->
-    <dimen name="capture_bar_button_margin_bottom">14dp</dimen>
-    <dimen name="capture_bar_button_margin_left">20dp</dimen>
-    <dimen name="capture_bar_button_margin_right">20dp</dimen>
-    <dimen name="capture_bar_button_margin_top">14dp</dimen>
-    <dimen name="capture_bar_button_padding">10dp</dimen>
-    <dimen name="capture_bar_primary_button_margin_bottom">35dp</dimen>
-    <dimen name="capture_bar_primary_button_margin_right">0dp</dimen>
-    <dimen name="capture_bar_height">160dp</dimen>
-    <dimen name="capture_bar_width">0dp</dimen>
-    
-    <!-- Capture modes panel -->
-    <dimen name="capture_modes_panel_adv_settings_padding">10dp</dimen>
-    <dimen name="capture_modes_panel_item_icon_height">24dp</dimen>
-    <dimen name="capture_modes_panel_item_icon_title_margin">20dp</dimen>
-    <dimen name="capture_modes_panel_item_icon_width">24dp</dimen>
-    <dimen name="capture_modes_panel_item_margin_bottom">13dp</dimen>
-    <dimen name="capture_modes_panel_item_margin_left">10dp</dimen>
-    <dimen name="capture_modes_panel_item_margin_right">0dp</dimen>
-    <dimen name="capture_modes_panel_item_margin_top">13dp</dimen>
-    <dimen name="capture_modes_panel_item_text">13sp</dimen>
-    <dimen name="capture_modes_panel_padding_bottom">167dp</dimen>
-    <dimen name="capture_modes_panel_padding_left">21dp</dimen>
-    <dimen name="capture_modes_panel_padding_right">21dp</dimen>
-    <dimen name="capture_modes_panel_padding_top">7dp</dimen>
-
-    <!-- Count-down timer -->
-    <dimen name="count_down_timer_text_size">60sp</dimen>
-    
-    <!-- Options panel -->
-    <dimen name="options_panel_height">70dp</dimen>
-    <dimen name="options_panel_item_height">50dp</dimen>
-    <dimen name="options_panel_item_icon_height">33dp</dimen>
-    <dimen name="options_panel_item_icon_width">50dp</dimen>
-    <dimen name="options_panel_item_margin_bottom">0dp</dimen>
-    <dimen name="options_panel_item_margin_left">16dp</dimen>
-    <dimen name="options_panel_item_margin_right">16dp</dimen>
-    <dimen name="options_panel_item_margin_top">dp</dimen>
-    <dimen name="options_panel_item_text_container_height">17dp</dimen>
-    <dimen name="options_panel_item_text_size">12sp</dimen>
-    <dimen name="options_panel_item_width">50dp</dimen>
-    <dimen name="options_panel_margin_bottom">@dimen/capture_bar_height</dimen>
-    <dimen name="options_panel_margin_right">0dp</dimen>
-    <dimen name="options_panel_width">0dp</dimen>
-
-    <!-- Preview Gallery -->
-    <dimen name="preview_item_width">270dp</dimen>
-    <dimen name="preview_item_height">480dp</dimen>
+	<!-- Capture bar -->
+	<dimen name="capture_bar_button_margin_bottom">14dp</dimen>
+	<dimen name="capture_bar_button_margin_left">20dp</dimen>
+	<dimen name="capture_bar_button_margin_right">20dp</dimen>
+	<dimen name="capture_bar_button_margin_top">14dp</dimen>
+	<dimen name="capture_bar_button_padding">10dp</dimen>
+	<dimen name="capture_bar_primary_button_margin_bottom">35dp</dimen>
+	<dimen name="capture_bar_primary_button_margin_right">0dp</dimen>
+	<dimen name="capture_bar_height">160dp</dimen>
+	<dimen name="capture_bar_width">0dp</dimen>
+	
+	<!-- Capture modes panel -->
+	<dimen name="capture_modes_panel_adv_settings_padding">10dp</dimen>
+	<dimen name="capture_modes_panel_item_icon_height">24dp</dimen>
+	<dimen name="capture_modes_panel_item_icon_title_margin">20dp</dimen>
+	<dimen name="capture_modes_panel_item_icon_width">24dp</dimen>
+	<dimen name="capture_modes_panel_item_margin_bottom">13dp</dimen>
+	<dimen name="capture_modes_panel_item_margin_left">10dp</dimen>
+	<dimen name="capture_modes_panel_item_margin_right">0dp</dimen>
+	<dimen name="capture_modes_panel_item_margin_top">13dp</dimen>
+	<dimen name="capture_modes_panel_item_text">13sp</dimen>
+	<dimen name="capture_modes_panel_padding_bottom">167dp</dimen>
+	<dimen name="capture_modes_panel_padding_left">21dp</dimen>
+	<dimen name="capture_modes_panel_padding_right">21dp</dimen>
+	<dimen name="capture_modes_panel_padding_top">7dp</dimen>
+	
+	<!-- Count-down timer -->
+	<dimen name="count_down_timer_text_size">60sp</dimen>
+	
+	<!-- Options panel -->
+	<dimen name="options_panel_height">70dp</dimen>
+	<dimen name="options_panel_item_height">50dp</dimen>
+	<dimen name="options_panel_item_icon_height">33dp</dimen>
+	<dimen name="options_panel_item_icon_width">50dp</dimen>
+	<dimen name="options_panel_item_margin_bottom">0dp</dimen>
+	<dimen name="options_panel_item_margin_left">16dp</dimen>
+	<dimen name="options_panel_item_margin_right">16dp</dimen>
+	<dimen name="options_panel_item_margin_top">dp</dimen>
+	<dimen name="options_panel_item_text_container_height">17dp</dimen>
+	<dimen name="options_panel_item_text_size">12sp</dimen>
+	<dimen name="options_panel_item_width">50dp</dimen>
+	<dimen name="options_panel_margin_bottom">@dimen/capture_bar_height</dimen>
+	<dimen name="options_panel_margin_right">0dp</dimen>
+	<dimen name="options_panel_width">0dp</dimen>
+	
+	<!-- Preview Gallery -->
+	<dimen name="preview_item_width">270dp</dimen>
+	<dimen name="preview_item_height">480dp</dimen>
+	
+	<!-- Recording timer -->
+	<dimen name="recording_timer_text_size">14sp</dimen>
+	<dimen name="recording_timer_text_height">35dp</dimen>
+	<dimen name="recording_timer_text_margin_bottom_port">125dp</dimen>
+	<dimen name="recording_timer_text_margin_top_land">8dp</dimen>
 
 </resources>

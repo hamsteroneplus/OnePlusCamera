@@ -10,6 +10,7 @@ import com.oneplus.camera.ui.CountDownTimerIndicatorBuilder;
 import com.oneplus.camera.ui.OptionsPanelBuilder;
 import com.oneplus.camera.ui.PreviewGalleryBuilder;
 import com.oneplus.camera.ui.FocusExposureIndicatorBuilder;
+import com.oneplus.camera.ui.RecordingTimerUIBuilder;
 import com.oneplus.camera.ui.TouchFocusExposureUIBuilder;
 
 final class ComponentBuilders
@@ -30,6 +31,7 @@ final class ComponentBuilders
 		new FocusExposureIndicatorBuilder(),
 		new OptionsPanelBuilder(),
 		new PreviewGalleryBuilder(),
+		new RecordingTimerUIBuilder(),
 		new SceneManagerBuilder(),
 		new SensorFocusControllerBuilder(),
 		new TouchFocusExposureUIBuilder(),

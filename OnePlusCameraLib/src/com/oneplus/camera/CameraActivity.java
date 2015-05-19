@@ -100,6 +100,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<View> PROP_CONTENT_VIEW = new PropertyKey<>("ContentView", View.class, CameraActivity.class, PropertyKey.FLAG_READONLY, null);
 	/**
+	 * Read-only property to get elapsed recording time in seconds.
+	 */
+	public static final PropertyKey<Long> PROP_ELAPSED_RECORDING_SECONDS = new PropertyKey<>("ElapsedRecordingSeconds", Long.class, CameraActivity.class, 0L);
+	/**
 	 * Read-only property to check whether camera is locked (cannot to be switched) or not.
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_LOCKED = new PropertyKey<>("IsCameraLocked", Boolean.class, CameraActivity.class, false);
@@ -199,6 +203,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private static final int MSG_PHOTO_CAPTURE_STARTED = -21;
 	private static final int MSG_VIDEO_CAPTURE_FAILED = -30;
 	private static final int MSG_VIDEO_CAPTURE_STARTED = -31;
+	private static final int MSG_UPDATE_ELAPSED_RECORDING_TIME = -40;
 	
 	
 	// Private fields
@@ -1203,6 +1208,13 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				break;
 			}
 			
+			case MSG_UPDATE_ELAPSED_RECORDING_TIME:
+			{
+				Object[] array = (Object[])msg.obj;
+				this.updateElapsedRecordingTime((Long)array[0], (Long)array[1]);
+				break;
+			}
+			
 			case MSG_VIDEO_CAPTURE_FAILED:
 				this.onVideoCaptureFailed((CaptureHandleImpl)msg.obj);
 				break;
@@ -1419,6 +1431,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		keys.add(CameraThread.PROP_AVAILABLE_CAMERAS);
 		keys.add(CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED);
+		keys.add(CameraThread.PROP_PHOTO_CAPTURE_STATE);
+		keys.add(CameraThread.PROP_VIDEO_CAPTURE_STATE);
 	}
 	
 	
@@ -1541,6 +1555,21 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Called when camera thread photo capture state changes.
+	private void onCameraThreadCaptureStateChanged(PhotoCaptureState oldeState, PhotoCaptureState newState)
+	{
+		//
+	}
+	
+	
+	// Called when camera thread video capture state changes.
+	private void onCameraThreadCaptureStateChanged(VideoCaptureState oldState, VideoCaptureState newState)
+	{
+		if(newState == VideoCaptureState.STOPPING && Handle.isValid(m_VideoCaptureHandle))
+			this.stopVideoCapture(m_VideoCaptureHandle);
+	}
+	
+	
 	/**
 	 * Called when receiving camera thread event in UI thread.
 	 * @param key Event key.
@@ -1567,8 +1596,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		if(key == CameraThread.PROP_AVAILABLE_CAMERAS)
 			this.onAvailableCamerasChanged((List<Camera>)e.getNewValue());
-		if(key == CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED)
+		else if(key == CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED)
 			this.setReadOnly(PROP_IS_CAMERA_PREVIEW_RECEIVED, (Boolean)e.getNewValue());
+		else if(key == CameraThread.PROP_PHOTO_CAPTURE_STATE)
+			this.onCameraThreadCaptureStateChanged((PhotoCaptureState)e.getOldValue(), (PhotoCaptureState)e.getNewValue());
+		else if(key == CameraThread.PROP_VIDEO_CAPTURE_STATE)
+			this.onCameraThreadCaptureStateChanged((VideoCaptureState)e.getOldValue(), (VideoCaptureState)e.getNewValue());
 	}
 	
 	
@@ -1625,6 +1658,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				m_VideoRotationLockHandle = Handle.close(m_VideoRotationLockHandle);
 				break;
 		}
+		
+		// reset recording timer
+		if(handle.getMediaType() == MediaType.VIDEO)
+			this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, 0L);
 		
 		// complete capture
 		if(this.get(PROP_STATE) == State.RUNNING)
@@ -1782,6 +1819,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		// enable logs
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_SIZE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_ELAPSED_RECORDING_SECONDS, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_IS_CAMERA_PREVIEW_RECEIVED, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_IS_CAPTURE_UI_ENABLED, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_IS_READY_TO_CAPTURE, LOG_PROPERTY_CHANGE);
@@ -2207,6 +2245,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		{
 			case STARTING:
 				handle.internalCaptureHandle = internalHandle;
+				this.updateElapsedRecordingTime(-1, -1);
 				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.CAPTURING);
 				this.raise(EVENT_CAPTURE_STARTED, new CaptureEventArgs(handle));
 				break;
@@ -2892,6 +2931,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				return;
 		}
 		
+		// stop timer
+		HandlerUtils.removeMessages(this, MSG_UPDATE_ELAPSED_RECORDING_TIME);
+		
 		// stop capture
 		if(Handle.isValid(handle.internalCaptureHandle))
 			Handle.close(handle.internalCaptureHandle);
@@ -3080,6 +3122,22 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			Log.w(TAG, "unlockRotation()");
 			this.onDeviceOrientationChanged(this.get(PROP_DEVICE_ORIENTATION));
 		}
+	}
+	
+	
+	// Update elapsed recording time.
+	private void updateElapsedRecordingTime(long lastCheckTime, long seconds)
+	{
+		long checkTime = SystemClock.elapsedRealtime();
+		++seconds;
+		this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, seconds);
+		if(lastCheckTime > 0)
+		{
+			long delay = (2000 - (checkTime - lastCheckTime));
+			HandlerUtils.sendMessage(this, MSG_UPDATE_ELAPSED_RECORDING_TIME, 0, 0, new Object[]{ checkTime, seconds }, delay);
+		}
+		else
+			HandlerUtils.sendMessage(this, MSG_UPDATE_ELAPSED_RECORDING_TIME, 0, 0, new Object[]{ checkTime, seconds }, 1000);
 	}
 	
 	
