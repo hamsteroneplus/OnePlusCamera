@@ -137,7 +137,7 @@ final class PreviewGallery extends UIComponent
 			if (m_ViewPager != null) {
 				current = m_ViewPager.getCurrentItem();
 			}
-			initLandscape(cameraActivity, m_ViewPager.getCurrentItem());
+			initLandscape(cameraActivity, current);
 		}
 	}
 	
