@@ -30,6 +30,7 @@ import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.base.Rotation;
 import com.oneplus.base.component.ComponentSearchCallback;
 import com.oneplus.base.component.ComponentUtils;
 import com.oneplus.camera.CameraActivity;
@@ -47,6 +48,7 @@ final class PreviewGallery extends UIComponent
 	// Private fields
 	private View m_PreviewGallery;
 	private ViewPager m_ViewPager;
+	private VerticalViewPager m_VerticalViewPager;
 	private PagerAdapter m_Adapter;
 	private FileManager m_FileManager;
 	private	int	m_OrignalZ;
@@ -64,7 +66,6 @@ final class PreviewGallery extends UIComponent
 			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
 			m_Adapter.initialize(m_FileManager);
 			m_ViewPager.setAdapter(m_Adapter);
-			m_PreviewGallery.setBackgroundDrawable(null);
 			bringToBack();
 			break;
 		}
@@ -86,13 +87,12 @@ final class PreviewGallery extends UIComponent
 
 	// Initialize.
 	@Override
-	protected void onInitialize()
-	{
+	protected void onInitialize() {
 		// call super
 		super.onInitialize();
-		
+
 		// setup UI
-		final CameraActivity cameraActivity = this.getCameraActivity();
+		final CameraActivity cameraActivity = getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
 
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
@@ -101,8 +101,49 @@ final class PreviewGallery extends UIComponent
 				m_OrignalZ = index;
 			}
 		}
+
+		initPager(getCameraActivity());
+
+	}
+	
+	/* 
+	 * @see com.oneplus.camera.UIComponent#onRotationChanged(com.oneplus.base.Rotation, com.oneplus.base.Rotation)
+	 */
+	@Override
+	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation) {
+		super.onRotationChanged(prevRotation, newRotation);
+		bringToBack();
 		
+		if(Rotation.PORTRAIT == newRotation){
+			if(m_VerticalViewPager != null){
+				m_VerticalViewPager.setVisibility(View.GONE);
+			}
+		}else{
+			if(m_ViewPager != null){
+				m_ViewPager.setVisibility(View.GONE);
+			}			
+		}
+		initPager(getCameraActivity());
+	}
+
+	void initPager(final CameraActivity cameraActivity) {
+		int current = 0;
+		if (Rotation.PORTRAIT == getRotation()) {
+			if (m_VerticalViewPager != null) {
+				current = m_VerticalViewPager.getCurrentItem();
+			}
+			initPortrait(cameraActivity, current);
+		} else {
+			if (m_ViewPager != null) {
+				current = m_ViewPager.getCurrentItem();
+			}
+			initLandscape(cameraActivity, m_ViewPager.getCurrentItem());
+		}
+	}
+	
+	void initPortrait(final CameraActivity cameraActivity, int position) {
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
+		m_ViewPager.setVisibility(View.VISIBLE);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
 		m_ViewPager.setOffscreenPageLimit(3);
 		m_Adapter = new PagerAdapter(cameraActivity.getFragmentManager());
@@ -123,17 +164,17 @@ final class PreviewGallery extends UIComponent
 							@Override
 							public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e) {
 								HandlerUtils.sendMessage(PreviewGallery.this, MESSAGE_UPDATE_RESET);
-								
+
 							}
 
 						});
-						
+
 						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILES_ADDED, new EventHandler<EventArgs>() {
 
 							@Override
 							public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e) {
 								HandlerUtils.sendMessage(PreviewGallery.this, MESSAGE_UPDATE_ADDED);
-								
+
 							}
 
 						});
@@ -145,87 +186,173 @@ final class PreviewGallery extends UIComponent
 			}
 		});
 		m_ViewPager.setAdapter(m_Adapter);
-		m_ViewPager.setOnPageChangeListener(new OnPageChangeListener(){
+		m_ViewPager.setOnPageChangeListener(new OnPageChangeListener() {
 
 			@Override
 			public void onPageScrollStateChanged(int state) {
-				
+
 			}
 
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-				
+
 			}
 
 			@Override
 			public void onPageSelected(int position) {
-				if(position == 0){
-					m_PreviewGallery.setBackgroundDrawable(null);
+				if (position == 0) {
 					bringToBack();
-				}else{
-					m_PreviewGallery.setBackgroundColor(cameraActivity.getResources().getColor(R.color.Previerw_gallery_background));
-					m_PreviewGallery.bringToFront();
+				} else {
+					bringToFront();
 				}
-			}});
+			}
+		});
 
-		m_ViewPager.setPageTransformer(false, new PageTransformer(){
+		m_ViewPager.setPageTransformer(false, new PageTransformer() {
 
 			@Override
 			public void transformPage(View view, float position) {
-			    final float MIN_SCALE = 0.85f;
-			    final float MIN_ALPHA = 0.6f;
-			      int pageWidth = view.getWidth();
-			        int pageHeight = view.getHeight();
+				final float MIN_SCALE = 0.85f;
+				final float MIN_ALPHA = 0.6f;
+				int pageWidth = view.getWidth();
+				int pageHeight = view.getHeight();
 
-			        if (position < -1) { // [-Infinity,-1)
-			            // This page is way off-screen to the left.
-			            view.setAlpha(0);
+				if (position < -1) { // [-Infinity,-1)
+					// This page is way off-screen to the left.
+					view.setAlpha(0);
 
-			        } else if (position <= 1) { // [-1,1]
-			            // Modify the default slide transition to shrink the page as well
-			            float scaleFactor = Math.max(MIN_SCALE, 1 - Math.abs(position));
-			            float vertMargin = pageHeight * (1 - scaleFactor) / 2;
-			            float horzMargin = pageWidth * (1 - scaleFactor) / 2;
-			            if (position < 0) {
-			                view.setTranslationX(horzMargin - vertMargin / 2);
-			            } else {
-			            	if(m_ViewPager.getCurrentItem()==0){
-			            		horzMargin *= 3.3;
-			            	}else{
-			            		horzMargin *= 4;
-			            	}
-			                view.setTranslationX(-horzMargin + vertMargin / 2);
-			            }
+				} else if (position <= 1) { // [-1,1]
+					// Modify the default slide transition to shrink the page as
+					// well
+					float scaleFactor = Math.max(MIN_SCALE, 1 - Math.abs(position));
+					float vertMargin = pageHeight * (1 - scaleFactor) / 2;
+					float horzMargin = pageWidth * (1 - scaleFactor) / 2;
+					if (position < 0) {
+						view.setTranslationX(horzMargin - vertMargin / 2);
+					} else {
+						if (m_ViewPager.getCurrentItem() == 0) {
+							horzMargin *= 3.3;
+						} else {
+							horzMargin *= 4;
+						}
+						view.setTranslationX(-horzMargin + vertMargin / 2);
+					}
 
-			            // Scale the page down (between MIN_SCALE and 1)
-			            view.setScaleX(scaleFactor);
-			            view.setScaleY(scaleFactor);
+					// Scale the page down (between MIN_SCALE and 1)
+					view.setScaleX(scaleFactor);
+					view.setScaleY(scaleFactor);
 
-			            // Fade the page relative to its size.
-			            view.setAlpha(MIN_ALPHA +
-			                    (scaleFactor - MIN_SCALE) /
-			                    (1 - MIN_SCALE) * (1 - MIN_ALPHA));
+					// Fade the page relative to its size.
+					view.setAlpha(MIN_ALPHA + (scaleFactor - MIN_SCALE) / (1 - MIN_SCALE) * (1 - MIN_ALPHA));
 
-			        } else { // (1,+Infinity]
-			            // This page is way off-screen to the right.
-			            view.setAlpha(0);
-			        }
-				
-			}});
-		
-		m_ViewPager.setOnTouchListener(new OnTouchListener(){
+				} else { // (1,+Infinity]
+					// This page is way off-screen to the right.
+					view.setAlpha(0);
+				}
+
+			}
+		});
+
+		m_ViewPager.setOnTouchListener(new OnTouchListener() {
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
 				cameraActivity.onTouchEvent(event);
 				return false;
-			}});
+			}
+		});
+		m_ViewPager.setCurrentItem(position);
+	}
+
+	void initLandscape(final CameraActivity cameraActivity, int position) {
+		m_VerticalViewPager = (VerticalViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager_landscape);
+		m_VerticalViewPager.setVisibility(View.VISIBLE);
+		m_VerticalViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
+		m_VerticalViewPager.setOffscreenPageLimit(3);
+		m_Adapter = new PagerAdapter(cameraActivity.getFragmentManager());
+
+		// find components
+		ComponentUtils.findComponent(getCameraThread(), FileManager.class, this, new ComponentSearchCallback<FileManager>() {
+
+			@Override
+			public void onComponentFound(FileManager component) {
+				Log.d(TAG, "onComponentFound");
+				m_FileManager = component;
+				HandlerUtils.post(m_FileManager, new Runnable() {
+
+					@Override
+					public void run() {
+						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILES_RESET, new EventHandler<EventArgs>() {
+
+							@Override
+							public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e) {
+								HandlerUtils.sendMessage(PreviewGallery.this, MESSAGE_UPDATE_RESET);
+
+							}
+
+						});
+
+						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILES_ADDED, new EventHandler<EventArgs>() {
+
+							@Override
+							public void onEventReceived(EventSource source, EventKey<EventArgs> key, EventArgs e) {
+								HandlerUtils.sendMessage(PreviewGallery.this, MESSAGE_UPDATE_ADDED);
+
+							}
+
+						});
+
+					}
+				});
+
+				m_Adapter.initialize(m_FileManager);
+			}
+		});
+		m_VerticalViewPager.setAdapter(m_Adapter);
+		m_VerticalViewPager.setOnPageChangeListener(new OnPageChangeListener() {
+
+			@Override
+			public void onPageScrollStateChanged(int state) {
+
+			}
+
+			@Override
+			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+
+			}
+
+			@Override
+			public void onPageSelected(int position) {
+				if (position == 0) {
+					bringToBack();
+				} else {
+					bringToFront();
+				}
+			}
+		});
+		
+		m_VerticalViewPager.setOnTouchListener(new OnTouchListener() {
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				cameraActivity.onTouchEvent(event);
+				return false;
+			}
+		});
+		m_VerticalViewPager.setCurrentItem(position);
 	}
 	
 	void bringToBack(){
+		m_PreviewGallery.setBackgroundDrawable(null);
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		parent.removeView(m_PreviewGallery);
 		parent.addView(m_PreviewGallery, m_OrignalZ);
+	}
+	
+	void bringToFront() {
+		m_PreviewGallery
+				.setBackgroundColor(getCameraActivity().getResources().getColor(R.color.Previerw_gallery_background));
+		m_PreviewGallery.bringToFront();
 	}
 
 	private static class ImageFragment extends Fragment {
