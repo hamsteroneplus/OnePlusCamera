@@ -10,12 +10,18 @@
     android:visibility="gone">
     
     <!-- Capture modes -->
-    <LinearLayout android:id="@+id/capture_modes_panel_items_container"
+    <com.oneplus.camera.widget.RotateRelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_alignParentLeft="true"
-        android:orientation="vertical"
-        android:gravity="center_vertical|start"/>
+        android:layout_height="match_parent">
+        
+        <LinearLayout android:id="@+id/capture_modes_panel_items_container"
+	        android:layout_width="match_parent"
+	        android:layout_height="match_parent"
+	        android:layout_alignParentLeft="true"
+	        android:orientation="vertical"
+	        android:gravity="center_vertical|start"/>
+        
+    </com.oneplus.camera.widget.RotateRelativeLayout>
     
     <!-- Advanced settings -->
     <ImageButton android:id="@+id/advanced_settings_button"

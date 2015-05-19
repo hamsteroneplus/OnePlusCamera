@@ -24,7 +24,7 @@
     <dimen name="capture_modes_panel_padding_bottom">167dp</dimen>
     <dimen name="capture_modes_panel_padding_left">21dp</dimen>
     <dimen name="capture_modes_panel_padding_right">21dp</dimen>
-    <dimen name="capture_modes_panel_padding_top">17dp</dimen>
+    <dimen name="capture_modes_panel_padding_top">7dp</dimen>
 
     <!-- Count-down timer -->
     <dimen name="count_down_timer_text_size">60sp</dimen>

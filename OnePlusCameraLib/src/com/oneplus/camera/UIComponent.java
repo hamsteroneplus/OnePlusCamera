@@ -12,6 +12,7 @@ import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.Rotation;
+import com.oneplus.camera.widget.RotateRelativeLayout;
 import com.oneplus.widget.ViewUtils;
 
 /**
@@ -67,6 +68,20 @@ public abstract class UIComponent extends CameraComponent
 			onRotationChanged(e.getOldValue(), e.getNewValue());
 		}
 	};
+	
+	
+	/**
+	 * Call-back for view rotation.
+	 */
+	protected interface ViewRotationCallback
+	{
+		/**
+		 * Called when view rotation completed.
+		 * @param view View to rotate.
+		 * @param rotation Final rotation.
+		 */
+		void onRotated(View view, Rotation rotation);
+	}
 	
 	
 	// Static initializer.
@@ -186,6 +201,72 @@ public abstract class UIComponent extends CameraComponent
 		this.verifyAccess();
 		if(m_AutoRotateViews != null)
 			m_AutoRotateViews.remove(view);
+	}
+	
+	
+	/**
+	 * Rotate layout to current rotation.
+	 * @param layout Layout to rotate.
+	 */
+	protected void rotateLayout(final RotateRelativeLayout layout)
+	{
+		this.rotateLayout(layout, DURATION_ROTATION, null);
+	}
+	
+	
+	/**
+	 * Rotate layout to current rotation.
+	 * @param layout Layout to rotate.
+	 * @param callback Call-back.
+	 */
+	protected void rotateLayout(final RotateRelativeLayout layout, final ViewRotationCallback callback)
+	{
+		this.rotateLayout(layout, DURATION_ROTATION, callback);
+	}
+	
+	
+	/**
+	 * Rotate layout to current rotation.
+	 * @param layout Layout to rotate.
+	 * @param duration Duration for animation.
+	 */
+	protected void rotateLayout(final RotateRelativeLayout layout, long duration)
+	{
+		this.rotateLayout(layout, duration, null);
+	}
+	
+	
+	/**
+	 * Rotate layout to current rotation.
+	 * @param layout Layout to rotate.
+	 * @param duration Duration for animation.
+	 * @param callback Call-back.
+	 */
+	protected void rotateLayout(final RotateRelativeLayout layout, long duration, final ViewRotationCallback callback)
+	{
+		if(layout == null)
+			return;
+		if(duration > 0 && layout.getVisibility() == View.VISIBLE)
+		{
+			final long halfDuration = (duration / 2);
+			this.setViewVisibility(layout, false, halfDuration, INTERPOLATOR_FADE_OUT, new ViewUtils.AnimationCompletedCallback()
+			{
+				@Override
+				public void onAnimationCompleted(View view, boolean isCancelled)
+				{
+					if(!isCancelled)
+					{
+						Rotation rotation = getRotation();
+						layout.setRotation(rotation);
+						setViewVisibility(layout, true, halfDuration, INTERPOLATOR_FADE_IN);
+						if(callback != null)
+							callback.onRotated(layout, rotation);
+					}
+				}
+			});
+		}
+		else
+			layout.setRotation(this.getRotation());
 	}
 	
 	

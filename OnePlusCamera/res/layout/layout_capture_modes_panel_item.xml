@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:gravity="center_vertical" >
+    android:gravity="center_vertical">
     
     <!-- Icon -->
     <ImageView android:id="@+id/capture_modes_panel_item_icon"

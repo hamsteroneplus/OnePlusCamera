@@ -33,6 +33,7 @@ import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.capturemode.CaptureMode;
 import com.oneplus.camera.capturemode.CaptureMode.ImageUsage;
 import com.oneplus.camera.capturemode.CaptureModeManager;
+import com.oneplus.camera.widget.RotateRelativeLayout;
 
 class CaptureModeSwitcher extends UIComponent
 {
@@ -44,6 +45,7 @@ class CaptureModeSwitcher extends UIComponent
 	// Private fields.
 	private final List<CaptureModeItem> m_CaptureModeItems = new ArrayList<>();
 	private ViewGroup m_CaptureModeItemsContainer;
+	private RotateRelativeLayout m_CaptureModeItemsRotateContainer;
 	private CaptureModeManager m_CaptureModeManager;
 	private View m_CaptureModesPanel;
 	private Handle m_CaptureUIDisableHandle;
@@ -146,7 +148,19 @@ class CaptureModeSwitcher extends UIComponent
 	// Called when capture mode item clicked.
 	private void onCaptureModeItemClicked(CaptureModeItem item)
 	{
-		//
+		// enable capture UI
+		m_CaptureUIDisableHandle = Handle.close(m_CaptureUIDisableHandle);
+		
+		// check state
+		if(!this.isCaptureUIEnabled())
+			return;
+		
+		// change capture mode
+		if(m_CaptureModeManager == null || !m_CaptureModeManager.setCaptureMode(item.captureMode, 0))
+			Log.e(TAG, "onCaptureModeItemClicked() - Fail to change capture mode to '" + item.captureMode + "'");
+		
+		// close panel
+		this.closeCaptureModesPanel();
 	}
 	
 	
@@ -193,8 +207,14 @@ class CaptureModeSwitcher extends UIComponent
 	@Override
 	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
 	{
+		// call super
 		super.onRotationChanged(prevRotation, newRotation);
+		
+		// cancel gesture
 		m_GestureState = GestureState.INVALID;
+		
+		// rotate capture modes panel
+		this.rotateLayout(m_CaptureModeItemsRotateContainer);
 	}
 	
 	
@@ -366,11 +386,11 @@ class CaptureModeSwitcher extends UIComponent
 				@Override
 				public boolean onTouch(View v, MotionEvent event)
 				{
-					closeCaptureModesPanel();
 					return true;
 				}
 			});
 			m_CaptureModeItemsContainer = (ViewGroup)m_CaptureModesPanel.findViewById(R.id.capture_modes_panel_items_container);
+			m_CaptureModeItemsRotateContainer = (RotateRelativeLayout)m_CaptureModeItemsContainer.getParent();
 			View advSettingsButton = m_CaptureModesPanel.findViewById(R.id.advanced_settings_button);
 			advSettingsButton.setOnClickListener(new View.OnClickListener()
 			{
@@ -394,7 +414,19 @@ class CaptureModeSwitcher extends UIComponent
 		// disable capture UI
 		m_CaptureUIDisableHandle = this.getCameraActivity().disableCaptureUI();
 		
+		// show current capture mode
+		if(m_CaptureModeManager != null)
+		{
+			CaptureMode captureMode = m_CaptureModeManager.get(CaptureModeManager.PROP_CAPTURE_MODE);
+			for(int i = m_CaptureModeItems.size() - 1 ; i >= 0 ; --i)
+			{
+				CaptureModeItem item = m_CaptureModeItems.get(i);
+				item.iconImageView.setSelected(item.captureMode == captureMode);
+			}
+		}
+		
 		// open panel
+		this.rotateLayout(m_CaptureModeItemsRotateContainer, 0);
 		this.setViewVisibility(m_CaptureModesPanel, true);
 	}
 	
