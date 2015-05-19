@@ -213,6 +213,54 @@ public final class Resolution implements Comparable<Resolution>
 	
 	
 	/**
+	 * Check whether this is a 1080p (Full HD) video resolution or not.
+	 * @return 1080p video resolution or not.
+	 */
+	public boolean is1080pVideo()
+	{
+		return (m_TargetType == MediaType.VIDEO
+				&& m_Width == 1920
+				&& (m_Height == 1080 || m_Height == 1088));
+	}
+	
+	
+	/**
+	 * Check whether this is a 4K video resolution or not.
+	 * @return 4K video resolution or not.
+	 */
+	public boolean is4kVideo()
+	{
+		return (m_TargetType == MediaType.VIDEO
+				&& (m_Width == 4096 || m_Width == 3840)
+				&& m_Height == 2160);
+	}
+	
+	
+	/**
+	 * Check whether this is a 720p (HD) video resolution or not.
+	 * @return 720p video resolution or not.
+	 */
+	public boolean is720pVideo()
+	{
+		return (m_TargetType == MediaType.VIDEO
+				&& m_Width == 1270
+				&& m_Height == 720);
+	}
+	
+	
+	/**
+	 * Check whether this is a MMS (QCIF) video resolution or not.
+	 * @return MMS video resolution or not.
+	 */
+	public boolean isMmsVideo()
+	{
+		return (m_TargetType == MediaType.VIDEO
+				&& m_Width == 176
+				&& m_Height == 144);
+	}
+	
+	
+	/**
 	 * Check whether this resolution is wider than given one or not.
 	 * @param resolution Another resolution to check.
 	 * @return Whether resolution is wider than given one or not.

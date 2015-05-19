@@ -14,6 +14,7 @@ import android.media.MediaRecorder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Size;
 
 import com.oneplus.base.BaseThread;
@@ -39,8 +40,10 @@ import com.oneplus.base.component.ComponentOwner;
 import com.oneplus.camera.io.FileManager;
 import com.oneplus.camera.io.FileManagerBuilder;
 import com.oneplus.camera.io.PhotoSaveTask;
+import com.oneplus.camera.io.VideoSaveTask;
 import com.oneplus.camera.media.AudioManager;
 import com.oneplus.camera.media.MediaType;
+import com.oneplus.camera.media.Resolution;
 
 /**
  * Camera access and control thread.
@@ -56,13 +59,19 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Constants
+	private static final long DURATION_VIDEO_CAPTURE_DELAY = 300;
 	private static final int MSG_SCREEN_SIZE_CHANGED = 10000;
+	private static final int MSG_CAPTURE_VIDEO = 10010;
 	
 	
 	/**
 	 * Flag to indicate that operation should be performed synchronously.
 	 */
 	public static final int FLAG_SYNCHRONOUS = 0x1;
+	/**
+	 * Flag to indicate do not play shutter sound.
+	 */
+	public static final int FLAG_NO_SHUTTER_SOUND = 0x2;
 	
 	
 	/**
@@ -143,6 +152,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private VideoCaptureHandle m_VideoCaptureHandle;
 	private VideoCaptureHandlerHandle m_VideoCaptureHandlerHandle;
 	private List<VideoCaptureHandlerHandle> m_VideoCaptureHandlerHandles;
+	private String m_VideoFilePath;
 	private Handle m_VideoStartSoundHandle;
 	private Handle m_VideoStopSoundHandle;
 	
@@ -304,6 +314,11 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			super(MediaType.PHOTO);
 			this.frameCount = frameCount;
 		}
+		
+		public void complete()
+		{
+			this.closeDirectly();
+		}
 
 		@Override
 		protected void onClose(int flags)
@@ -320,11 +335,16 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			super(MediaType.VIDEO);
 		}
+		
+		public void complete()
+		{
+			this.closeDirectly();
+		}
 
 		@Override
 		protected void onClose(int flags)
 		{
-			stopVideoCapture(this);
+			stopVideoCapture(this, flags);
 		}
 	}
 	
@@ -691,14 +711,25 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	/**
 	 * Start video capture.
+	 * @param resolution Video resolution.
 	 * @return Capture handle.
 	 */
-	public final CaptureHandle captureVideo()
+	public final CaptureHandle captureVideo(final Resolution resolution)
 	{
+		if(resolution == null)
+		{
+			Log.e(TAG, "captureVideo() - No video resolution");
+			return null;
+		}
+		if(resolution.getTargetType() != MediaType.VIDEO)
+		{
+			Log.e(TAG, "captureVideo() - Invalid resolution : " + resolution);
+			return null;
+		}
 		final VideoCaptureHandle handle = new VideoCaptureHandle();
 		if(this.isDependencyThread())
 		{
-			if(this.captureVideoInternal(handle, false))
+			if(this.captureVideoInternal(handle, resolution, false))
 				return handle;
 			return null;
 		}
@@ -707,7 +738,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			@Override
 			public void run()
 			{
-				captureVideoInternal(handle, false);
+				captureVideoInternal(handle, resolution, false);
 			}
 		}))
 		{
@@ -718,66 +749,102 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
-	//
-	private boolean captureVideoInternal(VideoCaptureHandle handle, boolean isShutterSoundPlayed)
+	// Start video capture.
+	private boolean captureVideoInternal(VideoCaptureHandle handle, Resolution resolution, boolean isShutterSoundPlayed)
 	{
-		//
-		File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
-		if(!directory.exists() && !directory.mkdir())
+		// check state
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
 		{
-			Log.e(TAG, "captureVideoInternal() - Fail to create " + directory.getAbsolutePath());
+			case READY:
+				break;
+			case STARTING:
+				if(isShutterSoundPlayed)
+					break;
+			default:
+				Log.e(TAG, "captureVideoInternal() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				return false;
+		}
+		Camera camera = this.get(PROP_CAMERA);
+		if(camera == null)
+		{
+			Log.e(TAG, "captureVideoInternal() - No primary camera");
 			return false;
 		}
 		
-		//
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-		File file = new File(directory, "VID_" + dateFormat.format(new Date()) + ".mp4");
-		Log.w(TAG, "captureVideoInternal() - Save video to " + file);
+		Log.v(TAG, "captureVideoInternal() - Handle : ", handle, ", resolution : ", resolution, ", shutter sound played : ", isShutterSoundPlayed);
 		
-		//
-		MediaRecorder mediaRecorder = new MediaRecorder();
-		try
+		// check storage
+		if(!isShutterSoundPlayed)
 		{
-			mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-			mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-			mediaRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_720P));
-			mediaRecorder.setOutputFile(file.getAbsolutePath());
-			mediaRecorder.prepare();
-		}
-		catch(Throwable ex)
-		{
-			Log.e(TAG, "captureVideoInternal() - Fail to prepare", ex);
-			mediaRecorder.release();
-			return false;
+			// check directory
+			File directory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
+			if(!directory.exists() && !directory.mkdir())
+			{
+				Log.e(TAG, "captureVideoInternal() - Fail to create " + directory.getAbsolutePath());
+				return false;
+			}
+			
+			// check file path
+			SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+			File file = new File(directory, "VID_" + dateFormat.format(new Date()) + ".mp4");
+			m_VideoFilePath = file.getAbsolutePath();
+			Log.w(TAG, "captureVideoInternal() - Video file path : " + m_VideoFilePath);
 		}
 		
-		// connect to camera
-		try
+		// change state
+		this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.STARTING);
+		
+		// play shutter sound
+		long shutterSoundTime = 0;
+		if(!isShutterSoundPlayed && Handle.isValid(m_VideoStartSoundHandle))
 		{
-			this.get(PROP_CAMERA).set(Camera.PROP_VIDEO_SURFACE, mediaRecorder.getSurface());
+			m_AudioManager.playSound(m_VideoStartSoundHandle, 0);
+			shutterSoundTime = SystemClock.elapsedRealtime();
 		}
-		catch(Throwable ex)
+		
+		// prepare media recorder and start later
+		if(!isShutterSoundPlayed)
 		{
-			Log.e(TAG, "captureVideoInternal() - Fail to connect to camera", ex);
-			mediaRecorder.release();
-			return false;
+			// prepare media recorder
+			MediaRecorder mediaRecorder = new MediaRecorder();
+			if(!this.prepareMediaRecorder(camera, mediaRecorder, resolution))
+			{
+				Log.e(TAG, "captureVideoInternal() - Fail to prepare media recorder");
+				mediaRecorder.release();
+				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
+				return false;
+			}
+			m_MediaRecorder = mediaRecorder;
+			
+			// start recording later
+			long delay = (DURATION_VIDEO_CAPTURE_DELAY - (SystemClock.elapsedRealtime() - shutterSoundTime));
+			if(delay > 0)
+			{
+				Log.w(TAG, "captureVideoInternal() - Start video recording " + delay + " ms later");
+				HandlerUtils.sendMessage(this, MSG_CAPTURE_VIDEO, 0, 0, resolution, delay);
+				m_VideoCaptureHandle = handle;
+				return true;
+			}
 		}
 		
 		// start
 		try
 		{
-			mediaRecorder.start();
+			m_MediaRecorder.start();
 		}
 		catch(Throwable ex)
 		{
 			Log.e(TAG, "captureVideoInternal() - Fail to start", ex);
 			this.get(PROP_CAMERA).set(Camera.PROP_VIDEO_SURFACE, null);
-			mediaRecorder.release();
+			m_MediaRecorder.release();
+			m_VideoCaptureHandle = null;
+			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
 			return false;
 		}
 		
-		m_MediaRecorder = mediaRecorder;
+		// update state
 		m_VideoCaptureHandle = handle;
+		this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.CAPTURING);
 		
 		// complete
 		return true;
@@ -952,6 +1019,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	{
 		switch(msg.what)
 		{
+			case MSG_CAPTURE_VIDEO:
+				this.captureVideoInternal(m_VideoCaptureHandle, (Resolution)msg.obj, true);
+				break;
+				
 			case MSG_SCREEN_SIZE_CHANGED:
 				this.setReadOnly(PROP_SCREEN_SIZE, (ScreenSize)msg.obj);
 				break;
@@ -1172,6 +1243,8 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// enable logs
 		this.enablePropertyLogs(PROP_CAMERA_PREVIEW_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_CAPTURE_ROTATION, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_PHOTO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
+		this.enablePropertyLogs(PROP_VIDEO_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		
 		// create handle lists
 		m_PhotoCaptureHandlerHandles = new ArrayList<>();
@@ -1344,6 +1417,101 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		
 		// play sound
 		m_AudioManager.playSound(m_DefaultShutterSoundHandle, 0);
+	}
+	
+	
+	// Prepare media recorder.
+	private boolean prepareMediaRecorder(Camera camera, MediaRecorder mediaRecorder, Resolution resolution)
+	{
+		// use capture handler to prepare
+		boolean isProfilePrepared = false;
+		if(!m_VideoCaptureHandlerHandles.isEmpty())
+		{
+			for(int i = m_VideoCaptureHandlerHandles.size() - 1 ; i >= 0 ; --i)
+			{
+				VideoCaptureHandler captureHandler = m_VideoCaptureHandlerHandles.get(i).captureHandler;
+				try
+				{
+					if(captureHandler.prepareCamcorderProfile(camera, mediaRecorder, resolution))
+					{
+						Log.w(TAG, "prepareMediaRecorder() - Profile is prepared by " + captureHandler);
+						isProfilePrepared = true;
+						break;
+					}
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "prepareMediaRecorder() - Fail to prepare media recorder by " + captureHandler, ex);
+					return false;
+				}
+			}
+		}
+		
+		// prepare media recorder
+		try
+		{
+			// setup parameters
+			if(!isProfilePrepared)
+			{
+				// select profile
+				CamcorderProfile profile;
+				if(resolution.is4kVideo())
+					profile = CamcorderProfile.get(CamcorderProfile.QUALITY_2160P);
+				else if(resolution.is1080pVideo())
+					profile = CamcorderProfile.get(CamcorderProfile.QUALITY_1080P);
+				else if(resolution.is720pVideo())
+					profile = CamcorderProfile.get(CamcorderProfile.QUALITY_720P);
+				else if(resolution.isMmsVideo())
+					profile = CamcorderProfile.get(CamcorderProfile.QUALITY_QCIF);
+				else
+				{
+					Log.e(TAG, "prepareMediaRecorder() - Unknown resolution : " + resolution);
+					return false;
+				}
+				
+				// set AV sources
+				mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+				mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+				
+				// set profile
+				mediaRecorder.setProfile(profile);
+				//mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);    
+				//mediaRecorder.setVideoFrameRate(profile.videoFrameRate);                
+				//mediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);              
+			    //mediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);                
+			    //mediaRecorder.setAudioEncodingBitRate(profile.audioBitRate);                
+			    //mediaRecorder.setAudioChannels(profile.audioChannels);              
+			    //mediaRecorder.setAudioSamplingRate(profile.audioSampleRate);                
+			    //mediaRecorder.setVideoEncoder(profile.videoCodec);              
+			   	//mediaRecorder.setAudioEncoder(profile.audioCodec);
+				
+				// set orientation
+				int orientation = (this.get(PROP_CAPTURE_ROTATION).getDeviceOrientation() - Rotation.LANDSCAPE.getDeviceOrientation());
+				if(orientation < 0)
+					orientation += 360;
+				Log.v(TAG, "prepareMediaRecorder() - Orientation : ", orientation);
+				mediaRecorder.setOrientationHint(orientation);
+			}
+			
+			// set output file
+			mediaRecorder.setOutputFile(m_VideoFilePath);
+			
+			// prepare
+			Log.w(TAG, "prepareMediaRecorder() - MediaRecorder.prepare [start]");
+			mediaRecorder.prepare();
+			Log.w(TAG, "prepareMediaRecorder() - MediaRecorder.prepare [end]");
+			
+			// prepare video surface
+			camera.set(Camera.PROP_VIDEO_SURFACE, mediaRecorder.getSurface());
+			
+			// complete
+			return true;
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "prepareMediaRecorder() - Fail to prepare media recorder ", ex);
+			return false;
+		}
 	}
 	
 	
@@ -1709,13 +1877,6 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	{
 		try
 		{
-			// stop video recording first
-			if(Handle.isValid(m_VideoCaptureHandle))
-			{
-				Log.w(TAG, "stopCameraPreviewInternal() - Stop video recording first");
-				stopVideoCaptureInternal(m_VideoCaptureHandle);
-			}
-			
 			// waiting for starting preview
 			if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STARTING)
 			{
@@ -1731,6 +1892,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			Log.v(TAG, "stopCameraPreviewInternal() - Stop preview [start]");
 			camera.stopPreview(0);
 			Log.v(TAG, "stopCameraPreviewInternal() - Stop preview [end]");
+			
+			// stop video recording
+			if(Handle.isValid(m_VideoCaptureHandle))
+			{
+				Log.w(TAG, "stopCameraPreviewInternal() - Stop video recording");
+				stopVideoCaptureInternal(m_VideoCaptureHandle, FLAG_NO_SHUTTER_SOUND);
+			}
 			
 			// notify waiting thread
 			if(result != null)
@@ -1856,16 +2024,16 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Stop video recording.
-	private void stopVideoCapture(final VideoCaptureHandle handle)
+	private void stopVideoCapture(final VideoCaptureHandle handle, final int flags)
 	{
 		if(this.isDependencyThread())
-			this.stopVideoCaptureInternal(handle);
+			this.stopVideoCaptureInternal(handle, flags);
 		else if(!HandlerUtils.post(this, new Runnable()
 		{
 			@Override
 			public void run()
 			{
-				stopVideoCaptureInternal(handle);
+				stopVideoCaptureInternal(handle, flags);
 			}
 		}))
 		{
@@ -1875,34 +2043,100 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	// Stop video recording.
-	private void stopVideoCaptureInternal(VideoCaptureHandle handle)
+	private void stopVideoCaptureInternal(VideoCaptureHandle handle, int flags)
 	{
-		try
+		// check handle
+		if(m_VideoCaptureHandle != handle)
 		{
-			m_MediaRecorder.stop();
-		}
-		catch(Throwable ex)
-		{
-			Log.e(TAG, "stopVideoCaptureInternal() - Fail to stop recorder", ex);
-		}
-		
-		m_VideoCaptureHandle = null;
-		
-		Camera camera = this.get(PROP_CAMERA);
-		camera.set(Camera.PROP_VIDEO_SURFACE, null);
-		
-		this.raise(EVENT_DEFAULT_VIDEO_CAPTURE_COMPLETED, new CaptureEventArgs(handle));
-		
-		if(camera.get(Camera.PROP_PREVIEW_STATE) == OperationState.STOPPING)
-		{
-			Log.w(TAG, "stopVideoCaptureInternal() - Release media recorder after preview ready");
+			Log.w(TAG, "stopVideoCaptureInternal() - Invalid handle");
 			return;
 		}
 		
+		// check state
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case CAPTURING:
+			case PAUSING:
+			case PAUSED:
+			case RESUMING:
+				break;
+			default:
+				Log.w(TAG, "stopVideoCaptureInternal() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				break;
+		}
+		
+		// check state
+		boolean isStarting = (this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.STARTING && this.getHandler().hasMessages(MSG_CAPTURE_VIDEO));
+		
+		// change state
+		this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.STOPPING);
+		
+		// stop recording
+		if(m_MediaRecorder != null && !isStarting)
+		{
+			try
+			{
+				this.get(PROP_CAMERA).stopPreview(0);
+				Log.w(TAG, "stopVideoCaptureInternal() - MediaRecorder.stop [start]");
+				m_MediaRecorder.stop();
+				Log.w(TAG, "stopVideoCaptureInternal() - MediaRecorder.stop [end]");
+			}
+			catch(Throwable ex)
+			{
+				Log.e(TAG, "stopVideoCaptureInternal() - Fail to stop recorder", ex);
+			}
+		}
+		
+		// play sound
+		if((flags & FLAG_NO_SHUTTER_SOUND) == 0 && Handle.isValid(m_VideoStopSoundHandle))
+			m_AudioManager.playSound(m_VideoStopSoundHandle, 0);
+		
+		// close handle
+		handle.complete();
+		m_VideoCaptureHandle = null;
+		
+		// clear video surface
+		Camera camera = this.get(PROP_CAMERA);
+		camera.set(Camera.PROP_VIDEO_SURFACE, null);
+		
+		// stop directly before starting recording
+		if(isStarting)
+		{
+			Log.w(TAG, "stopVideoCaptureInternal() - Stop while starting");
+			this.getHandler().removeMessages(MSG_CAPTURE_VIDEO);
+		}
+		
+		// save video
+		if(!isStarting)
+		{
+			VideoSaveTask saveTask = new VideoSaveTask(this.getContext(), m_VideoFilePath);
+			m_ComponentManager.findComponent(FileManager.class, this).saveMedia(saveTask, 0);
+		}
+		
+		// raise event
+		this.raise(EVENT_DEFAULT_VIDEO_CAPTURE_COMPLETED, new CaptureEventArgs(handle));
+		
+		// release media recorder
 		if(m_MediaRecorder != null)
 		{
-			m_MediaRecorder.release();
-			m_MediaRecorder = null;
+			switch(camera.get(Camera.PROP_PREVIEW_STATE))
+			{
+				case STARTED:
+				case STOPPED:
+					Log.v(TAG, "stopVideoCaptureInternal() - Release media recorder");
+					m_MediaRecorder.release();
+					m_MediaRecorder = null;
+					break;
+				default:
+					Log.w(TAG, "stopVideoCaptureInternal() - Release media recorder after preview start or stop");
+					break;
+			}
 		}
+		
+		// complete
+		if(this.get(PROP_CAMERA_PREVIEW_STATE) == OperationState.STARTED && this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO)
+			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
+		else
+			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
 	}
 }

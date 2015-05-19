@@ -21,6 +21,7 @@ import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
 import com.oneplus.base.Rotation;
 import com.oneplus.base.ScreenSize;
+import com.oneplus.base.ThreadMonitor;
 import com.oneplus.base.component.Component;
 import com.oneplus.base.component.ComponentBuilder;
 import com.oneplus.base.component.ComponentCreationPriority;
@@ -29,6 +30,7 @@ import com.oneplus.base.component.ComponentManager;
 import com.oneplus.base.component.ComponentOwner;
 import com.oneplus.camera.Camera.LensFacing;
 import com.oneplus.camera.media.MediaType;
+import com.oneplus.camera.media.Resolution;
 import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.media.ResolutionManagerBuilder;
 import com.oneplus.camera.ui.MotionEventArgs;
@@ -68,6 +70,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 * Flag to indicate UI can be enabled automatically when pausing activity.
 	 */
 	public static final int FLAG_ENABLE_WHEN_PAUSING = 0x1;
+	/**
+	 * Flag to indicate do not play shutter sound.
+	 */
+	public static final int FLAG_NO_SHUTTER_SOUND = 0x2;
 	
 	
 	/**
@@ -231,6 +237,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private Handle m_SelfTimerHandle;
 	private SensorManager m_SensorManager;
 	private final List<SettingsHandle> m_SettingsHandles = new ArrayList<>();
+	private Handle m_VideoCaptureCUDHandle;
 	private CaptureHandleImpl m_VideoCaptureHandle;
 	private Handle m_VideoRotationLockHandle;
 	private Viewfinder m_Viewfinder;
@@ -253,6 +260,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Class for capture handle.
 	private final class CaptureHandleImpl extends CaptureHandle
 	{
+		public volatile int closeFlags;
 		public final long creationTime;
 		public final int frameCount;
 		public CaptureHandle internalCaptureHandle;
@@ -278,6 +286,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		@Override
 		protected void onClose(int flags)
 		{
+			this.closeFlags = flags;
 			switch(this.getMediaType())
 			{
 				case PHOTO:
@@ -775,8 +784,19 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		Log.v(TAG, "captureVideo() - Handle : ", handle);
 		
+		// get resolution
+		if(m_ResolutionManager == null)
+		{
+			Log.e(TAG, "captureVideo() - No ResolutionManager");
+			return false;
+		}
+		final Resolution resolution = m_ResolutionManager.get(ResolutionManager.PROP_VIDEO_RESOLUTION);
+		
 		// lock rotation
 		m_VideoRotationLockHandle = this.lockRotation(null);
+		
+		// disable capture UI
+		m_VideoCaptureCUDHandle = this.disableCaptureUI();
 		
 		// change state
 		this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.STARTING);
@@ -789,7 +809,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			public void run()
 			{
 				Log.w(TAG, "captureVideo() - Capture in camera thread");
-				CaptureHandle internalHandle = m_CameraThread.captureVideo();
+				CaptureHandle internalHandle = m_CameraThread.captureVideo(resolution);
 				if(Handle.isValid(internalHandle))
 					HandlerUtils.sendMessage(CameraActivity.this, MSG_VIDEO_CAPTURE_STARTED, 0, 0, new Object[]{ handle, internalHandle });
 				else
@@ -799,6 +819,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		{
 			Log.e(TAG, "captureVideo() - Fail to perform cross-thread operation");
 			m_VideoRotationLockHandle = Handle.close(m_VideoRotationLockHandle);
+			m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 			this.resetVideoCaptureState();
 			return false;
 		}
@@ -1565,8 +1586,15 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Called when camera thread video capture state changes.
 	private void onCameraThreadCaptureStateChanged(VideoCaptureState oldState, VideoCaptureState newState)
 	{
-		if(newState == VideoCaptureState.STOPPING && Handle.isValid(m_VideoCaptureHandle))
-			this.stopVideoCapture(m_VideoCaptureHandle);
+		if(newState == VideoCaptureState.STOPPING)
+		{
+			// stop preview
+			this.stopCameraPreview(false);
+			
+			// stop video capture
+			if(Handle.isValid(m_VideoCaptureHandle))
+				this.stopVideoCapture(m_VideoCaptureHandle);
+		}
 	}
 	
 	
@@ -1659,9 +1687,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				break;
 		}
 		
-		// reset recording timer
+		// reset recording states
 		if(handle.getMediaType() == MediaType.VIDEO)
+		{
 			this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, 0L);
+			m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
+		}
 		
 		// complete capture
 		if(this.get(PROP_STATE) == State.RUNNING)
@@ -1812,7 +1843,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Called when creating activity.
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
-	{	
+	{
+		// start monitor thread
+		ThreadMonitor.startMonitorCurrentThread();
+		
 		// call super
 		super.onCreate(savedInstanceState);
 		
@@ -1958,6 +1992,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// call super
 		super.onDestroy();
+		
+		// stop monitor thread
+		ThreadMonitor.stopMonitorCurrentThread();
 	}
 	
 	
@@ -2216,10 +2253,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				this.raise(EVENT_CAPTURE_FAILED, new CaptureEventArgs(handle));
 				this.stopVideoCapture(handle);
 				this.completeCapture(handle);
+				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
 			case STOPPING:
 				this.raise(EVENT_CAPTURE_FAILED, new CaptureEventArgs(handle));
 				this.completeCapture(handle);
+				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
 			default:
 				Log.w(TAG, "onVideoCaptureFailed() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
@@ -2248,10 +2287,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				this.updateElapsedRecordingTime(-1, -1);
 				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.CAPTURING);
 				this.raise(EVENT_CAPTURE_STARTED, new CaptureEventArgs(handle));
+				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
 			case STOPPING:
 				Log.w(TAG, "onVideoCaptureStarted() - Stop capture immediately");
-				Handle.close(internalHandle);
+				Handle.close(internalHandle, CameraThread.FLAG_NO_SHUTTER_SOUND);
+				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
 			default:
 				Log.e(TAG, "onVideoCaptureStarted() - Video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
@@ -2931,12 +2972,21 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				return;
 		}
 		
+		// disable capture UI
+		if(!Handle.isValid(m_VideoCaptureCUDHandle))
+			m_VideoCaptureCUDHandle = this.disableCaptureUI();
+		
 		// stop timer
 		HandlerUtils.removeMessages(this, MSG_UPDATE_ELAPSED_RECORDING_TIME);
 		
 		// stop capture
 		if(Handle.isValid(handle.internalCaptureHandle))
-			Handle.close(handle.internalCaptureHandle);
+		{
+			int flags = 0;
+			if((handle.closeFlags & FLAG_NO_SHUTTER_SOUND) != 0)
+				flags |= CameraThread.FLAG_NO_SHUTTER_SOUND;
+			Handle.close(handle.internalCaptureHandle, flags);
+		}
 		else
 			Log.w(TAG, "stopPhotoCapture() - Stop when starting");
 	}

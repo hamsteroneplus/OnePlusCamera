@@ -50,9 +50,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 {
 	// Constants
 	private static final long TIMEOUT_AF_COMPLETE = 5000;
+	private static final long TIMEOUT_CAPTURE_SESSION_CLOSED = 5000;
 	private static final int MSG_PREVIEW_FRAME_RECEIVED = 10000;
 	private static final int MSG_START_AF = 10010;
 	private static final int MSG_AF_TIMEOUT = 10011;
+	private static final int MSG_CAPTURE_SESSION_CLOSE_TIMEOUT = 10020;
 	
 	
 	// Private fields
@@ -840,6 +842,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				this.onAutoFocusTimeout();
 				break;
 				
+			case MSG_CAPTURE_SESSION_CLOSE_TIMEOUT:
+				Log.e(TAG, "handleMessage() - Capture session close timeout");
+				this.onCaptureSessionClosed(m_CaptureSession);
+				break;
+				
 			case MSG_PREVIEW_FRAME_RECEIVED:
 				this.onPreviewFrameReceived();
 				break;
@@ -988,6 +995,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		
 		Log.w(TAG, "onCaptureSessionClosed() - Session : " + session);
+		
+		// stop timer
+		this.getHandler().removeMessages(MSG_CAPTURE_SESSION_CLOSE_TIMEOUT);
 		
 		// release picture reader
 		if(m_PictureSurface != null)
@@ -2407,6 +2417,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		m_CaptureSession.close();
 		if(stopDirectly)
 			this.onCaptureSessionClosed(m_CaptureSession);
+		else
+			this.getHandler().sendEmptyMessageDelayed(MSG_CAPTURE_SESSION_CLOSE_TIMEOUT, TIMEOUT_CAPTURE_SESSION_CLOSED);
 	}
 	
 	
