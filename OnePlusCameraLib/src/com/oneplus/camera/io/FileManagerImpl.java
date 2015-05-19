@@ -98,7 +98,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	@Override
 	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback) {
 
-		m_FileHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
+		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
 				new BitmapArgs(path, callback)));
 	}
 	
