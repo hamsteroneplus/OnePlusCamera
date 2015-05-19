@@ -6,6 +6,7 @@ import java.util.List;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
@@ -46,9 +47,9 @@ final class PreviewGallery extends UIComponent
 	// Private fields
 	private View m_PreviewGallery;
 	private ViewPager m_ViewPager;
-	
-	private FileManager m_FileManager;
 	private PagerAdapter m_Adapter;
+	private FileManager m_FileManager;
+	private	int	m_OrignalZ;
 
 	// Constructor
 	PreviewGallery(CameraActivity cameraActivity) {
@@ -93,6 +94,13 @@ final class PreviewGallery extends UIComponent
 		// setup UI
 		final CameraActivity cameraActivity = this.getCameraActivity();
 		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
+
+		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
+		for (int index = 0; index < parent.getChildCount(); index++) {
+			if (parent.getChildAt(index).getId() == R.id.preview_gallery) {
+				m_OrignalZ = index;
+			}
+		}
 		
 		m_ViewPager = (ViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager);
 		m_ViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -165,7 +173,7 @@ final class PreviewGallery extends UIComponent
 			@Override
 			public void transformPage(View view, float position) {
 			    final float MIN_SCALE = 0.85f;
-			    final float MIN_ALPHA = 0.5f;
+			    final float MIN_ALPHA = 0.6f;
 			      int pageWidth = view.getWidth();
 			        int pageHeight = view.getHeight();
 
@@ -181,8 +189,10 @@ final class PreviewGallery extends UIComponent
 			            if (position < 0) {
 			                view.setTranslationX(horzMargin - vertMargin / 2);
 			            } else {
-			            	if(m_ViewPager.getCurrentItem()>0){
-			            		horzMargin *= 3.5;
+			            	if(m_ViewPager.getCurrentItem()==0){
+			            		horzMargin *= 3.3;
+			            	}else{
+			            		horzMargin *= 4;
 			            	}
 			                view.setTranslationX(-horzMargin + vertMargin / 2);
 			            }
@@ -215,7 +225,7 @@ final class PreviewGallery extends UIComponent
 	void bringToBack(){
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		parent.removeView(m_PreviewGallery);
-		parent.addView(m_PreviewGallery, 0);
+		parent.addView(m_PreviewGallery, m_OrignalZ);
 	}
 
 	private static class ImageFragment extends Fragment {
@@ -246,9 +256,9 @@ final class PreviewGallery extends UIComponent
 		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 			View view = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
 			final ImageView image = (ImageView) (view.findViewById(R.id.preview_image));
-			
-			int reqWidth = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_width);
-			int reqHeight = inflater.getContext().getResources().getDimensionPixelSize(R.dimen.preview_item_height);
+			Resources res = inflater.getContext().getResources();
+			int reqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
+			int reqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
 
 			m_FileManager.getBitmap(m_File.getAbsolutePath(), reqWidth, reqHeight, new PhotoCallback() {
 
@@ -259,6 +269,7 @@ final class PreviewGallery extends UIComponent
 
 							@Override
 							public void run() {
+								image.setScaleType(ImageView.ScaleType.FIT_CENTER);
 								image.setImageBitmap(bitmap);
 								image.setOnClickListener(new View.OnClickListener() {
 
