@@ -4,16 +4,16 @@
     android:layout_height="match_parent"
     android:background="#000000"
     tools:context="com.oneplus.camera.MainActivity" >
+ 
+    <!-- Preview Gallery -->
+    <include layout="@layout/layout_preview_gallery"/>
     
     <!-- Workaround for alpha animation issue -->
     <View 
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#00000000"/>
-    
-    <!-- Preview Gallery -->
-    <include layout="@layout/layout_preview_gallery"/>
-    
+
     <!-- Capture UI -->
     <ViewStub android:id="@+id/capture_ui_container"
         android:layout_width="match_parent"

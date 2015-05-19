@@ -19,6 +19,7 @@ import android.support.v4.view.ViewPager.PageTransformer;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
@@ -180,6 +181,9 @@ final class PreviewGallery extends UIComponent
 			            if (position < 0) {
 			                view.setTranslationX(horzMargin - vertMargin / 2);
 			            } else {
+			            	if(m_ViewPager.getCurrentItem()>0){
+			            		horzMargin *= 3.5;
+			            	}
 			                view.setTranslationX(-horzMargin + vertMargin / 2);
 			            }
 
@@ -198,12 +202,20 @@ final class PreviewGallery extends UIComponent
 			        }
 				
 			}});
+		
+		m_ViewPager.setOnTouchListener(new OnTouchListener(){
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				cameraActivity.onTouchEvent(event);
+				return false;
+			}});
 	}
 	
 	void bringToBack(){
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		parent.removeView(m_PreviewGallery);
-		parent.addView(m_PreviewGallery, 1);
+		parent.addView(m_PreviewGallery, 0);
 	}
 
 	private static class ImageFragment extends Fragment {
