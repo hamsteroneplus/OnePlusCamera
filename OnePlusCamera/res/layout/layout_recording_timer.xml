@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.oneplus.camera.widget.RotateRelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" 
+    android:visibility="gone">
+    
+    <TextView android:id="@+id/recording_timer"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/recording_timer_text_height"
+        android:gravity="center"
+        style="@style/RecordingTimerText"/>
+
+</com.oneplus.camera.widget.RotateRelativeLayout>
