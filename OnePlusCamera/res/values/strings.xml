@@ -9,7 +9,7 @@
 	<string name="capture_mode_panorama">Panorama</string>
 	<string name="capture_mode_photo">Photo</string>
 	<string name="capture_mode_slow_motion">Slow motion</string>
-	<string name="capture_mode_timelapse">Timelapse</string>
+	<string name="capture_mode_timelapse">Time-lapse</string>
 	<string name="capture_mode_video">Video</string>
 	
 	<!-- Resolution -->

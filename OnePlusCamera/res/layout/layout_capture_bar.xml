@@ -7,7 +7,7 @@
     android:layout_alignParentBottom="true" >
     
     <!-- Primary button -->
-    <Button android:id="@+id/primary_capture_button"
+    <ImageButton android:id="@+id/primary_capture_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/capture_button_background"

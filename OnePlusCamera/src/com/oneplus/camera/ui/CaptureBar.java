@@ -6,7 +6,6 @@ import android.graphics.drawable.Drawable;
 import android.os.Message;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
 
 import com.oneplus.base.EventHandler;
@@ -48,9 +47,10 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	private ImageButton m_MoreOptionsButton;
 	private OptionsPanel m_OptionsPanel;
 	private CaptureHandle m_PhotoCaptureHandle;
-	private Button m_PrimaryButton;
+	private ImageButton m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
 	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonIconHandles = new LinkedList<>();
 	private ImageButton m_SelfTimerButton;
 	private ImageButton m_SwitchCameraButton;
 	private CaptureHandle m_VideoCaptureHandle;
@@ -66,7 +66,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	
 	
 	// Class for button drawable.
-	private final class ButtonDrawableHandle extends Handle
+	private abstract class ButtonDrawableHandle extends Handle
 	{
 		public final Drawable drawable;
 		public final int flags;
@@ -76,12 +76,6 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			super("CaptureButtonDrawable");
 			this.drawable = drawable;
 			this.flags = flags;
-		}
-
-		@Override
-		protected void onClose(int flags)
-		{
-			restorePrimaryButtonBackground(this);
 		}
 	}
 	
@@ -184,7 +178,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		// setup UI
 		CameraActivity cameraActivity = this.getCameraActivity();
 		m_CaptureBar = cameraActivity.findViewById(R.id.capture_bar);
-		m_PrimaryButton = (Button)m_CaptureBar.findViewById(R.id.primary_capture_button);
+		m_PrimaryButton = (ImageButton)m_CaptureBar.findViewById(R.id.primary_capture_button);
 		m_PrimaryButton.setOnTouchListener(new View.OnTouchListener()
 		{
 			@Override
@@ -272,7 +266,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			@Override
 			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 			{
-				updateButtonBackgrounds();
+				updateButtonImages();
 				updateFlashButton();
 				updateMoreOptionsButton();
 				updateSelfTimerButton();
@@ -513,7 +507,24 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// update buttons
 		if(isLastHandle)
-			this.updateButtonBackgrounds();
+			this.updateButtonImages();
+	}
+	
+	
+	// Restore icon of primary capture button.
+	private void restorePrimaryButtonIcon(ButtonDrawableHandle handle)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// remove handle
+		boolean isLastHandle = ListUtils.isLastObject(m_PrimaryButtonIconHandles, handle);
+		if(!m_PrimaryButtonIconHandles.remove(handle))
+			return;
+		
+		// update buttons
+		if(isLastHandle)
+			this.updateButtonImages();
 	}
 	
 	
@@ -530,10 +541,47 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		}
 		
 		// create handle
-		ButtonDrawableHandle handle = new ButtonDrawableHandle(drawable, flags);
+		ButtonDrawableHandle handle = new ButtonDrawableHandle(drawable, flags)
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				restorePrimaryButtonBackground(this);
+			}
+		};
+		m_PrimaryButtonBackgroundHandles.add(handle);
 		
 		// update button
-		this.updateButtonBackgrounds();
+		this.updateButtonImages();
+		return handle;
+	}
+	
+	
+	// Change icon of primary capture button.
+	@Override
+	public Handle setPrimaryButtonIcon(Drawable drawable, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "setPrimaryButtonIcon() - Component is not running");
+			return null;
+		}
+		
+		// create handle
+		ButtonDrawableHandle handle = new ButtonDrawableHandle(drawable, flags)
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				restorePrimaryButtonIcon(this);
+			}
+		};
+		m_PrimaryButtonIconHandles.add(handle);
+		
+		// update button
+		this.updateButtonImages();
 		return handle;
 	}
 	
@@ -569,12 +617,31 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	}
 	
 	
-	// Update capture button background.
-	private void updateButtonBackgrounds()
+	// Update capture button functions.
+	private void updateButtonFunctions(boolean updateBackground)
+	{
+		//CameraActivity cameraActivity = this.getCameraActivity();
+		switch(this.getMediaType())
+		{
+			case PHOTO:
+				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+				break;
+			case VIDEO:
+				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_VIDEO;
+				break;
+		}
+		if(updateBackground)
+			this.updateButtonImages();
+	}
+	
+	
+	// Update capture button images.
+	private void updateButtonImages()
 	{
 		// update primary button
 		if(m_PrimaryButton != null)
 		{
+			// update background
 			if(m_PrimaryButtonBackgroundHandles.isEmpty())
 			{
 				switch(m_PrimaryButtonFunction)
@@ -604,25 +671,13 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			}
 			else
 				m_PrimaryButton.setBackground(m_PrimaryButtonBackgroundHandles.getLast().drawable);
+			
+			// update icon
+			if(m_PrimaryButtonIconHandles.isEmpty())
+				m_PrimaryButton.setImageDrawable(null);
+			else
+				m_PrimaryButton.setImageDrawable(m_PrimaryButtonIconHandles.getLast().drawable);
 		}
-	}
-	
-	
-	// Update capture button functions.
-	private void updateButtonFunctions(boolean updateBackground)
-	{
-		//CameraActivity cameraActivity = this.getCameraActivity();
-		switch(this.getMediaType())
-		{
-			case PHOTO:
-				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
-				break;
-			case VIDEO:
-				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_VIDEO;
-				break;
-		}
-		if(updateBackground)
-			this.updateButtonBackgrounds();
 	}
 	
 	

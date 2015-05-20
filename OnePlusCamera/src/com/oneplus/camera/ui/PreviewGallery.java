@@ -61,6 +61,8 @@ final class PreviewGallery extends UIComponent
 	// Handle message.
 	@Override
 	protected void handleMessage(Message msg) {
+		if(m_ViewPager == null)
+			return;
 		switch (msg.what) {
 		case MESSAGE_UPDATE_RESET:{
 			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
