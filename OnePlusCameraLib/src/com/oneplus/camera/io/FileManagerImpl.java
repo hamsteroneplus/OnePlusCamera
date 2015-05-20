@@ -1,6 +1,7 @@
 package com.oneplus.camera.io;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	private final List<File> m_FileList = new ArrayList<>();
 	private FileObserver m_FileObserver;
 	private final File m_DefaultFolder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "100MEDIA");
+	static final String[] IMAGE_FILTER= {".jpg",};
 
 
 	// Constructor
@@ -268,7 +270,20 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						{
 							m_FileList.clear();
 							if(m_DefaultFolder.exists()){
-							File[] files = m_DefaultFolder.listFiles();
+							File[] files = m_DefaultFolder.listFiles(new FilenameFilter() {
+							    public boolean accept(File dir, String name) {
+							    	boolean ret = false;
+							    	for(String filter : IMAGE_FILTER){
+							    		if(name.toLowerCase().endsWith(filter)){
+							    			Log.d(TAG, "charles " + "name: " + name + "   filter: " + filter);
+								    		ret = true;
+								    		return ret;
+							    		}
+							    	}
+							        return ret;
+							    }
+							});
+							Log.d(TAG, "charles " + files.length);
 								if(files != null && files.length > 0){
 									Arrays.sort(files, new Comparator<File>(){
 									    public int compare(File f1, File f2)

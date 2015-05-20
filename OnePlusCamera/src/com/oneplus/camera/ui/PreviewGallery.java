@@ -257,7 +257,9 @@ final class PreviewGallery extends UIComponent
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
-				cameraActivity.onTouchEvent(event);
+				if(m_ViewPager.getCurrentItem()==0){
+					cameraActivity.onTouchEvent(event);
+				}
 				return false;
 			}
 		});
@@ -335,7 +337,9 @@ final class PreviewGallery extends UIComponent
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
-				cameraActivity.onTouchEvent(event);
+				if(m_VerticalViewPager.getCurrentItem()==0){
+					cameraActivity.onTouchEvent(event);
+				}
 				return false;
 			}
 		});
