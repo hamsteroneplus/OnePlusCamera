@@ -8,7 +8,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Video;
-import android.provider.MediaStore.Images.Media;
+import android.provider.MediaStore.Video.Media;
 
 public class VideoSaveTask extends MediaSaveTask {
 
