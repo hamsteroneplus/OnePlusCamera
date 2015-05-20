@@ -60,6 +60,7 @@ public abstract class UIComponent extends CameraComponent
 			onCaptureUIEnabledStateChanged(e.getNewValue());
 		}
 	};
+	private PropertyChangedCallback<Boolean> m_IsCameraThreadStartedCallback;
 	private final PropertyChangedCallback<Rotation> m_RotationChangedCallback = new PropertyChangedCallback<Rotation>()
 	{
 		@Override
@@ -142,7 +143,22 @@ public abstract class UIComponent extends CameraComponent
 		CameraActivity cameraActivity = this.getCameraActivity();
 		cameraActivity.removeCallback(CameraActivity.PROP_IS_CAPTURE_UI_ENABLED, m_CaptureUIEnabledChangedCallback);
 		cameraActivity.removeCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
+		if(m_IsCameraThreadStartedCallback != null)
+		{
+			cameraActivity.removeCallback(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED, m_IsCameraThreadStartedCallback);
+			m_IsCameraThreadStartedCallback = null;
+		}
 		super.onDeinitialize();
+	}
+	
+	
+	/**
+	 * Check whether camera thread is started or not.
+	 * @return Camera thread state.
+	 */
+	protected final boolean isCameraThreadStarted()
+	{
+		return this.getCameraActivity().get(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED);
 	}
 	
 	
@@ -164,8 +180,29 @@ public abstract class UIComponent extends CameraComponent
 		CameraActivity cameraActivity = this.getCameraActivity();
 		cameraActivity.addCallback(CameraActivity.PROP_IS_CAPTURE_UI_ENABLED, m_CaptureUIEnabledChangedCallback);
 		cameraActivity.addCallback(CameraActivity.PROP_ROTATION, m_RotationChangedCallback);
+		if(!cameraActivity.get(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED))
+		{
+			m_IsCameraThreadStartedCallback = new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					m_IsCameraThreadStartedCallback = null;
+					source.removeCallback(key, this);
+					onCameraThreadStarted();
+				}
+			};
+			cameraActivity.addCallback(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED, m_IsCameraThreadStartedCallback);
+		}
 		m_Rotation = this.getRotation();
 	}
+	
+	
+	/**
+	 * Called when camera thread started.
+	 */
+	protected void onCameraThreadStarted()
+	{}
 	
 	
 	/**

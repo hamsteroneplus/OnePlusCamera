@@ -33,4 +33,13 @@ public interface CaptureButtons extends Component
 	 * @return Handle to button background.
 	 */
 	Handle setPrimaryButtonBackground(Drawable drawable, int flags);
+	
+	
+	/**
+	 * Change icon of primary capture button.
+	 * @param drawable New icon drawable.
+	 * @param flags Flags, reserved.
+	 * @return Handle to button icon.
+	 */
+	Handle setPrimaryButtonIcon(Drawable drawable, int flags);
 }

@@ -298,7 +298,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		@Override
 		protected void onClose(int flags)
 		{
-			//
+			removeVideoCaptureHandler(this);
 		}
 	}
 	
@@ -1524,6 +1524,28 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	// Remove video capture handler.
+	private void removeVideoCaptureHandler(VideoCaptureHandlerHandle handle)
+	{
+		// check state
+		this.verifyAccess();
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+			case REVIEWING:
+				break;
+			default:
+				throw new RuntimeException("Cannot remove capture handler when video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+		}
+		
+		// remove handler
+		if(!m_VideoCaptureHandlerHandles.remove(handle))
+			return;
+		Log.w(TAG, "removeVideoCaptureHandler() - Handle : " + handle);
+	}
+	
+	
 	/**
 	 * Change current media type.
 	 * @param mediaType New media type.
@@ -1674,10 +1696,37 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
-	//
+	/**
+	 * Set video capture handler.
+	 * @param handler Video capture handler.
+	 * @param flags Flags, reserved.
+	 * @return Handle to video capture handler.
+	 */
 	public final Handle setVideoCaptureHandler(VideoCaptureHandler handler, int flags)
 	{
-		return null;
+		// check state
+		this.verifyAccess();
+		if(handler == null)
+		{
+			Log.e(TAG, "setVideoCaptureHandler() - No capture handler");
+			return null;
+		}
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+			case REVIEWING:
+				break;
+			default:
+				Log.e(TAG, "setVideoCaptureHandler() - Cannot remove capture handler when video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				return null;
+		}
+		
+		// add handler
+		VideoCaptureHandlerHandle handle = new VideoCaptureHandlerHandle(handler);
+		m_VideoCaptureHandlerHandles.add(handle);
+		Log.w(TAG, "setVideoCaptureHandler() - Capture handler : " + handler + ", handle : " + handle);
+		return handle;
 	}
 	
 	

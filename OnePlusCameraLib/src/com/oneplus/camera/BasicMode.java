@@ -2,7 +2,10 @@ package com.oneplus.camera;
 
 import com.oneplus.base.HandlerBaseObject;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
 import com.oneplus.camera.media.MediaType;
 
 /**
@@ -10,8 +13,9 @@ import com.oneplus.camera.media.MediaType;
  */
 public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject implements Mode<T>
 {
-	// Private fields
+	// Private fields.
 	private final CameraActivity m_CameraActivity;
+	private PropertyChangedCallback<Boolean> m_IsCameraThreadStartedCallback;
 	private State m_State = State.EXITED;
 	
 	
@@ -22,11 +26,32 @@ public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject imp
 	 */
 	protected BasicMode(CameraActivity cameraActivity, String id)
 	{
+		// call super
 		super(true);
+		
+		// check parameter
 		if(cameraActivity == null)
 			throw new IllegalArgumentException("No camera activity");
+		
+		// save state
 		this.setReadOnly(PROP_ID, id);
 		m_CameraActivity = cameraActivity;
+		
+		// add call-backs
+		if(!m_CameraActivity.get(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED))
+		{
+			m_IsCameraThreadStartedCallback = new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					m_IsCameraThreadStartedCallback = null;
+					source.removeCallback(key, this);
+					onCameraThreadStarted();
+				}
+			};
+			cameraActivity.addCallback(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED, m_IsCameraThreadStartedCallback);
+		}
 	}
 	
 	
@@ -212,6 +237,13 @@ public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject imp
 	
 	
 	/**
+	 * Called when camera thread started.
+	 */
+	protected void onCameraThreadStarted()
+	{}
+	
+	
+	/**
 	 * Called when entering to this mode.
 	 * @param prevMode Previous mode.
 	 * @param flags Flags:
@@ -240,6 +272,13 @@ public abstract class BasicMode<T extends Mode<?>> extends HandlerBaseObject imp
 	{
 		// change state
 		this.changeState(State.RELEASED);
+		
+		// remove call-backs
+		if(m_IsCameraThreadStartedCallback != null)
+		{
+			this.getCameraActivity().removeCallback(CameraActivity.PROP_IS_CAMERA_THREAD_STARTED, m_IsCameraThreadStartedCallback);
+			m_IsCameraThreadStartedCallback = null;
+		}
 		
 		// call super
 		super.onRelease();

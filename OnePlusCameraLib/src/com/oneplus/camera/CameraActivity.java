@@ -231,6 +231,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	private CaptureHandleImpl m_PendingPhotoCaptureHandle;
 	private CaptureHandleImpl m_PhotoCaptureHandle;
 	private Handle m_PhotoRotationLockHandle;
+	private final LinkedList<RecordingTimeRatioHandle> m_RecordingTimeRatioHandles = new LinkedList<>();
 	private ResolutionManager m_ResolutionManager;
 	private Rotation m_Rotation = Rotation.PORTRAIT;
 	private final LinkedList<RotationLockHandle> m_RotationLockHandles = new LinkedList<>();
@@ -296,6 +297,25 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 					stopVideoCapture(this);
 					break;
 			}
+		}
+	}
+	
+	
+	// Class for video recording time ratio.
+	private final class RecordingTimeRatioHandle extends Handle
+	{
+		public final float ratio;
+		
+		public RecordingTimeRatioHandle(float ratio)
+		{
+			super("VideoRecordingTimeRatio");
+			this.ratio = ratio;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			restoreRecordingTimeRatio(this);
 		}
 	}
 	
@@ -2346,6 +2366,29 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	}
 	
 	
+	// Restore recording time ratio.
+	private void restoreRecordingTimeRatio(RecordingTimeRatioHandle handle)
+	{
+		// check state
+		this.verifyAccess();
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+			case STOPPING:
+			case REVIEWING:
+				break;
+			default:
+				throw new RuntimeException("Cannot restore recording time ratio when capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE) + ".");
+		}
+		
+		// restore ratio
+		if(!m_RecordingTimeRatioHandles.remove(handle))
+			return;
+		Log.v(TAG, "restoreRecordingTimeRatio() - Ratio : " + handle.ratio + ", handle : " + handle);
+	}
+	
+	
 	// Restore to previous settings.
 	private void restoreSettings(SettingsHandle handle)
 	{
@@ -2519,6 +2562,42 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// complete
 		return true;
+	}
+	
+	
+	/**
+	 * Change ratio of video recording time.
+	 * @param ratio Ratio.
+	 * @return Handle to recording time ratio.
+	 */
+	public Handle setRecordingTimeRatio(float ratio)
+	{
+		// check state
+		this.verifyAccess();
+		switch(this.get(PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+			case STOPPING:
+			case REVIEWING:
+				break;
+			default:
+				Log.e(TAG, "setRecordingTimeRatio() - Cannot restore recording time ratio when capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
+				return null;
+		}
+		
+		// check parameter
+		if(ratio <= 0)
+		{
+			Log.e(TAG, "setRecordingTimeRatio() - Invalid ratio : " + ratio);
+			return null;
+		}
+		
+		// create handle
+		RecordingTimeRatioHandle handle = new RecordingTimeRatioHandle(ratio);
+		m_RecordingTimeRatioHandles.add(handle);
+		Log.v(TAG, "restoreRecordingTimeRatio() - Ratio : " + ratio + ", handle : " + handle);
+		return handle;
 	}
 	
 	
@@ -3178,16 +3257,24 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	// Update elapsed recording time.
 	private void updateElapsedRecordingTime(long lastCheckTime, long seconds)
 	{
+		// update elapsed time
 		long checkTime = SystemClock.elapsedRealtime();
 		++seconds;
 		this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, seconds);
+		
+		// check time later
+		long interval;
+		if(m_RecordingTimeRatioHandles.isEmpty())
+			interval = 1000;
+		else
+			interval = (long)(1000 / m_RecordingTimeRatioHandles.getLast().ratio);
 		if(lastCheckTime > 0)
 		{
-			long delay = (2000 - (checkTime - lastCheckTime));
+			long delay = ((interval * 2) - (checkTime - lastCheckTime));
 			HandlerUtils.sendMessage(this, MSG_UPDATE_ELAPSED_RECORDING_TIME, 0, 0, new Object[]{ checkTime, seconds }, delay);
 		}
 		else
-			HandlerUtils.sendMessage(this, MSG_UPDATE_ELAPSED_RECORDING_TIME, 0, 0, new Object[]{ checkTime, seconds }, 1000);
+			HandlerUtils.sendMessage(this, MSG_UPDATE_ELAPSED_RECORDING_TIME, 0, 0, new Object[]{ checkTime, seconds }, interval);
 	}
 	
 	
