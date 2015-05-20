@@ -8,12 +8,12 @@
         android:id="@+id/preview_gallery_pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone" />
+        android:visibility="invisible" />
 
     <com.oneplus.camera.ui.VerticalViewPager
         android:id="@+id/preview_gallery_pager_landscape"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone" />
+        android:visibility="invisible" />
 
 </com.oneplus.camera.widget.RotateRelativeLayout>
