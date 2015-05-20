@@ -95,8 +95,6 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	@Override
 	public <TValue> TValue get(PropertyKey<TValue> key)
 	{
-		if(key == PROP_PREVIEW_CONTAINER_SIZE)
-			return (TValue)m_ScreenSize;
 		if(key == PROP_PREVIEW_RENDERING_MODE)
 			return (TValue)m_PreviewRenderingMode;
 		return super.get(key);
@@ -345,6 +343,14 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 		
 		// save size
 		m_ScreenSize = screenSize.toSize();
+		
+		// update container size
+		Size containerSize;
+		if(this.getCameraActivityRotation().isLandscape())
+			containerSize = m_ScreenSize;
+		else
+			containerSize = new Size(m_ScreenSize.getHeight(), m_ScreenSize.getWidth());
+		this.setReadOnly(PROP_PREVIEW_CONTAINER_SIZE, containerSize);
 		
 		// update preview bounds
 		this.updatePreviewBounds();

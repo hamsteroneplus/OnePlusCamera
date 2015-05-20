@@ -317,6 +317,8 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			public void onPropertyChanged(PropertySource source, PropertyKey<VideoCaptureState> key, PropertyChangeEventArgs<VideoCaptureState> e)
 			{
 				updateButtonFunctions(true);
+				updateMoreOptionsButton(false);
+				updateSwitchCameraButton();
 			}
 		});
 		if(m_FlashController != null)
@@ -677,9 +679,23 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		if(m_MoreOptionsButton == null)
 			return;
 		
-		// update visibility
+		// check capture state
+		boolean isCapturing = false;
 		CameraActivity cameraActivity = this.getCameraActivity();
+		switch(cameraActivity.get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				isCapturing = false;
+				break;
+			default:
+				isCapturing = true;
+				break;
+		}
+		
+		// update visibility
 		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED)
+				|| isCapturing
 				|| m_OptionsPanel == null
 				|| !m_OptionsPanel.get(OptionsPanel.PROP_HAS_ITEMS))
 		{
@@ -742,16 +758,35 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	}
 	private void updateSwitchCameraButton(Camera camera)
 	{
+		// check state
 		if(m_SwitchCameraButton == null)
 			return;
+		
+		// check capture state
+		boolean isCapturing = false;
 		CameraActivity cameraActivity = this.getCameraActivity();
+		switch(cameraActivity.get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+		{
+			case PREPARING:
+			case READY:
+				isCapturing = false;
+				break;
+			default:
+				isCapturing = true;
+				break;
+		}
+		
+		// update visibility
 		if(cameraActivity.get(CameraActivity.PROP_IS_SELF_TIMER_STARTED)
-				|| cameraActivity.get(CameraActivity.PROP_IS_CAMERA_LOCKED))
+				|| cameraActivity.get(CameraActivity.PROP_IS_CAMERA_LOCKED)
+				|| isCapturing)
 		{
 			this.setViewVisibility(m_SwitchCameraButton, false);
 		}
 		else
 			this.setViewVisibility(m_SwitchCameraButton, true);
+		
+		// update selection state
 		if(camera == null || camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK)
 			m_SwitchCameraButton.setImageResource(R.drawable.switch_camera);
 		else
