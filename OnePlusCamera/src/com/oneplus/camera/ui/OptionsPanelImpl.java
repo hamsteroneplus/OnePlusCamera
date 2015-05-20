@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import android.content.res.Resources;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -25,6 +24,9 @@ import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.VideoCaptureState;
+import com.oneplus.camera.media.MediaType;
+import com.oneplus.camera.media.Resolution;
+import com.oneplus.camera.media.ResolutionManager;
 import com.oneplus.camera.scene.Scene;
 import com.oneplus.camera.scene.SceneEventArgs;
 import com.oneplus.camera.scene.SceneManager;
@@ -32,11 +34,13 @@ import com.oneplus.camera.scene.SceneManager;
 final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 {
 	// Private fields.
-	private final List<Item> m_Items = new ArrayList<>();
-	private ViewGroup m_ItemsContainer;
 	private View m_OptionsPanel;
+	private ResolutionManager m_ResolutionManager;
 	private final List<Item> m_SceneItems = new ArrayList<>();
+	private ViewGroup m_SceneItemsContainer;
 	private SceneManager m_SceneManager;
+	private final List<Item> m_VideoResolutionItems = new ArrayList<>();
+	private ViewGroup m_VideoResolutionItemsContainer;
 	
 	
 	// Class for panel item.
@@ -47,9 +51,14 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 		public Object object;
 		public TextView titleTextView;
 		
-		public Item(LayoutInflater inflater, Object obj)
+		public Item(CameraActivity cameraActivity, Object obj)
 		{
-			this.itemView = inflater.inflate(R.layout.layout_options_panel_item, null);
+			Resources res = cameraActivity.getResources();
+			LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(res.getDimensionPixelSize(R.dimen.options_panel_item_width), res.getDimensionPixelSize(R.dimen.options_panel_item_height));
+			layoutParams.leftMargin = res.getDimensionPixelSize(R.dimen.options_panel_item_margin_left);
+			layoutParams.rightMargin = res.getDimensionPixelSize(R.dimen.options_panel_item_margin_right);
+			this.itemView = cameraActivity.getLayoutInflater().inflate(R.layout.layout_options_panel_item, null);
+			this.itemView.setLayoutParams(layoutParams);
 			this.itemView.setOnClickListener(new View.OnClickListener()
 			{
 				@Override
@@ -72,6 +81,18 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 	}
 	
 	
+	// Check item count.
+	private void checkItemCount()
+	{
+		boolean hasItems = false;
+		if(!m_SceneItems.isEmpty())
+			hasItems = true;
+		else if(this.getMediaType() == MediaType.VIDEO && !m_VideoResolutionItems.isEmpty())
+			hasItems = true;
+		this.setReadOnly(PROP_HAS_ITEMS, hasItems);
+	}
+	
+	
 	// Close options panel.
 	@Override
 	public void closeOptionsPanel(int flags)
@@ -79,6 +100,43 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 		this.verifyAccess();
 		this.setViewVisibility(m_OptionsPanel, false);
 		this.setReadOnly(PROP_IS_VISIBLE, false);
+	}
+	
+	
+	// Create item for resolution.
+	private Item createResolutionItem(Resolution resolution)
+	{
+		// create item
+		CameraActivity cameraActivity = this.getCameraActivity();
+		Item item = new Item(cameraActivity, resolution);
+		
+		// select icon and title
+		int iconResId = 0;
+		int titleResId = 0;
+		if(resolution.is4kVideo())
+		{
+			iconResId = R.drawable.options_panel_icon_4k_video;
+			titleResId = R.string.resolution_video_2160p;
+		}
+		else if(resolution.is1080pVideo())
+		{
+			iconResId = R.drawable.options_panel_icon_1080p_video;
+			titleResId = R.string.resolution_video_1080p;
+		}
+		else if(resolution.is720pVideo())
+		{
+			iconResId = R.drawable.options_panel_icon_720p_video;
+			titleResId = R.string.resolution_video_720p;
+		}
+		if(iconResId != 0)
+			item.iconImageView.setImageResource(iconResId);
+		if(titleResId != 0)
+			item.titleTextView.setText(titleResId);
+		else
+			item.titleTextView.setText(resolution.getMegaPixelsDescription());
+		
+		// complete
+		return item;
 	}
 	
 	
@@ -91,12 +149,14 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 		super.onInitialize();
 		
 		// find components
+		m_ResolutionManager = this.findComponent(ResolutionManager.class);
 		m_SceneManager = this.findComponent(SceneManager.class);
 		
 		// setup layouts
 		CameraActivity cameraActivity = this.getCameraActivity();
 		m_OptionsPanel = ((MainActivity)cameraActivity).getCaptureUIContainer().findViewById(R.id.options_panel);
-		m_ItemsContainer = (ViewGroup)m_OptionsPanel.findViewById(R.id.options_panel_items_container);
+		m_SceneItemsContainer = (ViewGroup)m_OptionsPanel.findViewById(R.id.options_panel_scene_items_container);
+		m_VideoResolutionItemsContainer = (ViewGroup)m_OptionsPanel.findViewById(R.id.options_panel_video_resolution_items_container);
 		
 		// add property changed call-backs.
 		PropertyChangedCallback closePanelCallback = new PropertyChangedCallback()
@@ -108,6 +168,14 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 			}
 		};
 		cameraActivity.addCallback(CameraActivity.PROP_CAMERA, closePanelCallback);
+		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<MediaType> key, PropertyChangeEventArgs<MediaType> e)
+			{
+				updateItemsContainerVisibility();
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_PHOTO_CAPTURE_STATE, new PropertyChangedCallback<PhotoCaptureState>()
 		{
 			@Override
@@ -141,6 +209,27 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 			}
 		});
 		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, closePanelCallback);
+		if(m_ResolutionManager != null)
+		{
+			m_ResolutionManager.addCallback(ResolutionManager.PROP_VIDEO_RESOLUTION, new PropertyChangedCallback<Resolution>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Resolution> key, PropertyChangeEventArgs<Resolution> e)
+				{
+					onVideoResolutionChanged(e.getNewValue());
+				}
+			});
+			m_ResolutionManager.addCallback(ResolutionManager.PROP_VIDEO_RESOLUTION_LIST, new PropertyChangedCallback<List<Resolution>>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<List<Resolution>> key, PropertyChangeEventArgs<List<Resolution>> e)
+				{
+					onVideoResolutionListChanged(e.getNewValue());
+				}
+			});
+		}
+		else
+			Log.e(TAG, "onInitialize() - No ResolutionManager");
 		if(m_SceneManager != null)
 		{
 			m_SceneManager.addCallback(SceneManager.PROP_SCENE, new PropertyChangedCallback<Scene>()
@@ -183,6 +272,13 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 			for(int i = 0, count = sceneList.size() ; i < count ; ++i)
 				this.onSceneAdded(sceneList.get(i));
 		}
+		
+		// Setup resolution items
+		if(m_ResolutionManager != null)
+			this.onVideoResolutionListChanged(m_ResolutionManager.get(ResolutionManager.PROP_VIDEO_RESOLUTION_LIST));
+		
+		// Setup containers state
+		this.updateItemsContainerVisibility();
 	}
 	
 	
@@ -210,6 +306,14 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 				Log.e(TAG, "onItemClicked() - No SceneManager");
 			return;
 		}
+		
+		// change resolution
+		if(obj instanceof Resolution)
+		{
+			if(m_ResolutionManager != null)
+				m_ResolutionManager.set(ResolutionManager.PROP_VIDEO_RESOLUTION, (Resolution)obj);
+			return;
+		}
 	}
 	
 	
@@ -222,12 +326,7 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 			return;
 		
 		// create item
-		CameraActivity cameraActivity = this.getCameraActivity();
-		Resources res = cameraActivity.getResources();
-		Item item = new Item(cameraActivity.getLayoutInflater(), scene);
-		LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(res.getDimensionPixelSize(R.dimen.options_panel_item_width), res.getDimensionPixelSize(R.dimen.options_panel_item_height));
-		layoutParams.leftMargin = res.getDimensionPixelSize(R.dimen.options_panel_item_margin_left);
-		layoutParams.rightMargin = res.getDimensionPixelSize(R.dimen.options_panel_item_margin_right);
+		Item item = new Item(this.getCameraActivity(), scene);
 		
 		// setup icon
 		item.iconImageView.setImageDrawable(scene.getImage(Scene.ImageUsage.OPTIONS_PANEL_ICON));
@@ -236,17 +335,15 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 		item.titleTextView.setText(scene.getDisplayName());
 		
 		// setup initial state
-		this.updateSceneItem(item, m_SceneManager.get(SceneManager.PROP_SCENE) == scene);
+		this.updateItem(item, m_SceneManager.get(SceneManager.PROP_SCENE) == scene);
 		
 		// add item
-		m_Items.add(index, item);
 		m_SceneItems.add(index, item);
-		m_ItemsContainer.addView(item.itemView, index, layoutParams);
+		m_SceneItemsContainer.addView(item.itemView, index);
 		this.addAutoRotateView(item.itemView);
 		
 		// update state
-		if(m_Items.size() == 1)
-			this.setReadOnly(PROP_HAS_ITEMS, true);
+		this.checkItemCount();
 	}
 	
 	
@@ -256,7 +353,7 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 		for(int i = m_SceneItems.size() - 1 ; i >= 0 ; --i)
 		{
 			Item item = m_SceneItems.get(i);
-			this.updateSceneItem(item, item.object == scene);
+			this.updateItem(item, item.object == scene);
 		}
 	}
 	
@@ -271,16 +368,54 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 			{
 				// remove item
 				m_SceneItems.remove(i);
-				m_Items.remove(i);
-				m_ItemsContainer.removeView(item.itemView);
+				m_SceneItemsContainer.removeView(item.itemView);
 				this.removedAutoRotateView(item.itemView);
 				
 				// update state
-				if(m_Items.isEmpty())
-					this.setReadOnly(PROP_HAS_ITEMS, false);
+				this.checkItemCount();
 				break;
 			}
 		}
+	}
+	
+	
+	// Called when video resolution changed.
+	private void onVideoResolutionChanged(Resolution resolution)
+	{
+		for(int i = m_VideoResolutionItems.size() - 1 ; i >= 0 ; --i)
+		{
+			Item item = m_VideoResolutionItems.get(i);
+			this.updateItem(item, item.object.equals(resolution));
+		}
+	}
+	
+	
+	// Called when video resolution list changed.
+	private void onVideoResolutionListChanged(List<Resolution> resolutions)
+	{
+		// remove old items
+		for(int i = m_VideoResolutionItems.size() - 1 ; i >= 0 ; --i)
+		{
+			Item item = m_VideoResolutionItems.get(i);
+			m_VideoResolutionItemsContainer.removeView(item.itemView);
+			this.removedAutoRotateView(item.itemView);
+		}
+		m_VideoResolutionItems.clear();
+		
+		// create new items
+		Resolution resolution = m_ResolutionManager.get(ResolutionManager.PROP_VIDEO_RESOLUTION);
+		for(int i = 0, count = resolutions.size() ; i < count ; ++i)
+		{
+			Item item = this.createResolutionItem(resolutions.get(i));
+			int index = m_VideoResolutionItems.size();
+			m_VideoResolutionItems.add(item);
+			m_VideoResolutionItemsContainer.addView(item.itemView, index);
+			this.updateItem(item, item.object.equals(resolution));
+			this.addAutoRotateView(item.itemView);
+		}
+		
+		// update item count
+		this.checkItemCount();
 	}
 	
 	
@@ -310,8 +445,19 @@ final class OptionsPanelImpl extends UIComponent implements OptionsPanel
 	}
 	
 	
-	// Update scene item state.
-	private void updateSceneItem(Item item, boolean isSelected)
+	// Update items container state.
+	private void updateItemsContainerVisibility()
+	{
+		if(m_VideoResolutionItemsContainer != null)
+		{
+			m_VideoResolutionItemsContainer.setVisibility(this.getMediaType() == MediaType.VIDEO ? View.VISIBLE : View.GONE);
+			this.checkItemCount();
+		}
+	}
+	
+	
+	// Update item state.
+	private void updateItem(Item item, boolean isSelected)
 	{
 		if(isSelected)
 		{

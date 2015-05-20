@@ -61,6 +61,12 @@ public abstract class DefaultResolutionSelector implements ResolutionSelector
 		// check target size
 		if(previewContainerSize == null)
 			previewContainerSize = new Size(Integer.MAX_VALUE, Integer.MAX_VALUE);
+		if(previewContainerSize.getWidth() > resolution.getWidth() || previewContainerSize.getHeight() > resolution.getHeight())
+		{
+			previewContainerSize = new Size(
+					Math.min(previewContainerSize.getWidth(), resolution.getWidth()), 
+					Math.min(previewContainerSize.getHeight(), resolution.getHeight()));
+		}
 		
 		// Select preview size
 		Size largerSize = null;

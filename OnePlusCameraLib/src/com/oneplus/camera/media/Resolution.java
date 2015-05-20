@@ -243,7 +243,7 @@ public final class Resolution implements Comparable<Resolution>
 	public boolean is720pVideo()
 	{
 		return (m_TargetType == MediaType.VIDEO
-				&& m_Width == 1270
+				&& m_Width == 1280
 				&& m_Height == 720);
 	}
 	

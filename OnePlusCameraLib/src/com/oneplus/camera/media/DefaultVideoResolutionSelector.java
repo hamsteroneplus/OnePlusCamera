@@ -155,8 +155,8 @@ public class DefaultVideoResolutionSelector extends DefaultResolutionSelector im
 				}
 				
 				// check other videos
-				if((width == 1280 && height == 720)
-					|| (width == 176 && height == 144))
+				if((width == 1280 && height == 720))
+					//|| (width == 176 && height == 144))
 				{
 					resolutions.add(new Resolution(MediaType.VIDEO, width, height));
 				}

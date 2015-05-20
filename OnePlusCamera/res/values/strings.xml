@@ -1,20 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Application -->
-    <string name="app_name">OnePlusCamera</string>
-    
-    <!-- Capture mode -->
-    <string name="capture_mode_manual">Manual</string>
-    <string name="capture_mode_panorama">Panorama</string>
-    <string name="capture_mode_photo">Photo</string>
-    <string name="capture_mode_slow_motion">Slow motion</string>
-    <string name="capture_mode_timelapse">Timelapse</string>
-    <string name="capture_mode_video">Video</string>
-    
-    <!-- Scene -->
-    <string name="scene_clear_shot">Clear shot</string>
-    <string name="scene_hdr">HDR</string>
-    <string name="scene_face_beauty_photo">Beauty</string>
+	<!-- Application -->
+	<string name="app_name">OnePlusCamera</string>
+	
+	<!-- Capture mode -->
+	<string name="capture_mode_manual">Manual</string>
+	<string name="capture_mode_panorama">Panorama</string>
+	<string name="capture_mode_photo">Photo</string>
+	<string name="capture_mode_slow_motion">Slow motion</string>
+	<string name="capture_mode_timelapse">Timelapse</string>
+	<string name="capture_mode_video">Video</string>
+	
+	<!-- Resolution -->
+	<string name="resolution_video_1080p">Full HD</string>
+	<string name="resolution_video_2160p">UHD</string>
+	<string name="resolution_video_720p">HD</string>
+	
+	<!-- Scene -->
+	<string name="scene_clear_shot">Clear shot</string>
+	<string name="scene_hdr">HDR</string>
+	<string name="scene_face_beauty_photo">Beauty</string>
 
 </resources>
