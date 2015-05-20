@@ -78,19 +78,26 @@ final class PreviewGallery extends UIComponent
 			break;
 		}
 		case MESSAGE_UPDATE_RESET:{
-			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
+			m_ViewPager.setAdapter(null);
+			m_VerticalViewPager.setAdapter(null);
 			m_Adapter.initialize(m_FileManager, PreviewGallery.this);
+			m_VerticalAdapter.initialize(m_FileManager, PreviewGallery.this);
 			m_ViewPager.setAdapter(m_Adapter);
+			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
 			bringToBack();
 			break;
 		}
 		case MESSAGE_UPDATE_ADDED:{
 			int current = m_ViewPager.getCurrentItem();
-			m_Adapter = new PagerAdapter(this.getCameraActivity().getFragmentManager());
+			m_ViewPager.setAdapter(null);
+			m_VerticalViewPager.setAdapter(null);
 			m_Adapter.initialize(m_FileManager, PreviewGallery.this);
+			m_VerticalAdapter.initialize(m_FileManager, PreviewGallery.this);
 			m_ViewPager.setAdapter(m_Adapter);
+			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
 			if(current != 0){
 				m_ViewPager.setCurrentItem(current+1);
+				m_VerticalViewPager.setCurrentItem(current+1);
 			}
 			break;
 		}
