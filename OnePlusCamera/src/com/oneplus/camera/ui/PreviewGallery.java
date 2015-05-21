@@ -39,6 +39,7 @@ import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.io.FileManager;
 import com.oneplus.camera.io.FileManager.PhotoCallback;
+import com.oneplus.camera.widget.RotateRelativeLayout;
 
 final class PreviewGallery extends UIComponent
 {
@@ -48,7 +49,7 @@ final class PreviewGallery extends UIComponent
 	static private final int MESSAGE_UPDATE_DELETED = 1002;
 	
 	// Private fields
-	private View m_PreviewGallery;
+	private RotateRelativeLayout m_PreviewGallery;
 	private ViewPager m_ViewPager;
 	private VerticalViewPager m_VerticalViewPager;
 	private PagerAdapter m_Adapter, m_VerticalAdapter;
@@ -115,7 +116,7 @@ final class PreviewGallery extends UIComponent
 
 		// setup UI
 		final CameraActivity cameraActivity = getCameraActivity();
-		m_PreviewGallery = cameraActivity.findViewById(R.id.preview_gallery);
+		m_PreviewGallery = (RotateRelativeLayout)cameraActivity.findViewById(R.id.preview_gallery);
 
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		for (int index = 0; index < parent.getChildCount(); index++) {
@@ -134,12 +135,12 @@ final class PreviewGallery extends UIComponent
 	@Override
 	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation) {
 		super.onRotationChanged(prevRotation, newRotation);
-		bringToBack();
 		
-		if(Rotation.PORTRAIT == getRotation() || Rotation.INVERSE_PORTRAIT == getRotation()){
+		if(Rotation.PORTRAIT == newRotation || Rotation.INVERSE_PORTRAIT == newRotation){
 			m_VerticalViewPager.setVisibility(View.INVISIBLE);
 			m_ViewPager.setVisibility(View.VISIBLE);
 			m_ViewPager.setCurrentItem(m_VerticalViewPager.getCurrentItem());
+			m_PreviewGallery.setRotation(newRotation);
 		}else{
 			m_ViewPager.setVisibility(View.INVISIBLE);
 			m_VerticalViewPager.setVisibility(View.VISIBLE);
