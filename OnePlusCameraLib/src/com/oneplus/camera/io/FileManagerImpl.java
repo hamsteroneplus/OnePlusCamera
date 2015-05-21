@@ -10,6 +10,7 @@ import java.util.List;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.media.ThumbnailUtils;
 import android.os.Environment;
@@ -55,18 +56,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		m_Thread.start();
 		m_FileHandler = m_Thread.getHandler();
 		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_LOAD_IMAGES));
-		m_FileObserver = new FileObserver(m_DefaultFolder.getAbsolutePath()) { // set
-																				// up
-																				// a
-																				// file
-																				// observer
-																				// to
-																				// watch
-																				// this
-																				// directory
-																				// on
-																				// sd
-																				// card
+		m_FileObserver = new FileObserver(m_DefaultFolder.getAbsolutePath()) {
 
 			@Override
 			public void onEvent(int event, String file) {
@@ -107,23 +97,30 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	}
 
 	@Override
-	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback) {
+	public void getBitmap(final String path, final int width, final int height, final boolean isVertical,
+			final PhotoCallback callback) {
 
-		m_FileHandler.sendMessage(Message
-				.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, new BitmapArgs(path, callback)));
+		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, new BitmapArgs(path,
+				isVertical, callback)));
 	}
 
 	private class BitmapArgs {
 		private String m_Path;
 		private PhotoCallback m_callback;
+		private boolean m_IsVertical;
 
-		BitmapArgs(String path, PhotoCallback callback) {
+		BitmapArgs(String path, boolean isVertical, PhotoCallback callback) {
 			m_Path = path;
+			m_IsVertical = isVertical;
 			m_callback = callback;
 		}
 
 		String getPath() {
 			return m_Path;
+		}
+
+		boolean getIsVertical() {
+			return m_IsVertical;
 		}
 
 		PhotoCallback getCallback() {
@@ -322,15 +319,26 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 								break;
 							}
 						}
+						Bitmap bitmap;
+						Boolean isVideo;
 						if (isImage) {
-							args.getCallback().onBitmapLoad(
-									scaleCenterCrop(decodeBitmap(args.getPath(), msg.arg1, msg.arg2), msg.arg1, msg.arg2), false);
-							break;
+							bitmap = decodeBitmap(args.getPath(), msg.arg1, msg.arg2);
+							isVideo = false;
 						} else {
-							args.getCallback().onBitmapLoad(
-									scaleCenterCrop(ThumbnailUtils.createVideoThumbnail(args.getPath(),
-											MediaStore.Video.Thumbnails.FULL_SCREEN_KIND), msg.arg1, msg.arg2), true);
+							bitmap = ThumbnailUtils.createVideoThumbnail(args.getPath(),
+									MediaStore.Video.Thumbnails.FULL_SCREEN_KIND);
+							isVideo = true;
 						}
+						if (args.m_IsVertical) {
+							Matrix matrix = new Matrix();
+
+							matrix.postRotate(90);
+
+							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+						}
+
+						args.getCallback().onBitmapLoad(scaleCenterCrop(bitmap, msg.arg1, msg.arg2), isVideo);
+						break;
 					}
 					}
 				}

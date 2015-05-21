@@ -49,7 +49,7 @@ public interface FileManager extends Component
 		void onBitmapLoad(Bitmap bitmap, boolean isVideo);
 	}
 
-	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback);
+	void getBitmap(final String path, final int width, final int height, final boolean isVertical, final PhotoCallback callback);
 	/**
 	 * Start media saving asynchronously.
 	 * @param task Media save task.

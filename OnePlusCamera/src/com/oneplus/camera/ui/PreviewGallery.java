@@ -81,8 +81,8 @@ final class PreviewGallery extends UIComponent
 		case MESSAGE_UPDATE_RESET:{
 			m_ViewPager.setAdapter(null);
 			m_VerticalViewPager.setAdapter(null);
-			m_Adapter.initialize(m_FileManager, PreviewGallery.this);
-			m_VerticalAdapter.initialize(m_FileManager, PreviewGallery.this);
+			m_Adapter.initialize(PreviewGallery.this);
+			m_VerticalAdapter.initialize(PreviewGallery.this);
 			m_ViewPager.setAdapter(m_Adapter);
 			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
 			bringToBack();
@@ -92,8 +92,8 @@ final class PreviewGallery extends UIComponent
 			int current = m_ViewPager.getCurrentItem();
 			m_ViewPager.setAdapter(null);
 			m_VerticalViewPager.setAdapter(null);
-			m_Adapter.initialize(m_FileManager, PreviewGallery.this);
-			m_VerticalAdapter.initialize(m_FileManager, PreviewGallery.this);
+			m_Adapter.initialize(PreviewGallery.this);
+			m_VerticalAdapter.initialize(PreviewGallery.this);
 			m_ViewPager.setAdapter(m_Adapter);
 			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
 			if(current != 0){
@@ -145,6 +145,11 @@ final class PreviewGallery extends UIComponent
 			m_ViewPager.setVisibility(View.INVISIBLE);
 			m_VerticalViewPager.setVisibility(View.VISIBLE);
 			m_VerticalViewPager.setCurrentItem(m_ViewPager.getCurrentItem());
+			if(Rotation.LANDSCAPE == newRotation){
+				m_PreviewGallery.setRotation(Rotation.PORTRAIT);
+			}else{
+				m_PreviewGallery.setRotation(Rotation.INVERSE_PORTRAIT);
+			}
 		}
 	}
 
@@ -200,7 +205,7 @@ final class PreviewGallery extends UIComponent
 					}
 				});
 
-				m_Adapter.initialize(m_FileManager, PreviewGallery.this);
+				m_Adapter.initialize(PreviewGallery.this);
 			}
 		});
 		m_ViewPager.setAdapter(m_Adapter);
@@ -287,7 +292,7 @@ final class PreviewGallery extends UIComponent
 		m_VerticalViewPager = (VerticalViewPager) m_PreviewGallery.findViewById(R.id.preview_gallery_pager_landscape);
 		m_VerticalViewPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
 		m_VerticalViewPager.setOffscreenPageLimit(3);
-		m_VerticalAdapter = new PagerAdapter(cameraActivity.getFragmentManager());
+		m_VerticalAdapter = new PagerAdapter(cameraActivity.getFragmentManager(), true);
 
 		// find components
 		ComponentUtils.findComponent(getCameraThread(), FileManager.class, this, new ComponentSearchCallback<FileManager>() {
@@ -323,7 +328,7 @@ final class PreviewGallery extends UIComponent
 					}
 				});
 
-				m_VerticalAdapter.initialize(m_FileManager, PreviewGallery.this);
+				m_VerticalAdapter.initialize(PreviewGallery.this);
 			}
 		});
 		m_VerticalViewPager.setAdapter(m_VerticalAdapter);
@@ -349,11 +354,13 @@ final class PreviewGallery extends UIComponent
 			}
 		});
 		
+
+
 		m_VerticalViewPager.setOnTouchListener(new OnTouchListener() {
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
-				if(m_VerticalViewPager.getCurrentItem()==0){
+				if (m_VerticalViewPager.getCurrentItem() == 0) {
 					cameraActivity.onTouchEvent(event);
 				}
 				return false;
@@ -379,12 +386,14 @@ final class PreviewGallery extends UIComponent
 		private File m_File;
 		private FileManager m_FileManager;
 		private PreviewGallery m_Gallery;
+		private boolean m_IsVertical;
 		static private final String TAG = ImageFragment.class.getSimpleName();
 
-		public ImageFragment(File file, FileManager fileManager, PreviewGallery gallery) {
+		public ImageFragment(File file, FileManager fileManager, PreviewGallery gallery, boolean isVertical) {
 			m_File = file;
 			m_FileManager = fileManager;
 			m_Gallery = gallery;
+			m_IsVertical = isVertical;
 		}
 
 		@Override
@@ -402,14 +411,25 @@ final class PreviewGallery extends UIComponent
 
 		@Override
 		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-			View view = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
-			final ImageView image = (ImageView) (view.findViewById(R.id.preview_image));
-			final ImageView play = (ImageView) (view.findViewById(R.id.play_icon));
-			Resources res = inflater.getContext().getResources();
-			int reqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
-			int reqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
+			View root;
+			int reqWidth,reqHeight;
+			if(m_IsVertical){
+				root = inflater.inflate(R.layout.layout_preview_gallery_land_item, container, false);
+				Resources res = inflater.getContext().getResources();
+				reqWidth = res.getDimensionPixelSize(R.dimen.preview_item_land_width);
+				reqHeight = res.getDimensionPixelSize(R.dimen.preview_item_land_height);
+			}else{
+				root = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
+				Resources res = inflater.getContext().getResources();
+				reqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
+				reqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
+			}
+			
+			final ImageView image = (ImageView) (root.findViewById(R.id.preview_image));
+			final ImageView play = (ImageView) (root.findViewById(R.id.play_icon));
+			
 
-			m_FileManager.getBitmap(m_File.getAbsolutePath(), reqWidth, reqHeight, new PhotoCallback() {
+			m_FileManager.getBitmap(m_File.getAbsolutePath(), reqWidth, reqHeight, m_IsVertical, new PhotoCallback() {
 
 				@Override
 				public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo) {
@@ -448,19 +468,18 @@ final class PreviewGallery extends UIComponent
 							}
 						});
 					}else{
-						Handler hr = new Handler(Looper.getMainLooper());
-//						hr.sendMessage(Message.obtain(hr, MESSAGE_UPDATE_DELETED, m_File));
 						HandlerUtils.sendMessage(m_Gallery, MESSAGE_UPDATE_DELETED, 0, 0, m_File);
 						
 					}
 
 				}
 			});
-			return view;
+			return root;
 		}
 	}
 	
     private static class PagerAdapter extends FragmentStatePagerAdapter {
+    	private boolean m_IsVertical;
     	private List<File> m_Files;
     	private FileManager m_FileManager;
     	private PreviewGallery m_PreviewGallery;
@@ -469,9 +488,14 @@ final class PreviewGallery extends UIComponent
             super(fragmentManager);
         }
         
-        void initialize(FileManager fileManager, PreviewGallery gallery){
-        	m_FileManager = fileManager;
-        	m_Files = fileManager.getMediaFiles();
+        public PagerAdapter(FragmentManager fragmentManager, boolean isVertical) {
+            super(fragmentManager);
+            m_IsVertical = isVertical;
+        }
+        
+        void initialize(PreviewGallery gallery){
+        	m_FileManager = gallery.m_FileManager;
+        	m_Files = m_FileManager.getMediaFiles();
         	m_PreviewGallery = gallery;
         }
         
@@ -500,7 +524,7 @@ final class PreviewGallery extends UIComponent
             case 0: // Fragment # 0 - This will show FirstFragment
                 return new Fragment();
             default:
-                return new ImageFragment(m_Files.get(position - 1), m_FileManager, m_PreviewGallery);
+                return new ImageFragment(m_Files.get(position - 1), m_FileManager, m_PreviewGallery, m_IsVertical);
             }
         }
 

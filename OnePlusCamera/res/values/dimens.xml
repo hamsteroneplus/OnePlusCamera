@@ -48,6 +48,8 @@
 	<!-- Preview Gallery -->
 	<dimen name="preview_item_width">270dp</dimen>
 	<dimen name="preview_item_height">480dp</dimen>
+	<dimen name="preview_item_land_width">202dp</dimen>
+	<dimen name="preview_item_land_height">360dp</dimen>
 	
 	<!-- Recording timer -->
 	<dimen name="recording_timer_text_size">14sp</dimen>
