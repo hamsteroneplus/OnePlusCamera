@@ -404,6 +404,7 @@ final class PreviewGallery extends UIComponent
 		public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 			View view = inflater.inflate(R.layout.layout_preview_gallery_item, container, false);
 			final ImageView image = (ImageView) (view.findViewById(R.id.preview_image));
+			final ImageView play = (ImageView) (view.findViewById(R.id.play_icon));
 			Resources res = inflater.getContext().getResources();
 			int reqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
 			int reqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
@@ -411,7 +412,7 @@ final class PreviewGallery extends UIComponent
 			m_FileManager.getBitmap(m_File.getAbsolutePath(), reqWidth, reqHeight, new PhotoCallback() {
 
 				@Override
-				public void onBitmapLoad(final Bitmap bitmap) {
+				public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo) {
 					if (bitmap != null) {
 						new Handler(Looper.getMainLooper()).post(new Runnable() {
 
@@ -419,16 +420,31 @@ final class PreviewGallery extends UIComponent
 							public void run() {
 								image.setScaleType(ImageView.ScaleType.FIT_CENTER);
 								image.setImageBitmap(bitmap);
-								image.setOnClickListener(new View.OnClickListener() {
+								
+								if(isVideo){
+									play.setVisibility(View.VISIBLE);
+									image.setOnClickListener(new View.OnClickListener() {
 
-									@Override
-									public void onClick(View v) {
-										Intent intent = new Intent();
-										intent.setAction(Intent.ACTION_VIEW);
-										intent.setDataAndType(Uri.fromFile(m_File), "image/*");
-										startActivity(intent);
-									}
-								});
+										@Override
+										public void onClick(View v) {
+											Intent intent = new Intent();
+											intent.setAction(Intent.ACTION_VIEW);
+											intent.setDataAndType(Uri.fromFile(m_File), "video/*");
+											startActivity(intent);
+										}
+									});
+								}else{
+									image.setOnClickListener(new View.OnClickListener() {
+
+										@Override
+										public void onClick(View v) {
+											Intent intent = new Intent();
+											intent.setAction(Intent.ACTION_VIEW);
+											intent.setDataAndType(Uri.fromFile(m_File), "image/*");
+											startActivity(intent);
+										}
+									});
+								}
 							}
 						});
 					}else{

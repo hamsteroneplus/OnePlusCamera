@@ -46,7 +46,7 @@ public interface FileManager extends Component
 		/**
 		 * Called when bitmap load.
 		 */
-		void onBitmapLoad(Bitmap bitmap);
+		void onBitmapLoad(Bitmap bitmap, boolean isVideo);
 	}
 
 	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback);

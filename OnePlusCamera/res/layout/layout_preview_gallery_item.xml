@@ -8,8 +8,17 @@
         android:id="@+id/preview_image"
         android:layout_width="@dimen/preview_item_width"
         android:layout_height="@dimen/preview_item_height"
-        android:src="@drawable/loading"
+        android:layout_centerInParent="true"
         android:scaleType="center"
-        android:layout_centerInParent="true" />
+        android:src="@drawable/loading" />
+
+    <ImageView
+        android:id="@+id/play_icon"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true"
+        android:scaleType="center"
+        android:src="@drawable/playback"
+        android:visibility="gone" />
 
 </RelativeLayout>
