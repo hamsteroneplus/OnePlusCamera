@@ -1,4 +1,4 @@
-package com.oneplus.camera.timelapse;
+package com.oneplus.camera.slowmotion;
 
 import android.graphics.drawable.Drawable;
 
@@ -6,12 +6,12 @@ import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.R;
 import com.oneplus.camera.capturemode.ComponentBasedCaptureMode;
 
-final class TimelapseCaptureMode extends ComponentBasedCaptureMode<TimelapseUI>
+final class SlowMotionCaptureMode extends ComponentBasedCaptureMode<SlowMotionUI>
 {
 	// Constructor.
-	TimelapseCaptureMode(CameraActivity cameraActivity)
+	SlowMotionCaptureMode(CameraActivity cameraActivity)
 	{
-		super(cameraActivity, "Time-lapse", "timelapse", TimelapseUI.class);
+		super(cameraActivity, "Slow-motion", "slowmotion", SlowMotionUI.class);
 	}
 	
 	
@@ -19,7 +19,7 @@ final class TimelapseCaptureMode extends ComponentBasedCaptureMode<TimelapseUI>
 	@Override
 	public String getDisplayName()
 	{
-		return this.getCameraActivity().getString(R.string.capture_mode_timelapse);
+		return this.getCameraActivity().getString(R.string.capture_mode_slow_motion);
 	}
 
 	
@@ -30,7 +30,7 @@ final class TimelapseCaptureMode extends ComponentBasedCaptureMode<TimelapseUI>
 		switch(usage)
 		{
 			case CAPTURE_MODES_PANEL_ICON:
-				return this.getCameraActivity().getDrawable(R.drawable.capture_mode_panel_icon_timelapse);
+				return this.getCameraActivity().getDrawable(R.drawable.capture_mode_panel_icon_slow_motion);
 			default:
 				return null;
 		}

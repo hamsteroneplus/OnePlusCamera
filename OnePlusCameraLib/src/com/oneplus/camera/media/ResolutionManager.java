@@ -5,6 +5,7 @@ import java.util.List;
 
 import android.util.Size;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.component.Component;
 
@@ -13,6 +14,12 @@ import com.oneplus.base.component.Component;
  */
 public interface ResolutionManager extends Component
 {
+	/**
+	 * Flag to synchronize photo/video resolution between two resolution selectors.
+	 */
+	int FLAG_SYNC_RESOLUTION = 0x1;
+	
+	
 	/**
 	 * Read-only property to get current camera preview size for photo.
 	 */
@@ -39,4 +46,20 @@ public interface ResolutionManager extends Component
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	PropertyKey<List<Resolution>> PROP_VIDEO_RESOLUTION_LIST = new PropertyKey<List<Resolution>>("VideoResolutionList", (Class)List.class, ResolutionManager.class, Collections.EMPTY_LIST);
+	
+	
+	/**
+	 * Change photo or video resolution selector.
+	 * @param selector Photo or video resolution selector.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_SYNC_RESOLUTION}</li>
+	 * </ul>
+	 * When closing handle, you can use flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_SYNC_RESOLUTION}</li>
+	 * </ul>
+	 * @return Handle to resolution selector.
+	 */
+	Handle setResolutionSelector(ResolutionSelector selector, int flags);
 }

@@ -1,18 +1,18 @@
-package com.oneplus.camera.timelapse;
+package com.oneplus.camera.slowmotion;
 
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.capturemode.CaptureMode;
 import com.oneplus.camera.capturemode.CaptureModeBuilder;
 
 /**
- * Builder for time-lapse video capture mode.
+ * Builder for slow-motion video capture mode.
  */
-public class TimelapseCaptureModeBuilder implements CaptureModeBuilder
+public class SlowMotionCaptureModeBuilder implements CaptureModeBuilder
 {
 	// Create capture mode.
 	@Override
 	public CaptureMode createCaptureMode(CameraActivity cameraActivity)
 	{
-		return new TimelapseCaptureMode(cameraActivity);
+		return new SlowMotionCaptureMode(cameraActivity);
 	}
 }

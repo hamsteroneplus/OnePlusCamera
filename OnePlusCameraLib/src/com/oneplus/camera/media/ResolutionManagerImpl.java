@@ -1,10 +1,12 @@
 package com.oneplus.camera.media;
 
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 
 import android.util.Size;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
@@ -27,8 +29,29 @@ final class ResolutionManagerImpl extends CameraComponent implements ResolutionM
 	private PhotoResolutionSelector m_DefaultPhotoResSelector;
 	private VideoResolutionSelector m_DefaultVideoResSelector;
 	private Resolution m_PhotoResolution;
+	private final LinkedList<ResolutionSelectorHandle> m_PhotoResSelectorHandles = new LinkedList<>();
 	private Resolution m_VideoResolution;
+	private final LinkedList<ResolutionSelectorHandle> m_VideoResSelectorHandles = new LinkedList<>();
 	private Viewfinder m_Viewfinder;
+	
+	
+	// Class for resolution selector handle.
+	private final class ResolutionSelectorHandle extends Handle
+	{
+		public final ResolutionSelector selector;
+		
+		public ResolutionSelectorHandle(ResolutionSelector selector)
+		{
+			super("ResolutionSelector");
+			this.selector = selector;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			restoreResolutionSelector(this, flags);
+		}
+	}
 	
 	
 	// Constructor
@@ -58,7 +81,9 @@ final class ResolutionManagerImpl extends CameraComponent implements ResolutionM
 	// Get active photo resolution selector.
 	private PhotoResolutionSelector getPhotoResolutionSelector()
 	{
-		return m_DefaultPhotoResSelector;
+		if(m_PhotoResSelectorHandles.isEmpty())
+			return m_DefaultPhotoResSelector;
+		return (PhotoResolutionSelector)m_PhotoResSelectorHandles.getLast().selector;
 	}
 	
 	
@@ -74,7 +99,9 @@ final class ResolutionManagerImpl extends CameraComponent implements ResolutionM
 	// Get active video resolution selector.
 	private VideoResolutionSelector getVideoResolutionSelector()
 	{
-		return m_DefaultVideoResSelector;
+		if(m_VideoResSelectorHandles.isEmpty())
+			return m_DefaultVideoResSelector;
+		return (VideoResolutionSelector)m_VideoResSelectorHandles.getLast().selector;
 	}
 	
 	
@@ -115,6 +142,32 @@ final class ResolutionManagerImpl extends CameraComponent implements ResolutionM
 		// setup initial resolutions
 		if(cameraActivity.get(CameraActivity.PROP_CAMERA) != null && m_Viewfinder != null)
 			this.selectResolutions(false, false);
+	}
+	
+	
+	// Restore resolution selector.
+	private void restoreResolutionSelector(ResolutionSelectorHandle handle, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		
+		// remove handle
+		boolean syncPhotoRes = false;
+		boolean syncVideoRes = false;
+		Log.v(TAG, "restoreResolutionSelector() - Selector : ", handle.selector, ", handle : ", handle);
+		if(handle.selector instanceof PhotoResolutionSelector)
+		{
+			syncPhotoRes = ((flags & FLAG_SYNC_RESOLUTION) != 0);
+			m_PhotoResSelectorHandles.remove(handle);
+		}
+		if(handle.selector instanceof VideoResolutionSelector)
+		{
+			syncVideoRes = ((flags & FLAG_SYNC_RESOLUTION) != 0);
+			m_VideoResSelectorHandles.remove(handle);
+		}
+		
+		// update resolutions
+		this.selectResolutions(syncPhotoRes, syncVideoRes);
 	}
 	
 	
@@ -276,6 +329,57 @@ final class ResolutionManagerImpl extends CameraComponent implements ResolutionM
 		this.notifyPropertyChanged(PROP_PHOTO_RESOLUTION, oldResolution, resolution);
 		this.setReadOnly(PROP_PHOTO_PREVIEW_SIZE, previewSize);
 		return true;
+	}
+	
+	
+	// Change photo or video resolution selector.
+	@Override
+	public Handle setResolutionSelector(ResolutionSelector selector, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "setResolutionSelector() - Component is not running");
+			return null;
+		}
+		
+		// check parameter
+		if(selector == null)
+		{
+			Log.e(TAG, "setResolutionSelector() - No resolution selector");
+			return null;
+		}
+		
+		// create handle
+		boolean syncPhotoRes = false;
+		boolean syncVideoRes = false;
+		boolean isKnownType = false;
+		ResolutionSelectorHandle handle = new ResolutionSelectorHandle(selector);
+		Log.v(TAG, "setResolutionSelector() - Selector : ", selector, ", handle : ", handle);
+		if(selector instanceof PhotoResolutionSelector)
+		{
+			isKnownType = true;
+			syncPhotoRes = ((flags & FLAG_SYNC_RESOLUTION) != 0);
+			m_PhotoResSelectorHandles.add(handle);
+		}
+		if(selector instanceof VideoResolutionSelector)
+		{
+			isKnownType = true;
+			syncVideoRes = ((flags & FLAG_SYNC_RESOLUTION) != 0);
+			m_VideoResSelectorHandles.add(handle);
+		}
+		if(!isKnownType)
+		{
+			Log.e(TAG, "setResolutionSelector() - Unknown selector type");
+			return null;
+		}
+		
+		// update resolutions
+		this.selectResolutions(syncPhotoRes, syncVideoRes);
+		
+		// complete
+		return handle;
 	}
 	
 	

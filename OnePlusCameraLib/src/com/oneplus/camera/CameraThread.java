@@ -805,25 +805,37 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// prepare media recorder and start later
 		if(!isShutterSoundPlayed)
 		{
-			// prepare media recorder
-			MediaRecorder mediaRecorder = new MediaRecorder();
-			if(!this.prepareMediaRecorder(camera, mediaRecorder, resolution))
-			{
-				Log.e(TAG, "captureVideoInternal() - Fail to prepare media recorder");
-				mediaRecorder.release();
-				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
-				return false;
-			}
-			m_MediaRecorder = mediaRecorder;
+			// stop preview to prepare
+			camera.stopPreview(0);
+			camera.set(Camera.PROP_VIDEO_SIZE, resolution.toSize());
 			
-			// start recording later
-			long delay = (DURATION_VIDEO_CAPTURE_DELAY - (SystemClock.elapsedRealtime() - shutterSoundTime));
-			if(delay > 0)
+			// prepare
+			try
 			{
-				Log.w(TAG, "captureVideoInternal() - Start video recording " + delay + " ms later");
-				HandlerUtils.sendMessage(this, MSG_CAPTURE_VIDEO, 0, 0, resolution, delay);
-				m_VideoCaptureHandle = handle;
-				return true;
+				// prepare media recorder
+				MediaRecorder mediaRecorder = new MediaRecorder();
+				if(!this.prepareMediaRecorder(camera, mediaRecorder, resolution))
+				{
+					Log.e(TAG, "captureVideoInternal() - Fail to prepare media recorder");
+					mediaRecorder.release();
+					this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.READY);
+					return false;
+				}
+				m_MediaRecorder = mediaRecorder;
+				
+				// start recording later
+				long delay = (DURATION_VIDEO_CAPTURE_DELAY - (SystemClock.elapsedRealtime() - shutterSoundTime));
+				if(delay > 0)
+				{
+					Log.w(TAG, "captureVideoInternal() - Start video recording " + delay + " ms later");
+					HandlerUtils.sendMessage(this, MSG_CAPTURE_VIDEO, 0, 0, resolution, delay);
+					m_VideoCaptureHandle = handle;
+					return true;
+				}
+			}
+			finally
+			{
+				camera.startPreview(0);
 			}
 		}
 		

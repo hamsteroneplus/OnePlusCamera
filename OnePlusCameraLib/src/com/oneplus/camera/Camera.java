@@ -6,6 +6,7 @@ import java.util.List;
 import android.graphics.ImageFormat;
 import android.graphics.RectF;
 import android.hardware.camera2.CaptureRequest;
+import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
 
@@ -112,6 +113,16 @@ public interface Camera extends BaseObject, HandlerObject
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	PropertyKey<List<Size>> PROP_PICTURE_SIZES = new PropertyKey<List<Size>>("PictureSizes", (Class)List.class, Camera.class, Collections.EMPTY_LIST);
 	/**
+	 * Read-only property to get all supported preview FPS ranges.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	PropertyKey<List<Range<Integer>>> PROP_PREVIEW_FPS_RANGES = new PropertyKey<List<Range<Integer>>>("PreviewFpsRanges", (Class)List.class, Camera.class, Collections.EMPTY_LIST);
+	/**
+	 * Property to get or set preview FPS range.
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	PropertyKey<Range<Integer>> PROP_PREVIEW_FPS_RANGE = new PropertyKey<>("PreviewFpsRange", (Class)Range.class, Camera.class, 0, null);
+	/**
 	 * Property to get or set preview receiver.
 	 */
 	PropertyKey<Object> PROP_PREVIEW_RECEIVER = new PropertyKey<>("PreviewReceiver", Object.class, Camera.class, 0, null);
@@ -154,6 +165,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	PropertyKey<List<Size>> PROP_VIDEO_SIZES = new PropertyKey<List<Size>>("VideoSizes", (Class)List.class, Camera.class, Collections.EMPTY_LIST);
+	/**
+	 * Property to get or set video size.
+	 */
+	PropertyKey<Size> PROP_VIDEO_SIZE = new PropertyKey<>("VideoSize", Size.class, Camera.class, PropertyKey.FLAG_NOT_NULL, new Size(0, 0));
 	/**
 	 * Property to get or set {@link Surface} for video recording.
 	 */

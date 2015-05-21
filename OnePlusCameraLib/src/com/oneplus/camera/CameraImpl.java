@@ -30,6 +30,7 @@ import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
 import android.renderscript.Type;
+import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -87,6 +88,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private final CameraCharacteristics m_Characteristics;
 	private final CameraManager m_CameraManager;
 	private Context m_Context;
+	private Range<Integer> m_DefaultPreviewFpsRange;
 	private CameraDevice m_Device;
 	private final CameraDevice.StateCallback m_DeviceStateCallback = new CameraDevice.StateCallback()
 	{
@@ -190,6 +192,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			onPreviewCaptureCompleted(result);
 		}
 	};
+	private Range<Integer> m_PreviewFpsRange;
 	private CaptureRequest.Builder m_PreviewRequestBuilder;
 	private Size m_PreviewSize = new Size(0, 0);
 	private Surface m_PreviewSurface;
@@ -210,6 +213,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	@SuppressWarnings("rawtypes")
 	private final List m_TempList = new ArrayList();
 	private final List<Surface> m_TempSurfaces = new ArrayList<>();
+	private Size m_VideoSize = new Size(0, 0);
 	private Surface m_VideoSurface;
 	
 	
@@ -315,6 +319,10 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// check scene modes
 		m_SceneModes = ListUtils.asList(cameraChar.get(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES));
 		this.setReadOnly(PROP_SCENE_MODES, m_SceneModes);
+		
+		// check preview FPS ranges
+		Range<Integer>[] fpsRanges = cameraChar.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+		this.setReadOnly(PROP_PREVIEW_FPS_RANGES, Arrays.asList(fpsRanges));
 		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
@@ -816,6 +824,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_LensFacing;
 		if(key == PROP_PICTURE_SIZE)
 			return (TValue)m_PictureSize;
+		if(key == PROP_PREVIEW_FPS_RANGE)
+			return (TValue)m_PreviewFpsRange;
 		if(key == PROP_PREVIEW_SIZE)
 			return (TValue)m_PreviewSize;
 		if(key == PROP_SCENE_MODE)
@@ -826,6 +836,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_SensorSize;
 		if(key == PROP_STATE)
 			return (TValue)m_State;
+		if(key == PROP_VIDEO_SIZE)
+			return (TValue)m_VideoSize;
 		if(key == PROP_VIDEO_SURFACE)
 			return (TValue)m_VideoSurface;
 		return super.get(key);
@@ -1578,12 +1590,16 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return this.setRecordingModeProp((Boolean)value);
 		if(key == PROP_PICTURE_SIZE)
 			return this.setPictureSize((Size)value);
+		if(key == PROP_PREVIEW_FPS_RANGE)
+			return this.setPreviewFpsRangeProp((Range<Integer>)value);
 		if(key == PROP_PREVIEW_SIZE)
 			return this.setPreviewSizeProp((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
 			return this.setPreviewReceiver(value);
 		if(key == PROP_SCENE_MODE)
 			return this.setSceneModeProp((Integer)value);
+		if(key == PROP_VIDEO_SIZE)
+			return this.setVideoSizeProp((Size)value);
 		if(key == PROP_VIDEO_SURFACE)
 			return this.setVideoSurface((Surface)value);
 		return super.set(key, value);
@@ -1925,6 +1941,42 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Set video size property.
+	private boolean setVideoSizeProp(Size size)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		switch(this.get(PROP_PREVIEW_STATE))
+		{
+			case STARTING:
+			case STARTED:
+				if(m_IsRecordingMode)
+					throw new RuntimeException("Cannot change video size while preview start in recording mode.");
+			default:
+				break;
+		}
+		
+		// check video size
+		if(size == null)
+			throw new IllegalArgumentException("No video size.");
+		if(!this.get(PROP_VIDEO_SIZES).contains(size))
+		{
+			Log.e(TAG, "setVideoSizeProp() - Invalid video size : " + size);
+			return false;
+		}
+		if(m_VideoSize.equals(size))
+			return false;
+		
+		Log.v(TAG, "setVideoSizeProp() - Video size : ", size);
+		
+		// complete
+		Size oldSize = m_VideoSize;
+		m_VideoSize = size;
+		return this.notifyPropertyChanged(PROP_VIDEO_SIZE, oldSize, size);
+	}
+	
+	
 	// Set video surface.
 	private boolean setVideoSurface(Surface surface)
 	{
@@ -2055,7 +2107,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				return false;
 		}
 		
-		// check picture size
+		// check preview size
 		if(m_PreviewSize.getWidth() <= 0 || m_PreviewSize.getHeight() <= 0)
 		{
 			Log.e(TAG, "startCaptureSession() - Empty preview size");
@@ -2094,7 +2146,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		surfaces.add(m_PreviewSurface);
 		
 		// prepare picture surface
-		m_PictureReader = ImageReader.newInstance(pictureSize.getWidth(), pictureSize.getHeight(), pictureFormat, 1);
+		if(!m_IsRecordingMode)
+			m_PictureReader = ImageReader.newInstance(pictureSize.getWidth(), pictureSize.getHeight(), pictureFormat, 1);
+		else if(m_VideoSize.getWidth() > 0 && m_VideoSize.getHeight() > 0)	
+			m_PictureReader = ImageReader.newInstance(m_VideoSize.getWidth(), m_VideoSize.getHeight(), pictureFormat, 1);
+		else
+			m_PictureReader = ImageReader.newInstance(m_PreviewSize.getWidth(), m_PreviewSize.getHeight(), pictureFormat, 1);
 		m_PictureReader.setOnImageAvailableListener(m_PictureAvailableListener, this.getHandler());
 		m_PictureSurface = m_PictureReader.getSurface();
 		surfaces.add(m_PictureSurface);
@@ -2140,6 +2197,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				m_PreviewRequestBuilder = m_Device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
 			}
 			
+			// get default FPS range
+			m_DefaultPreviewFpsRange = m_PreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE);
+			
 			// prepare output surfaces
 			m_PreviewRequestBuilder.addTarget(m_PreviewSurface);
 			if(m_IsRecordingMode && m_VideoSurface != null)
@@ -2166,20 +2226,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			// setup scene mode
 			this.applySceneMode(m_PreviewRequestBuilder, m_SceneMode);
 			
-			// TEST
-			/*
-			try
+			// setup FPS range
+			if(m_PreviewFpsRange != null)
 			{
-				Field field = CaptureRequest.class.getField("ONEPLUS_REC_TIME_MULTIPLE");
-				CaptureRequest.Key<Boolean> key = (CaptureRequest.Key<Boolean>)field.get(null);
-				m_PreviewRequestBuilder.set(key, m_IsRecordingMode);
-				Log.w(TAG, "[TEST] Set ONEPLUS_REC_TIME_MULTIPLE to " + m_IsRecordingMode);
+				Log.v(TAG, "startCaptureSession() - FPS range : ", m_PreviewFpsRange);
+				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, m_PreviewFpsRange);
 			}
-			catch(Throwable ex)
-			{
-				Log.w(TAG, "[TEST] No ONEPLUS_REC_TIME_MULTIPLE key to use");
-			}
-			*/
 		}
 		catch(Throwable ex)
 		{
@@ -2251,6 +2303,37 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// complete
 		this.setReadOnly(PROP_PREVIEW_STATE, OperationState.STARTING);
 		return true;
+	}
+	
+	
+	// Set PROP_PREVIEW_FPS_RANGE property.
+	private boolean setPreviewFpsRangeProp(Range<Integer> range)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		
+		// check range
+		if(m_PreviewFpsRange == range || (m_PreviewFpsRange != null && m_PreviewFpsRange.equals(range)))
+			return false;
+		if(range != null && !this.get(PROP_PREVIEW_FPS_RANGES).contains(range))
+		{
+			Log.e(TAG, "setPreviewFpsRangeProp() - Invalid range : " + range);
+			//return false;
+		}
+		
+		// update FPS range
+		Log.v(TAG, "setPreviewFpsRangeProp() - FPS range : " + range);
+		Range<Integer> oldRange = m_PreviewFpsRange;
+		m_PreviewFpsRange = range;
+		if(m_PreviewRequestBuilder != null)
+		{
+			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range != null ? range : m_DefaultPreviewFpsRange);
+			this.applyToPreview();
+		}
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_PREVIEW_FPS_RANGE, oldRange, range);
 	}
 	
 	
