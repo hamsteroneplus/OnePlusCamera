@@ -27,6 +27,7 @@ final class SensorFocusControllerImpl extends CameraComponent
 	
 	// Private fields.
 	private SensorAfState m_AfState = SensorAfState.UNSTABLE;
+	private ExposureController m_ExposureController;
 	private FocusController m_FocusController;
 	private final float[] m_LastAccelerometerValues = new float[3];
 	private long m_LastTouchAFTime;
@@ -162,6 +163,7 @@ final class SensorFocusControllerImpl extends CameraComponent
 		super.onInitialize();
 		
 		// find components
+		m_ExposureController = this.findComponent(ExposureController.class);
 		m_FocusController = this.findComponent(FocusController.class);
 		m_TouchAutoFocusUI = this.findComponent(TouchAutoFocusUI.class);
 		
@@ -228,6 +230,10 @@ final class SensorFocusControllerImpl extends CameraComponent
 			Log.e(TAG, "startAutoFocus() - Fail to start sensor AF");
 			return false;
 		}
+		
+		// reset AE regions
+		if(m_ExposureController != null)
+			m_ExposureController.set(ExposureController.PROP_AE_REGIONS, null);
 		
 		// complete
 		return true;

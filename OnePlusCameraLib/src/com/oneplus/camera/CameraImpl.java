@@ -113,6 +113,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private FlashMode m_FlashMode = FlashMode.OFF;
 	private FocusMode m_FocusMode = FocusMode.DISABLED;
 	private final String m_Id;
+	private boolean m_IsAELocked;
 	private boolean m_IsAutoFocusTimeout;
 	private boolean m_IsCaptureSequenceCompleted;
 	private volatile boolean m_IsPreviewReceived;
@@ -359,6 +360,48 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Apply AE lock state.
+	private boolean applyAELock(boolean isLocked, CaptureRequest.Builder requestBuilder)
+	{
+		if(requestBuilder == null)
+			return false;
+		requestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, isLocked);
+		return true;
+	}
+	
+	
+	// Apply AF regions to preview.
+	@SuppressWarnings("unchecked")
+	private boolean applyAERegions(List<MeteringRect> regions, CaptureRequest.Builder requestBuilder)
+	{
+		// check request builder
+		if(requestBuilder == null)
+			return false;
+		
+		// create region list
+		m_TempList.clear();
+		List<MeteringRectangle> regionList = (List<MeteringRectangle>)m_TempList;
+		for(int i = regions.size() - 1 ; i >= 0 ; --i)
+		{
+			MeteringRectangle rect = this.createMeteringRectangle(regions.get(i));
+			if(rect != null)
+				regionList.add(rect);
+		}
+		MeteringRectangle[] regionArray;
+		if(regionList.isEmpty())
+			regionArray = null;
+		else
+		{
+			regionArray = new MeteringRectangle[regionList.size()];
+			regionList.toArray(regionArray);
+		}
+		
+		// apply regions
+		requestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, regionArray);
+		return true;
+	}
+	
+	
 	// Apply AF regions to preview.
 	@SuppressWarnings("unchecked")
 	private void applyAfRegions()
@@ -592,6 +635,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			// set flash mode
 			this.setFlashMode(m_FlashMode, builder);
 			
+			// setup AE states
+			this.applyAELock(m_IsAELocked, builder);
+			this.applyAERegions(m_AeRegions , builder);
+			
+			// setup focus states
+			//
+			
 			// set rotation
 			int deviceOrientation = this.get(PROP_PICTURE_ROTATION).getDeviceOrientation();
 			if(m_LensFacing == LensFacing.FRONT)
@@ -818,6 +868,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_FocusMode;
 		if(key == PROP_ID)
 			return (TValue)m_Id;
+		if(key == PROP_IS_AE_LOCKED)
+			return (TValue)(Boolean)m_IsAELocked;
 		if(key == PROP_IS_RECORDING_MODE)
 			return (TValue)(Boolean)m_IsRecordingMode;
 		if(key == PROP_LENS_FACING)
@@ -1579,13 +1631,15 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	public <TValue> boolean set(PropertyKey<TValue> key, TValue value)
 	{
 		if(key == PROP_AE_REGIONS)
-			;
+			return this.setAERegionsProp((List<MeteringRect>)value);
 		if(key == PROP_AF_REGIONS)
-			return this.setAfRegionsProp((List<MeteringRect>)value);
+			return this.setAFRegionsProp((List<MeteringRect>)value);
 		if(key == PROP_FLASH_MODE)
 			return this.setFlashModeProp((FlashMode)value);
 		if(key == PROP_FOCUS_MODE)
 			return this.setFocusModeProp((FocusMode)value);
+		if(key == PROP_IS_AE_LOCKED)
+			return this.setAELockedProp((Boolean)value);
 		if(key == PROP_IS_RECORDING_MODE)
 			return this.setRecordingModeProp((Boolean)value);
 		if(key == PROP_PICTURE_SIZE)
@@ -1606,9 +1660,53 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Set PROP_IS_AE_LOCKED property.
+	private boolean setAELockedProp(boolean isLocked)
+	{
+		// check state
+		this.verifyAccess();
+		if(m_IsAELocked == isLocked)
+			return false;
+		
+		// update AE lock state
+		m_IsAELocked = isLocked;
+		if(this.applyAELock(isLocked, m_PreviewRequestBuilder))
+			this.applyToPreview();
+		
+		// update property
+		return this.notifyPropertyChanged(PROP_IS_AE_LOCKED, !isLocked, isLocked);
+	}
+	
+	
+	// Set PROP_AE_REGIONS property.
+	@SuppressWarnings("unchecked")
+	private boolean setAERegionsProp(List<MeteringRect> regions)
+	{
+		// check thread
+		this.verifyAccess();
+		
+		// check parameter
+		if(regions == null)
+			regions = Collections.EMPTY_LIST;
+		else if(regions.size() > this.get(PROP_MAX_AE_REGION_COUNT))
+			throw new IllegalArgumentException("Too many AE regions");
+		else
+			regions = Collections.unmodifiableList(regions);
+		
+		// apply regions
+		List<MeteringRect> oldRegions = m_AfRegions;
+		m_AeRegions = regions;
+		if(this.applyAERegions(regions, m_PreviewRequestBuilder) && !m_IsAELocked)
+			this.applyToPreview();
+		
+		// update property
+		return this.notifyPropertyChanged(PROP_AE_REGIONS, oldRegions, regions);
+	}
+	
+	
 	// Set PROP_AF_REGIONS property.
 	@SuppressWarnings("unchecked")
-	private boolean setAfRegionsProp(List<MeteringRect> regions)
+	private boolean setAFRegionsProp(List<MeteringRect> regions)
 	{
 		// check thread
 		this.verifyAccess();
@@ -2214,7 +2312,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			this.setFlashMode(m_FlashMode, m_PreviewRequestBuilder);
 			
 			// setup AE states
-			//
+			this.applyAELock(m_IsAELocked, m_PreviewRequestBuilder);
+			this.applyAERegions(m_AeRegions ,m_PreviewRequestBuilder);
 			
 			// setup AF states
 			this.applyFocusMode();
