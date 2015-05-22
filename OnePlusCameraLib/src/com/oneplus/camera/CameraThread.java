@@ -52,7 +52,8 @@ public class CameraThread extends BaseThread implements ComponentOwner
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
-		new CameraDeviceManagerBuilder(), 
+		new CameraDeviceManagerBuilder(),
+		new ExposureControllerBuilder(),
 		new FileManagerBuilder(),
 		new FocusControllerBuilder(),
 	};

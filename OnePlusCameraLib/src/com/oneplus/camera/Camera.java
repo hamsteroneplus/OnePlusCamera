@@ -64,6 +64,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<String> PROP_ID = new PropertyKey<>("ID", String.class, Camera.class, "");
 	/**
+	 * Property to get or set whether AE should be locked or not.
+	 */
+	PropertyKey<Boolean> PROP_IS_AE_LOCKED = new PropertyKey<>("IsAELocked", Boolean.class, Camera.class, PropertyKey.FLAG_NOT_NULL, false);
+	/**
 	 * Read-only property to check whether burst capture is supported or not.
 	 */
 	PropertyKey<Boolean> PROP_IS_BURST_CAPTURE_SUPPORTED = new PropertyKey<>("IsBurstCaptureSupported", Boolean.class, Camera.class, false);

@@ -60,6 +60,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 {
 	// Default component builders
 	private static final ComponentBuilder[] DEFAULT_COMPONENT_BUILDERS = new ComponentBuilder[]{
+		new ExposureControllerBuilder(),
 		new FocusControllerBuilder(),
 		new ResolutionManagerBuilder(),
 		new ViewfinderBuilder(),

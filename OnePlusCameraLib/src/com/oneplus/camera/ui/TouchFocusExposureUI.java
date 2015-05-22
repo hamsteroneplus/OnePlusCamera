@@ -1,6 +1,7 @@
 package com.oneplus.camera.ui;
 
 import java.util.Arrays;
+import java.util.List;
 
 import android.graphics.PointF;
 import android.os.Message;
@@ -20,6 +21,7 @@ import com.oneplus.base.PropertySource;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CameraComponent;
+import com.oneplus.camera.ExposureController;
 import com.oneplus.camera.FocusController;
 import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.Camera.MeteringRect;
@@ -37,6 +39,7 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	
 	
 	// Private fields.
+	private ExposureController m_ExposureController;
 	private FocusController m_FocusController;
 	private float m_TouchAfDistanceThreshold;
 	private Handle m_TouchAfHandle;
@@ -47,6 +50,19 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	TouchFocusExposureUI(CameraActivity cameraActivity)
 	{
 		super("Touch AE/AF UI", cameraActivity, true);
+	}
+	
+	
+	// Bind to ExposureController.
+	private boolean bindToExposureController()
+	{
+		if(m_ExposureController != null)
+			return true;
+		m_ExposureController = this.findComponent(ExposureController.class);
+		if(m_ExposureController == null)
+			return false;
+		//
+		return true;
 	}
 	
 	
@@ -240,12 +256,17 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		m_TouchAfHandle = Handle.close(m_TouchAfHandle);
 		
 		// start AF
-		m_TouchAfHandle = m_FocusController.startAutoFocus(Arrays.asList(focusRect), FocusController.FLAG_SINGLE_AF);
+		List<MeteringRect> regions = Arrays.asList(focusRect);
+		m_TouchAfHandle = m_FocusController.startAutoFocus(regions, FocusController.FLAG_SINGLE_AF);
 		if(!Handle.isValid(m_TouchAfHandle))
 		{
 			Log.e(TAG, "startAutoFocus() - Fail to start touch AF");
 			return;
 		}
+		
+		// change AE region
+		if(this.bindToExposureController())
+			m_ExposureController.set(ExposureController.PROP_AE_REGIONS, regions);
 		
 		// raise event
 		this.raise(EVENT_TOUCH_AF, EventArgs.EMPTY);

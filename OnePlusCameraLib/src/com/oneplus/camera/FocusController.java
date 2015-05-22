@@ -26,7 +26,7 @@ public interface FocusController extends Component
 	 * Read-only property to get current AF regions.
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	PropertyKey<List<Camera.MeteringRect>> PROP_AF_REGIONS = new PropertyKey<List<Camera.MeteringRect>>("AfRegions", (Class)List.class, FocusController.class, Collections.EMPTY_LIST);
+	PropertyKey<List<Camera.MeteringRect>> PROP_AF_REGIONS = new PropertyKey<List<Camera.MeteringRect>>("AFRegions", (Class)List.class, FocusController.class, Collections.EMPTY_LIST);
 	/**
 	 * Read-only property to check whether focus can be changed on primary camera or not.
 	 */
