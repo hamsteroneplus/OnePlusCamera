@@ -21,7 +21,7 @@ final class SensorFocusControllerImpl extends CameraComponent
 	// Constants.
 	private static final long DURATION_SENSOR_AF_AFTER_TOUCH_AF = 3000;
 	private static final long DURATION_START_SENSOR_AF = 500;
-	private static final float STABLE_THRESHOLD = 2f;
+	private static final float STABLE_THRESHOLD = 1.5f;
 	private static final int MSG_START_AF = 10000;
 	
 	
@@ -29,6 +29,7 @@ final class SensorFocusControllerImpl extends CameraComponent
 	private SensorAfState m_AfState = SensorAfState.UNSTABLE;
 	private ExposureController m_ExposureController;
 	private FocusController m_FocusController;
+	private boolean m_IsAEResetNeeded;
 	private final float[] m_LastAccelerometerValues = new float[3];
 	private long m_LastTouchAFTime;
 	private TouchAutoFocusUI m_TouchAutoFocusUI;
@@ -150,6 +151,7 @@ final class SensorFocusControllerImpl extends CameraComponent
 	private void resetAfState()
 	{
 		m_AfState = SensorAfState.UNSTABLE;
+		m_IsAEResetNeeded = false;
 		this.getHandler().removeMessages(MSG_START_AF);
 	}
 	
@@ -199,7 +201,38 @@ final class SensorFocusControllerImpl extends CameraComponent
 				onAccelerometerValuesChanged(e.getNewValue());
 			}
 		});
-		cameraActivity.addCallback(CameraActivity.PROP_IS_TOUCHING_ON_SCREEN, callbackToReset);
+		cameraActivity.addCallback(CameraActivity.PROP_IS_TOUCHING_ON_SCREEN, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(!e.getNewValue())
+				{
+					resetAfState();
+					m_LastTouchAFTime = SystemClock.elapsedRealtime();
+				}
+			}
+		});
+		if(m_FocusController != null)
+		{
+			m_FocusController.addCallback(FocusController.PROP_FOCUS_STATE, new PropertyChangedCallback<FocusState>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<FocusState> key, PropertyChangeEventArgs<FocusState> e)
+				{
+					// reset AE
+					if(m_AfState == SensorAfState.STABLE_WITH_AF 
+							&& m_IsAEResetNeeded
+							&& e.getNewValue() == FocusState.SCANNING 
+							&& m_ExposureController != null)
+					{
+						m_ExposureController.set(ExposureController.PROP_AE_REGIONS, null);
+						m_ExposureController.set(ExposureController.PROP_EXPOSURE_COMPENSATION, 0f);
+						m_IsAEResetNeeded = false;
+					}
+				}
+			});
+		}
 	}
 	
 	// Start auto focus.
@@ -212,6 +245,9 @@ final class SensorFocusControllerImpl extends CameraComponent
 		// check state
 		if(!this.canSensorFocus())
 			return false;
+		
+		// update state
+		m_IsAEResetNeeded = true;
 		
 		// check focus mode
 		if(m_FocusController.get(FocusController.PROP_FOCUS_MODE) == FocusMode.CONTINUOUS_AF 
@@ -231,9 +267,13 @@ final class SensorFocusControllerImpl extends CameraComponent
 			return false;
 		}
 		
-		// reset AE regions
+		// reset AE
 		if(m_ExposureController != null)
+		{
 			m_ExposureController.set(ExposureController.PROP_AE_REGIONS, null);
+			m_ExposureController.set(ExposureController.PROP_EXPOSURE_COMPENSATION, 0f);
+			m_IsAEResetNeeded = false;
+		}
 		
 		// complete
 		return true;

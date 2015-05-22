@@ -29,6 +29,15 @@
 	<!-- Count-down timer -->
 	<dimen name="count_down_timer_text_size">60sp</dimen>
 	
+	<!-- Exposure compensation -->
+	<dimen name="exposure_comp_border_thickness">1dp</dimen>
+	<dimen name="exposure_comp_direction_icon_margin_top">23dp</dimen>
+	<dimen name="exposure_comp_icon_padding">10dp</dimen>
+	
+	<!-- Focus indicator -->
+	<dimen name="focus_indicator_container_height">180dp</dimen>
+	<dimen name="focus_indicator_container_width">180dp</dimen>
+	
 	<!-- Options panel -->
 	<dimen name="options_panel_height">70dp</dimen>
 	<dimen name="options_panel_item_height">50dp</dimen>

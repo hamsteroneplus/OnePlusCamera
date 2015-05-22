@@ -110,6 +110,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			onDeviceError(camera, 0, true);
 		}
 	};
+	private float m_ExposureCompensation;
 	private FlashMode m_FlashMode = FlashMode.OFF;
 	private FocusMode m_FocusMode = FocusMode.DISABLED;
 	private final String m_Id;
@@ -325,6 +326,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		Range<Integer>[] fpsRanges = cameraChar.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
 		this.setReadOnly(PROP_PREVIEW_FPS_RANGES, Arrays.asList(fpsRanges));
 		
+		// check exposure compensation state
+		float evStep = cameraChar.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue();
+		Range<Integer> exposureCompRange = cameraChar.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+		this.setReadOnly(PROP_EXPOSURE_COMPENSATION_RANGE, new Range<Float>(exposureCompRange.getLower() * evStep, exposureCompRange.getUpper() * evStep));
+		this.setReadOnly(PROP_EXPOSURE_COMPENSATION_STEP, cameraChar.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue());
+		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_FOCUS_STATE, LOG_PROPERTY_CHANGE);
@@ -404,7 +411,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	
 	// Apply AF regions to preview.
 	@SuppressWarnings("unchecked")
-	private void applyAfRegions()
+	private boolean applyAfRegions(List<MeteringRect> regions, CaptureRequest.Builder requestBuilder)
 	{
 		// check focus mode
 		switch(this.get(PROP_FOCUS_MODE))
@@ -413,19 +420,19 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			case NORMAL_AF:
 				break;
 			default:
-				return;
+				return false;
 		}
 		
 		// check preview state
-		if(m_PreviewRequestBuilder == null)
-			return;
+		if(requestBuilder == null)
+			return false;
 		
 		// create region list
 		m_TempList.clear();
 		List<MeteringRectangle> regionList = (List<MeteringRectangle>)m_TempList;
-		for(int i = m_AfRegions.size() - 1 ; i >= 0 ; --i)
+		for(int i = regions.size() - 1 ; i >= 0 ; --i)
 		{
-			MeteringRectangle rect = this.createMeteringRectangle(m_AfRegions.get(i));
+			MeteringRectangle rect = this.createMeteringRectangle(regions.get(i));
 			if(rect != null)
 				regionList.add(rect);
 		}
@@ -439,17 +446,33 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		
 		// apply regions
-		m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, regionArray);
-		this.applyToPreview();
+		requestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, regionArray);
+		return true;
+	}
+	
+	
+	// Apply exposure compensation.
+	private boolean applyExposureCompensation(float ev, CaptureRequest.Builder requestBuilder)
+	{
+		// check request builder
+		if(requestBuilder == null)
+			return false;
+		
+		// convert to steps
+		int steps = (int)Math.round(ev / this.get(PROP_EXPOSURE_COMPENSATION_STEP));
+		
+		// apply
+		requestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, steps);
+		return true;
 	}
 	
 	
 	// Apply focus mode to preview.
-	private void applyFocusMode()
+	private boolean applyFocusMode(FocusMode focusMode, CaptureRequest.Builder requestBuilder)
 	{
 		// prepare values
 		int afModeValue;
-		switch(m_FocusMode)
+		switch(focusMode)
 		{
 			case DISABLED:
 				afModeValue = CaptureRequest.CONTROL_AF_MODE_OFF;
@@ -468,15 +491,16 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				break;
 			default:
 				Log.e(TAG, "applyFocusMode() - Unknown focus mode : " + m_FocusMode);
-				return;
+				return false;
 		}
 		
 		// apply to preview
-		if(m_PreviewRequestBuilder != null)
+		if(requestBuilder != null)
 		{
-			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeValue);
-			this.applyToPreview();
+			requestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeValue);
+			return true;
 		}
+		return false;
 	}
 	
 	
@@ -632,24 +656,14 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(m_VideoSurface != null)
 				builder.addTarget(m_VideoSurface);
 			
-			// set flash mode
-			this.setFlashMode(m_FlashMode, builder);
-			
-			// setup AE states
-			this.applyAELock(m_IsAELocked, builder);
-			this.applyAERegions(m_AeRegions , builder);
-			
-			// setup focus states
-			//
+			// setup parameters
+			this.prepareCaptureRequestParams(builder);
 			
 			// set rotation
 			int deviceOrientation = this.get(PROP_PICTURE_ROTATION).getDeviceOrientation();
 			if(m_LensFacing == LensFacing.FRONT)
 				deviceOrientation = -deviceOrientation;
 			builder.set(CaptureRequest.JPEG_ORIENTATION, (m_SensorOrientation + deviceOrientation + 360) % 360);
-			
-			// set scene mode
-			this.applySceneMode(builder, m_SceneMode);
 			
 			// create request
 			m_PictureCaptureRequest = builder.build();
@@ -862,6 +876,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return (TValue)m_AeRegions;
 		if(key == PROP_AF_REGIONS)
 			return (TValue)m_AfRegions;
+		if(key == PROP_EXPOSURE_COMPENSATION)
+			return (TValue)(Float)m_ExposureCompensation;
 		if(key == PROP_FLASH_MODE)
 			return (TValue)m_FlashMode;
 		if(key == PROP_FOCUS_MODE)
@@ -1568,6 +1584,36 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	}
 	
 	
+	// Prepare capture request parameters.
+	private void prepareCaptureRequestParams(CaptureRequest.Builder requestBuilder)
+	{
+		// setup flash mode
+		this.setFlashMode(m_FlashMode, requestBuilder);
+		
+		// setup AE states
+		this.applyAELock(m_IsAELocked, requestBuilder);
+		this.applyAERegions(m_AeRegions ,requestBuilder);
+		this.applyExposureCompensation(m_ExposureCompensation, requestBuilder);
+		
+		// setup AF states
+		this.applyFocusMode(m_FocusMode, requestBuilder);
+		this.applyAfRegions(m_AfRegions, requestBuilder);
+		
+		// setup effect
+		//
+		
+		// setup scene mode
+		this.applySceneMode(requestBuilder, m_SceneMode);
+		
+		// setup FPS range
+		if(m_PreviewFpsRange != null)
+		{
+			Log.v(TAG, "prepareCaptureRequestParams() - FPS range : ", m_PreviewFpsRange);
+			requestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, m_PreviewFpsRange);
+		}
+	}
+	
+	
 	// Prepare Surface for capture.
 	private Surface prepareSurface(Object receiver)
 	{
@@ -1634,6 +1680,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return this.setAERegionsProp((List<MeteringRect>)value);
 		if(key == PROP_AF_REGIONS)
 			return this.setAFRegionsProp((List<MeteringRect>)value);
+		if(key == PROP_EXPOSURE_COMPENSATION)
+			return this.setExposureCompensationProp((Float)value);
 		if(key == PROP_FLASH_MODE)
 			return this.setFlashModeProp((FlashMode)value);
 		if(key == PROP_FOCUS_MODE)
@@ -1722,7 +1770,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// apply regions
 		List<MeteringRect> oldRegions = m_AfRegions;
 		m_AfRegions = regions;
-		this.applyAfRegions();
+		if(this.applyAfRegions(regions, m_PreviewRequestBuilder))
+			this.applyToPreview();
 		
 		// start AF later
 		if(!this.getHandler().hasMessages(MSG_START_AF))
@@ -1730,6 +1779,39 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// update property
 		return this.notifyPropertyChanged(PROP_AF_REGIONS, oldRegions, regions);
+	}
+	
+	
+	// Set PROP_EXPOSURE_COMPENSATION property.
+	private boolean setExposureCompensationProp(float ev)
+	{
+		// check state
+		this.verifyAccess();
+		this.verifyReleaseState();
+		
+		// check range
+		Range<Float> evRange = this.get(PROP_EXPOSURE_COMPENSATION_RANGE);
+		if(ev < evRange.getLower())
+			ev = evRange.getLower();
+		else if(ev > evRange.getUpper())
+			ev = evRange.getUpper();
+		
+		// check steps
+		float step = this.get(PROP_EXPOSURE_COMPENSATION_STEP);
+		ev = (Math.round(ev / step) * step);
+		if(Math.abs(m_ExposureCompensation - ev) < 0.001)
+			return false;
+		
+		Log.v(TAG, "setExposureCompensationProp() - EV : ", ev);
+		
+		// apply exposure compensation
+		float oldEV = m_ExposureCompensation;
+		m_ExposureCompensation = ev;
+		if(this.applyExposureCompensation(ev, m_PreviewRequestBuilder))
+			this.applyToPreview();
+		
+		// complete
+		return this.notifyPropertyChanged(PROP_EXPOSURE_COMPENSATION, oldEV, ev);
 	}
 	
 	
@@ -1823,7 +1905,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		// update focus mode
 		FocusMode oldMode = m_FocusMode;
 		m_FocusMode = focusMode;
-		this.applyFocusMode();
+		if(this.applyFocusMode(focusMode, m_PreviewRequestBuilder))
+			this.applyToPreview();
 		
 		// start AF later
 		if(!this.getHandler().hasMessages(MSG_START_AF))
@@ -2308,29 +2391,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				m_PreviewRequestBuilder.addTarget(m_PreviewCallbackSurface);
 			}
 			
-			// setup flash mode
-			this.setFlashMode(m_FlashMode, m_PreviewRequestBuilder);
-			
-			// setup AE states
-			this.applyAELock(m_IsAELocked, m_PreviewRequestBuilder);
-			this.applyAERegions(m_AeRegions ,m_PreviewRequestBuilder);
-			
-			// setup AF states
-			this.applyFocusMode();
-			this.applyAfRegions();
-			
-			// setup effect
-			//
-			
-			// setup scene mode
-			this.applySceneMode(m_PreviewRequestBuilder, m_SceneMode);
-			
-			// setup FPS range
-			if(m_PreviewFpsRange != null)
-			{
-				Log.v(TAG, "startCaptureSession() - FPS range : ", m_PreviewFpsRange);
-				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, m_PreviewFpsRange);
-			}
+			// setup parameters
+			this.prepareCaptureRequestParams(m_PreviewRequestBuilder);
 		}
 		catch(Throwable ex)
 		{

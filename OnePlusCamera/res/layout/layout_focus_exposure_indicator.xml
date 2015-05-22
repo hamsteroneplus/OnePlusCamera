@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/focus_exposure_indicator_container"
+	android:layout_width="@dimen/focus_indicator_container_width"
+	android:layout_height="@dimen/focus_indicator_container_height"
+	android:layout_alignParentLeft="true"
+	android:layout_alignParentTop="true"
+	android:visibility="gone" >
+	
+	<!-- Focus/Exposure indicator -->
+	<ImageView android:id="@+id/focus_indicator"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_centerInParent="true"/>
+	
+	<!-- Exposure compensation drag icon -->
+	<RelativeLayout android:id="@+id/exposure_comp_drag_icon_container"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent">
+		
+	    <ImageView android:id="@+id/exposure_comp_drag_icon"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_alignParentTop="true"
+			android:layout_centerHorizontal="true"
+			android:padding="@dimen/exposure_comp_icon_padding"
+			android:src="@drawable/exposure_comp_icon"/>
+	    
+	</RelativeLayout>
+	
+	<!-- Exposure compensation direction icon -->
+	<ImageView android:id="@+id/exposure_comp_direction_icon"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_alignParentTop="true"
+		android:layout_centerHorizontal="true"
+		android:layout_marginTop="@dimen/exposure_comp_direction_icon_margin_top"
+		android:visibility="gone"/>
+
+</RelativeLayout>
