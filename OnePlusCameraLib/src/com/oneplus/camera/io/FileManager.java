@@ -23,7 +23,7 @@ public interface FileManager extends Component
 	/**
 	 * Event raised when media file added.
 	 */
-	EventKey<EventArgs> EVENT_MEDIA_FILES_ADDED = new EventKey<>("MediaFileUpdated", EventArgs.class, FileManager.class);
+	EventKey<MediaEventArgs> EVENT_MEDIA_FILES_ADDED = new EventKey<>("MediaFileUpdated", MediaEventArgs.class, FileManager.class);
 	/**
 	 * Event raised when media file saving completed.
 	 */
@@ -49,7 +49,7 @@ public interface FileManager extends Component
 		void onBitmapLoad(Bitmap bitmap, boolean isVideo);
 	}
 
-	void getBitmap(final String path, final int width, final int height, final boolean isVertical, final PhotoCallback callback);
+	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position);
 	/**
 	 * Start media saving asynchronously.
 	 * @param task Media save task.

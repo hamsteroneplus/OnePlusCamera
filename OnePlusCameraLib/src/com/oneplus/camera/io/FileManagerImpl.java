@@ -6,6 +6,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -29,13 +33,25 @@ import com.oneplus.camera.CameraThreadComponent;
 import com.oneplus.camera.media.MediaEventArgs;
 
 final class FileManagerImpl extends CameraThreadComponent implements FileManager {
-	private FileManageerThread m_Thread = null;
-	private Handler m_FileHandler;
+	private FileManageerThread m_FileThread = null;
+	private DecodeBitmapThread m_DecodeBitmapThread = null;
+	private Handler m_FileHandler, m_DecodeBitmapHandler;
 	private final int MESSAGE_SAVE_MEDIA = 1000;
 	private final int MESSAGE_LOAD_IMAGES = 1001;
 	private final int MESSAGE_GET_BITMAP = 1002;
 	private final List<File> m_FileList = new ArrayList<>();
 	private FileObserver m_FileObserver;
+	// A managed pool of background decoder threads
+	private ThreadPoolExecutor m_DecodeThreadPool;
+	private static int NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors();
+	// Sets the amount of time an idle thread will wait for a task before
+	// terminating
+	private static final int KEEP_ALIVE_TIME = 1;
+	// Sets the Time Unit to seconds
+	private static final TimeUnit KEEP_ALIVE_TIME_UNIT = TimeUnit.SECONDS;;
+	// A queue of Runnables for the image decoding pool
+	private BlockingQueue<Runnable> m_DecodeWorkQueue;
+
 	private final File m_DefaultFolder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
 			"100MEDIA");
 	static final String[] IMAGE_FILTER = { ".jpg", };
@@ -50,9 +66,15 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	 * Called when initializing component.
 	 */
 	protected void onInitialize() {
-		m_Thread = new FileManageerThread("save media thread");
-		m_Thread.start();
-		m_FileHandler = m_Thread.getHandler();
+		// start file thread
+		m_FileThread = new FileManageerThread("save media thread");
+		m_FileThread.start();
+		m_FileHandler = m_FileThread.getHandler();
+		// start image thread
+		m_DecodeBitmapThread = new DecodeBitmapThread("decode bitmap thread");
+		m_DecodeBitmapThread.start();
+		m_DecodeBitmapHandler = m_DecodeBitmapThread.getHandler();
+		// observe file change
 		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_LOAD_IMAGES));
 		m_FileObserver = new FileObserver(m_DefaultFolder.getAbsolutePath()) {
 
@@ -64,6 +86,15 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 			}
 		};
 		m_FileObserver.startWatching(); // START OBSERVING
+
+		/*
+		 * Creates a work queue for the pool of Thread objects used for
+		 * decoding, using a linked list queue that blocks when the queue is
+		 * empty.
+		 */
+		m_DecodeWorkQueue = new LinkedBlockingQueue<Runnable>();
+		m_DecodeThreadPool = new ThreadPoolExecutor(NUMBER_OF_CORES, NUMBER_OF_CORES, KEEP_ALIVE_TIME, KEEP_ALIVE_TIME_UNIT,
+				m_DecodeWorkQueue);
 	}
 
 	/**
@@ -71,8 +102,8 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	 */
 	protected void onDeinitialize() {
 		super.onDeinitialize();
-		m_Thread.quitSafely();
-		m_Thread = null;
+		m_FileThread.quitSafely();
+		m_FileThread = null;
 		m_FileHandler = null;
 		m_FileList.clear();
 		m_FileObserver.stopWatching();
@@ -95,22 +126,28 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	}
 
 	@Override
-	public void getBitmap(final String path, final int width, final int height, final boolean isVertical,
-			final PhotoCallback callback) {
+	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position) {
 
-		m_FileHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, new BitmapArgs(path,
-				isVertical, callback)));
+		m_DecodeBitmapThread.m_Current = position;
+		m_DecodeBitmapHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
+				new BitmapArgs(position, path, isVertical, callback)));
 	}
 
 	private class BitmapArgs {
+		private int m_Position;
 		private String m_Path;
 		private PhotoCallback m_callback;
 		private boolean m_IsVertical;
 
-		BitmapArgs(String path, boolean isVertical, PhotoCallback callback) {
+		BitmapArgs(int position, String path, boolean isVertical, PhotoCallback callback) {
+			m_Position = position;
 			m_Path = path;
 			m_IsVertical = isVertical;
 			m_callback = callback;
+		}
+		
+		int getPosition() {
+			return m_Position;
 		}
 
 		String getPath() {
@@ -206,7 +243,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						if (task.saveMediaToFile()) {
 							m_FileList.add(0, new File(task.getFilePath()));
 							notifyCameraThread(EVENT_MEDIA_FILE_SAVED, task);
-							notifyCameraThread(EVENT_MEDIA_FILES_ADDED, EventArgs.EMPTY);
+							notifyCameraThread(EVENT_MEDIA_FILES_ADDED, task);
 							// insert MediaStore
 							if (task.insertToMediaStore()) {
 								notifyCameraThread(EVENT_MEDIA_SAVED, task);
@@ -258,6 +295,68 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 					}
 					case MESSAGE_GET_BITMAP: {
 						BitmapArgs args = (BitmapArgs) msg.obj;
+						boolean isImage = false;
+						for (String filter : IMAGE_FILTER) {
+							if (args.getPath().toLowerCase().endsWith(filter)) {
+								isImage = true;
+								break;
+							}
+						}
+						Bitmap bitmap;
+						Boolean isVideo;
+						if (isImage) {
+							bitmap = decodeBitmap(args.getPath(), msg.arg1, msg.arg2);
+							isVideo = false;
+						} else {
+							bitmap = ThumbnailUtils.createVideoThumbnail(args.getPath(),
+									MediaStore.Video.Thumbnails.FULL_SCREEN_KIND);
+							isVideo = true;
+						}
+						if (args.m_IsVertical) {
+							Matrix matrix = new Matrix();
+
+							matrix.postRotate(90);
+
+							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+						}
+
+						args.getCallback().onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, msg.arg1, msg.arg2), isVideo);
+						break;
+					}
+					}
+				}
+			};
+		}
+	}
+
+	class DecodeBitmapThread extends HandlerThread {
+		private static final String TAG = "DecodeBitmapThread";
+		private Handler m_Handler;
+		private int m_Current;
+		static final private int OFFSET = 3;
+
+		public DecodeBitmapThread(String name) {
+			super(name);
+		}
+
+		public Handler getHandler() {
+			return m_Handler;
+		}
+
+		@Override
+		public void start() {
+			super.start();
+			Looper looper = getLooper(); // will block until thread¡¦s Looper
+											// object initialized
+			m_Handler = new Handler(looper) {
+				@Override
+				public void handleMessage(Message msg) {
+					switch (msg.what) {
+					case MESSAGE_GET_BITMAP: {
+						BitmapArgs args = (BitmapArgs) msg.obj;
+						if(args.getPosition() > m_Current+OFFSET || args.getPosition() < Math.max(0, m_Current-OFFSET)){
+							return;
+						}
 						boolean isImage = false;
 						for (String filter : IMAGE_FILTER) {
 							if (args.getPath().toLowerCase().endsWith(filter)) {
