@@ -5,7 +5,7 @@ import java.util.ArrayDeque;
 /**
  * Event data for property changing.
  */
-public class PropertyChangeEventArgs<TValue> extends EventArgs
+public class PropertyChangeEventArgs<TValue> extends EventArgs implements RecyclableObject
 {
 	// Constants
 	private static final int POOL_CAPACITY = 32;

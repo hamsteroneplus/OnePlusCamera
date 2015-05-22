@@ -39,6 +39,19 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<OperationState> PROP_CAPTURE_STATE = new PropertyKey<>("CaptureState", OperationState.class, Camera.class, OperationState.STOPPED);
 	/**
+	 * Property to get or set exposure compensation in EV.
+	 */
+	PropertyKey<Float> PROP_EXPOSURE_COMPENSATION = new PropertyKey<>("ExposureCompensation", Float.class, Camera.class, PropertyKey.FLAG_NOT_NULL, 0f);
+	/**
+	 * Read-only property to get exposure compensation range in EV.
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	PropertyKey<Range<Float>> PROP_EXPOSURE_COMPENSATION_RANGE = new PropertyKey<Range<Float>>("ExposureCompensationRange", (Class)Range.class, Camera.class, new Range<Float>(0f, 0f));
+	/**
+	 * Read-only property to get minimum exposure compensation step in EV.
+	 */
+	PropertyKey<Float> PROP_EXPOSURE_COMPENSATION_STEP = new PropertyKey<>("ExposureCompensationStep", Float.class, Camera.class, 0f);
+	/**
 	 * Property to get or set flash mode.
 	 */
 	PropertyKey<FlashMode> PROP_FLASH_MODE = new PropertyKey<>("FlashMode", FlashMode.class, Camera.class, PropertyKey.FLAG_NOT_NULL, FlashMode.AUTO);
@@ -343,6 +356,14 @@ public interface Camera extends BaseObject, HandlerObject
 					|| m_Rect.right < 0
 					|| m_Rect.bottom < 0
 					|| Float.isNaN(m_Weight));
+		}
+		
+		
+		// Get string represents this rectangle.
+		@Override
+		public String toString()
+		{
+			return m_Rect.toString();
 		}
 	}
 	

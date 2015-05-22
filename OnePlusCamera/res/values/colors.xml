@@ -12,6 +12,9 @@
 	<color name="count_down_timer_text">#FFEA01</color>
 	<color name="count_down_timer_text_shadow">#99000000</color>
 	
+	<!-- Exposure compensation -->
+	<color name="exposure_comp_border">#FFEE00</color>
+	
 	<!-- Options panel -->
 	<color name="options_panel_background">#4C000000</color>
 	<color name="options_panel_item_text">#99FFFFFF</color>

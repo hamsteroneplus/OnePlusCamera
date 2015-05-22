@@ -5,11 +5,12 @@ import java.util.ArrayDeque;
 import android.view.MotionEvent;
 
 import com.oneplus.base.EventArgs;
+import com.oneplus.base.RecyclableObject;
 
 /**
  * Data for motion related events.
  */
-public class MotionEventArgs extends EventArgs
+public class MotionEventArgs extends EventArgs implements RecyclableObject
 {
 	// Constants.
 	private static final int POOL_SIZE = 8;
