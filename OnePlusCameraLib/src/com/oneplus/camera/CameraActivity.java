@@ -107,6 +107,10 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<View> PROP_CONTENT_VIEW = new PropertyKey<>("ContentView", View.class, CameraActivity.class, PropertyKey.FLAG_READONLY, null);
 	/**
+	 * Read-only property for current device orientation.
+	 */
+	public static final PropertyKey<Integer> PROP_DEVICE_ORIENTATION = new PropertyKey<>("DeviceOrientation", Integer.class, CameraActivity.class, 0);
+	/**
 	 * Read-only property to get elapsed recording time in seconds.
 	 */
 	public static final PropertyKey<Long> PROP_ELAPSED_RECORDING_SECONDS = new PropertyKey<>("ElapsedRecordingSeconds", Long.class, CameraActivity.class, 0L);
@@ -139,9 +143,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_TOUCHING_ON_SCREEN = new PropertyKey<>("IsTouchingOnScreen", Boolean.class, CameraActivity.class, false);
 	/**
-	 * Read-only property for current device orientation.
+	 * Read-only property to check whether video snapshot is enabled or not.
 	 */
-	public static final PropertyKey<Integer> PROP_DEVICE_ORIENTATION = new PropertyKey<>("DeviceOrientation", Integer.class, CameraActivity.class, 0);
+	public static final PropertyKey<Boolean> PROP_IS_VIDEO_SNAPSHOT_ENABLED = new PropertyKey<>("IsVideoSnapshotEnabled", Boolean.class, CameraActivity.class, false);
 	/**
 	 * Read-only property to check whether activity is launching (before first starting preview) or not.
 	 */
@@ -295,7 +299,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 					stopPhotoCapture(this);
 					break;
 				case VIDEO:
-					stopVideoCapture(this);
+					stopVideoCapture(this, false, false);
 					break;
 			}
 		}
@@ -576,6 +580,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			case PHOTO:
 				return false;
 			case VIDEO:
+				if(!this.get(PROP_IS_VIDEO_SNAPSHOT_ENABLED))
+					return false;
 				switch(this.get(PROP_VIDEO_CAPTURE_STATE))
 				{
 					case CAPTURING:
@@ -1473,6 +1479,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	{
 		keys.add(CameraThread.PROP_AVAILABLE_CAMERAS);
 		keys.add(CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED);
+		keys.add(CameraThread.PROP_IS_VIDEO_SNAPSHOT_ENABLED);
 		keys.add(CameraThread.PROP_PHOTO_CAPTURE_STATE);
 		keys.add(CameraThread.PROP_VIDEO_CAPTURE_STATE);
 	}
@@ -1614,7 +1621,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			
 			// stop video capture
 			if(Handle.isValid(m_VideoCaptureHandle))
-				this.stopVideoCapture(m_VideoCaptureHandle);
+				this.stopVideoCapture(m_VideoCaptureHandle, false, true);
 		}
 	}
 	
@@ -1647,6 +1654,8 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			this.onAvailableCamerasChanged((List<Camera>)e.getNewValue());
 		else if(key == CameraThread.PROP_IS_CAMERA_PREVIEW_RECEIVED)
 			this.setReadOnly(PROP_IS_CAMERA_PREVIEW_RECEIVED, (Boolean)e.getNewValue());
+		else if(key == CameraThread.PROP_IS_VIDEO_SNAPSHOT_ENABLED)
+			this.setReadOnly(PROP_IS_VIDEO_SNAPSHOT_ENABLED, (Boolean)e.getNewValue());
 		else if(key == CameraThread.PROP_PHOTO_CAPTURE_STATE)
 			this.onCameraThreadCaptureStateChanged((PhotoCaptureState)e.getOldValue(), (PhotoCaptureState)e.getNewValue());
 		else if(key == CameraThread.PROP_VIDEO_CAPTURE_STATE)
@@ -1716,11 +1725,12 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		}
 		
 		// complete capture
-		if(this.get(PROP_STATE) == State.RUNNING)
+		switch(handle.getMediaType())
 		{
-			switch(handle.getMediaType())
+			case PHOTO:
 			{
-				case PHOTO:
+				// restart preview
+				if(this.get(PROP_STATE) == State.RUNNING)
 				{
 					if(this.startCameraPreview())
 					{
@@ -1744,10 +1754,32 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 						Log.e(TAG, "onCaptureCompleted() - Fail to start camera preview");
 						this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
 					}
-					break;
+				}
+				else
+				{
+					Log.w(TAG, "onCaptureCompleted() - Activity state is " + this.get(PROP_STATE));
+					this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
 				}
 				
-				case VIDEO:
+				// stop video recording
+				if(this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO 
+						&& this.get(PROP_VIDEO_CAPTURE_STATE) == VideoCaptureState.STOPPING
+						&& m_VideoCaptureHandle != null)
+				{
+					Log.w(TAG, "onCaptureCompleted() - Continue stopping video recording");
+					this.stopVideoCapture(m_VideoCaptureHandle, true, false);
+				}
+				break;
+			}
+			
+			case VIDEO:
+			{
+				// reset states
+				this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, 0L);
+				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
+				
+				// restart preview
+				if(this.get(PROP_STATE) == State.RUNNING)
 				{
 					if(this.startCameraPreview())
 					{
@@ -1759,17 +1791,14 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 						Log.e(TAG, "onCaptureCompleted() - Fail to start camera preview");
 						this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
 					}
-					break;
 				}
+				else
+				{
+					Log.w(TAG, "onCaptureCompleted() - Activity state is " + this.get(PROP_STATE));
+					this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
+				}
+				break;
 			}
-		}
-		else
-		{
-			Log.w(TAG, "onCaptureCompleted() -Activity state is " + this.get(PROP_STATE));
-			
-			// reset capture state
-			this.setReadOnly(PROP_PHOTO_CAPTURE_STATE, PhotoCaptureState.PREPARING);
-			this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.PREPARING);
 		}
 	}
 	
@@ -2272,7 +2301,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			case STARTING:
 			case CAPTURING:
 				this.raise(EVENT_CAPTURE_FAILED, new CaptureEventArgs(handle));
-				this.stopVideoCapture(handle);
+				this.stopVideoCapture(handle, false, true);
 				this.completeCapture(handle);
 				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
@@ -2308,6 +2337,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				this.updateElapsedRecordingTime(-1, -1);
 				this.setReadOnly(PROP_VIDEO_CAPTURE_STATE, VideoCaptureState.CAPTURING);
 				this.raise(EVENT_CAPTURE_STARTED, new CaptureEventArgs(handle));
+				this.resetPhotoCaptureState();
 				m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
 				break;
 			case STOPPING:
@@ -3021,7 +3051,7 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 	
 	
 	// Stop capturing video.
-	private void stopVideoCapture(CaptureHandleImpl handle)
+	private void stopVideoCapture(CaptureHandleImpl handle, boolean fromVideoSnapshot, boolean fromCameraThread)
 	{
 		// check state
 		this.verifyAccess();
@@ -3031,7 +3061,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			return;
 		}
 		
-		Log.w(TAG, "stopVideoCapture() - Handle : " + handle);
+		Log.w(TAG, "stopVideoCapture() - Handle : " + handle + ", from camera thread : " + fromCameraThread);
+		if(fromVideoSnapshot)
+			Log.w(TAG, "stopVideoCapture() - Stop from video snapshot");
 		
 		// close handle
 		handle.close();
@@ -3058,6 +3090,24 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 		
 		// stop timer
 		HandlerUtils.removeMessages(this, MSG_UPDATE_ELAPSED_RECORDING_TIME);
+		
+		// waiting for video snapshot
+		switch(this.get(PROP_PHOTO_CAPTURE_STATE))
+		{
+			case PREPARING:
+				break;
+			case READY:
+				this.resetPhotoCaptureState();
+				break;
+			default:
+				if(!fromVideoSnapshot && !fromCameraThread)
+				{
+					Log.w(TAG, "stopVideoCapture() - Waiting for video snapshot");
+					return;
+				}
+				this.resetPhotoCaptureState();
+				break;
+		}
 		
 		// stop capture
 		if(Handle.isValid(handle.internalCaptureHandle))

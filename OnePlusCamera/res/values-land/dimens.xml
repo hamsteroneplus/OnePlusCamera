@@ -6,9 +6,9 @@
     <dimen name="capture_bar_button_margin_right">14dp</dimen>
     <dimen name="capture_bar_button_margin_top">20dp</dimen>
     <dimen name="capture_bar_button_padding">10dp</dimen>
+    <dimen name="capture_bar_height">0dp</dimen>
     <dimen name="capture_bar_primary_button_margin_bottom">0dp</dimen>
     <dimen name="capture_bar_primary_button_margin_right">35dp</dimen>
-    <dimen name="capture_bar_height">0dp</dimen>
     <dimen name="capture_bar_width">160dp</dimen>
     
     <!-- Options panel -->

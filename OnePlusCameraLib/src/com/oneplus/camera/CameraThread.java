@@ -98,6 +98,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	 */
 	public static final PropertyKey<Boolean> PROP_IS_CAMERA_PREVIEW_RECEIVED = new PropertyKey<>("IsCameraPreviewReceived", Boolean.class, CameraThread.class, false);
 	/**
+	 * Read-only property to check whether video snapshot is enabled or not.
+	 */
+	public static final PropertyKey<Boolean> PROP_IS_VIDEO_SNAPSHOT_ENABLED = new PropertyKey<>("IsVideoSnapshotEnabled", Boolean.class, CameraThread.class, false);
+	/**
 	 * Read-only property for current captured media type.
 	 */
 	public static final PropertyKey<MediaType> PROP_MEDIA_TYPE = new PropertyKey<>("MediaType", MediaType.class, CameraThread.class, MediaType.PHOTO);
@@ -156,6 +160,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private VideoCaptureHandlerHandle m_VideoCaptureHandlerHandle;
 	private List<VideoCaptureHandlerHandle> m_VideoCaptureHandlerHandles;
 	private String m_VideoFilePath;
+	private List<Handle> m_VideoSnapshotDisableHandles;
 	private Handle m_VideoStartSoundHandle;
 	private Handle m_VideoStopSoundHandle;
 	
@@ -1014,6 +1019,48 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	/**
+	 * Disable video snapshot.
+	 * @return Handle to this operation.
+	 */
+	public Handle disableVideoSnapshot()
+	{
+		// check state
+		this.verifyAccess();
+		
+		// create handle
+		Handle handle = new Handle("DisableVideoSnapshot")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				enableVideoSnapshot(this);
+			}
+		};
+		m_VideoSnapshotDisableHandles.add(handle);
+		
+		// disable video snapshot
+		if(m_VideoSnapshotDisableHandles.size() == 1)
+			this.setReadOnly(PROP_IS_VIDEO_SNAPSHOT_ENABLED, false);
+		
+		// complete
+		return handle;
+	}
+	
+	
+	// Enable video snapshot.
+	private void enableVideoSnapshot(Handle handle)
+	{
+		this.verifyAccess();
+		if(m_VideoSnapshotDisableHandles.remove(handle) 
+				&& m_VideoSnapshotDisableHandles.isEmpty()
+				&& this.get(PROP_MEDIA_TYPE) == MediaType.VIDEO)
+		{
+			this.setReadOnly(PROP_IS_VIDEO_SNAPSHOT_ENABLED, true);
+		}
+	}
+	
+	
 	// Find component extends or implements given type.
 	@Override
 	public <TComponent extends Component> TComponent findComponent(Class<TComponent> componentType)
@@ -1223,7 +1270,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		Log.v(TAG, "onShutter() - Index : ", e.getFrameIndex());
 		
 		// play shutter sound
-		if(e.getFrameIndex() == 0)
+		if(this.get(PROP_VIDEO_CAPTURE_STATE) != VideoCaptureState.CAPTURING && e.getFrameIndex() == 0)
 		{
 			if(m_IsCapturingBurstPhotos)
 			{
@@ -1271,6 +1318,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		// create handle lists
 		m_PhotoCaptureHandlerHandles = new ArrayList<>();
 		m_VideoCaptureHandlerHandles = new ArrayList<>();
+		m_VideoSnapshotDisableHandles = new ArrayList<>();
 		
 		// setup initial states
 		synchronized(this)
@@ -1613,6 +1661,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 						Log.e(TAG, "setMediaTypeInternal() - Current video capture state is " + this.get(PROP_VIDEO_CAPTURE_STATE));
 						return false;
 				}
+				this.setReadOnly(PROP_IS_VIDEO_SNAPSHOT_ENABLED, false);
 				break;
 			}
 			
@@ -1627,6 +1676,8 @@ public class CameraThread extends BaseThread implements ComponentOwner
 						Log.e(TAG, "setMediaTypeInternal() - Current photo capture state is " + this.get(PROP_PHOTO_CAPTURE_STATE));
 						return false;
 				}
+				if(m_VideoSnapshotDisableHandles.isEmpty())
+					this.setReadOnly(PROP_IS_VIDEO_SNAPSHOT_ENABLED, true);
 				break;
 			}
 			

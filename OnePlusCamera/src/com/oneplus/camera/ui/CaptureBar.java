@@ -49,8 +49,10 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	private CaptureHandle m_PhotoCaptureHandle;
 	private ImageButton m_PrimaryButton;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonBackgroundHandles = new LinkedList<>();
-	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+	private CaptureButtonFunction m_PrimaryButtonFunction = CaptureButtonFunction.NONE;
 	private final LinkedList<ButtonDrawableHandle> m_PrimaryButtonIconHandles = new LinkedList<>();
+	private ImageButton m_SecondaryButton;
+	private CaptureButtonFunction m_SecondaryButtonFunction = CaptureButtonFunction.NONE;
 	private ImageButton m_SelfTimerButton;
 	private ImageButton m_SwitchCameraButton;
 	private CaptureHandle m_VideoCaptureHandle;
@@ -59,6 +61,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 	// Constants for capture button function.
 	private enum CaptureButtonFunction
 	{
+		NONE,
 		CAPTURE_PHOTO,
 		CAPTURE_VIDEO,
 		PAUSE_RESUME_VIDEO,
@@ -184,6 +187,13 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 			@Override
 			public boolean onTouch(View v, MotionEvent event)
 			{
+				float x = event.getX();
+				float y = event.getY();
+				if(x < 0 || x > v.getWidth() || y < 0 || y > v.getHeight())
+				{
+					onPrimaryButtonReleased();
+					return false;
+				}
 				switch(event.getAction())
 				{
 					case MotionEvent.ACTION_DOWN:
@@ -195,6 +205,15 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 						break;
 				}
 				return false;
+			}
+		});
+		m_SecondaryButton = (ImageButton)m_CaptureBar.findViewById(R.id.secondary_capture_button);
+		m_SecondaryButton.setOnClickListener(new View.OnClickListener()
+		{
+			@Override
+			public void onClick(View v)
+			{
+				onSecondaryButtonClicked();
 			}
 		});
 		m_FlashButton = (ImageButton)m_CaptureBar.findViewById(R.id.flash_button);
@@ -273,6 +292,30 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				updateSwitchCameraButton();
 			}
 		});
+		cameraActivity.addCallback(CameraActivity.PROP_IS_VIDEO_SNAPSHOT_ENABLED, new PropertyChangedCallback<Boolean>()
+		{
+			@SuppressWarnings("incomplete-switch")
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(m_SecondaryButtonFunction != CaptureButtonFunction.CAPTURE_PHOTO)
+					return;
+				if(e.getNewValue())
+				{
+					switch(getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+					{
+						case CAPTURING:
+						case PAUSING:
+						case PAUSED:
+						case RESUMING:
+							setViewVisibility(m_SecondaryButton, true);
+							break;
+					}
+				}
+				else
+					setViewVisibility(m_SecondaryButton, false);
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_MEDIA_TYPE, new PropertyChangedCallback<MediaType>()
 		{
 			@Override
@@ -307,12 +350,26 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		});
 		cameraActivity.addCallback(CameraActivity.PROP_VIDEO_CAPTURE_STATE, new PropertyChangedCallback<VideoCaptureState>()
 		{
+			@SuppressWarnings("incomplete-switch")
 			@Override
 			public void onPropertyChanged(PropertySource source, PropertyKey<VideoCaptureState> key, PropertyChangeEventArgs<VideoCaptureState> e)
 			{
+				// update button states
 				updateButtonFunctions(true);
 				updateMoreOptionsButton(false);
 				updateSwitchCameraButton();
+				
+				// show/hide secondary button
+				switch(e.getNewValue())
+				{
+					case CAPTURING:
+						if(getCameraActivity().get(CameraActivity.PROP_IS_VIDEO_SNAPSHOT_ENABLED))
+							setViewVisibility(m_SecondaryButton, true);
+						break;
+					case STOPPING:
+						setViewVisibility(m_SecondaryButton, false);
+						break;
+				}
 			}
 		});
 		if(m_FlashController != null)
@@ -354,6 +411,7 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		
 		// setup initial UI rotation
 		this.addAutoRotateView(m_PrimaryButton);
+		this.addAutoRotateView(m_SecondaryButton);
 		this.addAutoRotateView(m_FlashButton);
 		this.addAutoRotateView(m_MoreOptionsButton);
 		this.addAutoRotateView(m_SelfTimerButton);
@@ -455,6 +513,25 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 				break;
 			case PAUSE_RESUME_VIDEO:
 				//
+				break;
+		}
+	}
+	
+	
+	// Called when secondary button clicked.
+	@SuppressWarnings("incomplete-switch")
+	private void onSecondaryButtonClicked()
+	{
+		if(!this.isCaptureUIEnabled())
+			return;
+		switch(m_SecondaryButtonFunction)
+		{
+			case CAPTURE_PHOTO:
+				if(this.getMediaType() == MediaType.VIDEO)
+					Log.v(TAG, "onSecondaryButtonClicked() - Take video snapshot");
+				m_PhotoCaptureHandle = this.getCameraActivity().capturePhoto();
+				if(!Handle.isValid(m_PhotoCaptureHandle))
+					Log.e(TAG, "onSecondaryButtonClicked() - Fail to capture photo");
 				break;
 		}
 	}
@@ -625,9 +702,11 @@ final class CaptureBar extends UIComponent implements CaptureButtons
 		{
 			case PHOTO:
 				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
+				m_SecondaryButtonFunction = CaptureButtonFunction.NONE;
 				break;
 			case VIDEO:
 				m_PrimaryButtonFunction = CaptureButtonFunction.CAPTURE_VIDEO;
+				m_SecondaryButtonFunction = CaptureButtonFunction.CAPTURE_PHOTO;
 				break;
 		}
 		if(updateBackground)
