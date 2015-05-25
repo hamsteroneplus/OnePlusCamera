@@ -118,6 +118,42 @@ public class Settings extends HandlerBaseObject
 	
 	
 	/**
+	 * Get boolean value.
+	 * @param key Key.
+	 * @return Value of given key, or default value if key does not exists.
+	 */
+	public final boolean getBoolean(String key)
+	{
+		Object obj = this.getDefaultValue(key);
+		boolean defaultValue = (obj instanceof Boolean ? (Boolean)obj : false);
+		return this.getBoolean(key, defaultValue);
+	}
+	
+	
+	/**
+	 * Get boolean value.
+	 * @param key Key.
+	 * @param defaultValue Default value.
+	 * @return Value of given key, or default value if key does not exists.
+	 */
+	public final boolean getBoolean(String key, boolean defaultValue)
+	{
+		synchronized(PRIVATE_KEYS)
+		{
+			if(!PRIVATE_KEYS.contains(key))
+				return m_GlobalPreferences.getBoolean(key, defaultValue);
+			if(!m_IsVolatile)
+				return m_PrivatePreferences.getBoolean(key, defaultValue);
+		}
+		synchronized(m_PrivateVolatileValues)
+		{
+			Object value = m_PrivateVolatileValues.get(key);
+			return (value instanceof Boolean ? (Boolean)value : defaultValue);
+		}
+	}
+	
+	
+	/**
 	 * Get default value.
 	 * @param key Key.
 	 * @return Default value.
@@ -283,6 +319,16 @@ public class Settings extends HandlerBaseObject
 	
 	
 	/**
+	 * Get settings name.
+	 * @return Name.
+	 */
+	public final String getName()
+	{
+		return m_Name;
+	}
+	
+	
+	/**
 	 * Get string value.
 	 * @param key Key.
 	 * @return Value of given key, or default value if key does not exists.
@@ -332,6 +378,16 @@ public class Settings extends HandlerBaseObject
 				super.handleMessage(msg);
 				break;
 		}
+	}
+	
+	
+	/**
+	 * Check whether settings is volatile or not.
+	 * @return Whether settings is volatile or not.
+	 */
+	public final boolean isVolatile()
+	{
+		return m_IsVolatile;
 	}
 	
 	
@@ -394,7 +450,7 @@ public class Settings extends HandlerBaseObject
 		}
 		synchronized(m_PrivateVolatileValues)
 		{
-			if(value instanceof Integer || value instanceof Long)
+			if(value instanceof Boolean || value instanceof Integer || value instanceof Long)
 				m_PrivateVolatileValues.put(key, value);
 			else if(value != null)
 				m_PrivateVolatileValues.put(key, value.toString());
@@ -411,9 +467,11 @@ public class Settings extends HandlerBaseObject
 	// Set value to shared preferences.
 	private void set(SharedPreferences.Editor editor, String key, Object value)
 	{
-		if(value instanceof Integer)
+		if(value instanceof Boolean)
+			editor.putBoolean(key, (Boolean)value);
+		else if(value instanceof Integer)
 			editor.putInt(key, (Integer)value);
-		if(value instanceof Long)
+		else if(value instanceof Long)
 			editor.putLong(key, (Long)value);
 		else if(value != null)
 			editor.putString(key, value.toString());

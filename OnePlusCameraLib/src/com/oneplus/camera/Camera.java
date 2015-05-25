@@ -6,6 +6,7 @@ import java.util.List;
 import android.graphics.ImageFormat;
 import android.graphics.RectF;
 import android.hardware.camera2.CaptureRequest;
+import android.location.Location;
 import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
@@ -104,6 +105,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Read-only property for camera device facing.
 	 */
 	PropertyKey<LensFacing> PROP_LENS_FACING = new PropertyKey<>("LensFacing", LensFacing.class, Camera.class, LensFacing.BACK);
+	/**
+	 * Property to get or set location.
+	 */
+	PropertyKey<Location> PROP_LOCATION = new PropertyKey<>("Location", Location.class, Camera.class, 0, null);
 	/**
 	 * Read-only property to check maximum number of AE regions supported by camera.
 	 */

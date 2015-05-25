@@ -1,5 +1,12 @@
 <resources>
 
+	<!-- Advanced settings -->
+	<dimen name="adv_settings_item_height">63dp</dimen>
+	<dimen name="adv_settings_item_padding_left">16dp</dimen>
+	<dimen name="adv_settings_item_padding_right">16dp</dimen>
+	<dimen name="adv_settings_item_summary_text_size">13sp</dimen>
+	<dimen name="adv_settings_item_title_text_size">16sp</dimen>
+	
 	<!-- Capture bar -->
 	<dimen name="capture_bar_button_margin_bottom">14dp</dimen>
 	<dimen name="capture_bar_button_margin_left">20dp</dimen>

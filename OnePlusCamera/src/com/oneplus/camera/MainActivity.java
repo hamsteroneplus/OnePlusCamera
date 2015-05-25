@@ -8,6 +8,8 @@ import com.oneplus.base.PropertySource;
 import com.oneplus.camera.capturemode.CaptureModeManager;
 import com.oneplus.camera.scene.SceneManager;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.ViewGroup;
 import android.view.ViewStub;
@@ -135,5 +137,31 @@ public class MainActivity extends CameraActivity
 	{
 		// call super
 		super.onPause();
+	}
+	
+	
+	/**
+	 * Open advanced settings UI.
+	 * @return True if advanced settings UI shows successfully, False otherwise.
+	 */
+	public final boolean showAdvancedSettings()
+	{
+		// start activity
+		try
+		{
+			Settings settings = this.get(PROP_SETTINGS);
+			Intent intent = new Intent(this.getApplicationContext(), AdvancedSettingsActivity.class);
+			intent.putExtra(AdvancedSettingsActivity.EXTRA_SETTINGS_NAME, settings.getName());
+			intent.putExtra(AdvancedSettingsActivity.EXTRA_SETTINGS_IS_VOLATILE, settings.isVolatile());
+			this.startActivityForResult(intent, 0);
+		}
+		catch(ActivityNotFoundException ex)
+		{
+			Log.e(TAG, "showAdvancedSettings() - Fail to start activity", ex);
+			return false;
+		}
+		
+		// complete
+		return true;
 	}
 }

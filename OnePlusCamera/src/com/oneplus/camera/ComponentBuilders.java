@@ -2,6 +2,7 @@ package com.oneplus.camera;
 
 import com.oneplus.base.component.ComponentBuilder;
 import com.oneplus.camera.capturemode.CaptureModeManagerBuilder;
+import com.oneplus.camera.location.LocationManagerBuilder;
 import com.oneplus.camera.media.AudioManagerBuilder;
 import com.oneplus.camera.scene.SceneManagerBuilder;
 import com.oneplus.camera.slowmotion.SlowMotionControllerBuilder;
@@ -21,6 +22,7 @@ final class ComponentBuilders
 {
 	static final ComponentBuilder[] BUILDERS_CAMERA_THREAD = new ComponentBuilder[]{
 		new AudioManagerBuilder(),
+		new LocationManagerBuilder(),
 		new SlowMotionControllerBuilder(),
 		new TimelapseControllerBuilder(),
 	};
@@ -35,6 +37,7 @@ final class ComponentBuilders
 		new CountDownTimerIndicatorBuilder(),
 		new FlashControllerBuilder(),
 		new FocusExposureIndicatorBuilder(),
+		new LocationManagerBuilder(),
 		new OptionsPanelBuilder(),
 		new PreviewGalleryBuilder(),
 		new RecordingTimerUIBuilder(),

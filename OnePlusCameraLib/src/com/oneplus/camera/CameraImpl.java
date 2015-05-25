@@ -22,6 +22,7 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.location.Location;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
@@ -664,6 +665,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			if(m_LensFacing == LensFacing.FRONT)
 				deviceOrientation = -deviceOrientation;
 			builder.set(CaptureRequest.JPEG_ORIENTATION, (m_SensorOrientation + deviceOrientation + 360) % 360);
+			
+			// set location
+			Location location = this.get(PROP_LOCATION);
+			if(location != null)
+				builder.set(CaptureRequest.JPEG_GPS_LOCATION, location);
 			
 			// create request
 			m_PictureCaptureRequest = builder.build();
@@ -2326,17 +2332,6 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		surfaces.add(m_PreviewSurface);
 		
-		// prepare picture surface
-		if(!m_IsRecordingMode)
-			m_PictureReader = ImageReader.newInstance(pictureSize.getWidth(), pictureSize.getHeight(), pictureFormat, 1);
-		else if(m_VideoSize.getWidth() > 0 && m_VideoSize.getHeight() > 0)	
-			m_PictureReader = ImageReader.newInstance(m_VideoSize.getWidth(), m_VideoSize.getHeight(), pictureFormat, 1);
-		else
-			m_PictureReader = ImageReader.newInstance(m_PreviewSize.getWidth(), m_PreviewSize.getHeight(), pictureFormat, 1);
-		m_PictureReader.setOnImageAvailableListener(m_PictureAvailableListener, this.getHandler());
-		m_PictureSurface = m_PictureReader.getSurface();
-		surfaces.add(m_PictureSurface);
-		
 		// prepare video/preview call-back surface
 		if(m_IsRecordingMode && m_VideoSurface != null)
 		{
@@ -2365,6 +2360,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				surfaces.add(m_PreviewCallbackSurface);
 			}
 		}
+		
+		// prepare picture surface
+		if(!m_IsRecordingMode)
+			m_PictureReader = ImageReader.newInstance(pictureSize.getWidth(), pictureSize.getHeight(), pictureFormat, 1);
+		else if(m_VideoSize.getWidth() > 0 && m_VideoSize.getHeight() > 0)	
+			m_PictureReader = ImageReader.newInstance(m_VideoSize.getWidth(), m_VideoSize.getHeight(), pictureFormat, 1);
+		else
+			m_PictureReader = ImageReader.newInstance(m_PreviewSize.getWidth(), m_PreviewSize.getHeight(), pictureFormat, 1);
+		m_PictureReader.setOnImageAvailableListener(m_PictureAvailableListener, this.getHandler());
+		m_PictureSurface = m_PictureReader.getSurface();
+		surfaces.add(m_PictureSurface);
 		
 		// create request builders
 		try

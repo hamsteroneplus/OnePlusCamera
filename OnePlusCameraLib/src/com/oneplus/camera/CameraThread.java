@@ -41,6 +41,7 @@ import com.oneplus.camera.io.FileManager;
 import com.oneplus.camera.io.FileManagerBuilder;
 import com.oneplus.camera.io.PhotoSaveTask;
 import com.oneplus.camera.io.VideoSaveTask;
+import com.oneplus.camera.location.LocationManager;
 import com.oneplus.camera.media.AudioManager;
 import com.oneplus.camera.media.MediaType;
 import com.oneplus.camera.media.Resolution;
@@ -144,6 +145,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private final List<ComponentBuilder> m_InitialComponentBuilders = new ArrayList<>();
 	private volatile MediaType m_InitialMediaType;
 	private volatile ScreenSize m_InitialScreenSize;
+	private LocationManager m_LocationManager;
 	private MediaRecorder m_MediaRecorder;
 	private final List<CameraPreviewStopRequest> m_PendingCameraPreviewStopRequests = new ArrayList<>();
 	private PhotoCaptureHandle m_PhotoCaptureHandle;
@@ -478,6 +480,11 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		}
 		else
 			Log.w(TAG, "bindToNormalComponents() - No FocusController");
+		
+		// bind to LocationManager
+		m_LocationManager = m_ComponentManager.findComponent(LocationManager.class, this);
+		if(m_LocationManager == null)
+			Log.w(TAG, "bindToNormalComponents() - No LocationManager");
 	}
 	
 	
@@ -642,6 +649,8 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			// prepare parameters
 			camera.set(Camera.PROP_PICTURE_ROTATION, this.get(PROP_CAPTURE_ROTATION));
+			if(m_LocationManager != null)
+				camera.set(Camera.PROP_LOCATION, m_LocationManager.get(LocationManager.PROP_LOCATION));
 			
 			// capture
 			for(int i = m_PhotoCaptureHandlerHandles.size() - 1 ; i >= 0 ; --i)

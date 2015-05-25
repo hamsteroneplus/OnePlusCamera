@@ -1,5 +1,17 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
 	
+	<!-- Advanced settings -->
+	<style name="AdvSettingsItemSummary">
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/adv_settings_item_summary</item>
+		<item name="android:textSize">@dimen/adv_settings_item_summary_text_size</item>
+	</style>
+	<style name="AdvSettingsItemTitle">
+		<item name="android:fontFamily">sans-serif</item>
+		<item name="android:textColor">@color/adv_settings_item_title</item>
+		<item name="android:textSize">@dimen/adv_settings_item_title_text_size</item>
+	</style>
+	
 	<!-- Capture modes panel -->
 	<style name="CaptureModesPanelItemText">
 		<item name="android:fontFamily">sans-serif</item>

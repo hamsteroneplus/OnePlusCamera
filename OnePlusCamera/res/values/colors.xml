@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	
+	<!-- Advanced settings -->
+	<color name="adv_settings_item_summary">#FFEA00</color>
+	<color name="adv_settings_item_title">#80FFFFFF</color>
+	
 	<!-- Capture bar -->
 	<color name="capture_bar_background">#1A101012</color>
 	

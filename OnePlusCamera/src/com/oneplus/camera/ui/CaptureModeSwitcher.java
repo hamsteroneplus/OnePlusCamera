@@ -16,6 +16,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.oneplus.base.BaseActivity.State;
 import com.oneplus.base.EventHandler;
 import com.oneplus.base.EventKey;
 import com.oneplus.base.EventSource;
@@ -28,6 +29,7 @@ import com.oneplus.base.PropertySource;
 import com.oneplus.base.Rotation;
 import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.CameraActivity;
+import com.oneplus.camera.MainActivity;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
 import com.oneplus.camera.capturemode.CaptureMode;
@@ -109,7 +111,7 @@ class CaptureModeSwitcher extends UIComponent
 	
 	
 	// Close capture modes panel.
-	private void closeCaptureModesPanel()
+	private void closeCaptureModesPanel(boolean animation)
 	{
 		// enable capture UI
 		m_CaptureUIDisableHandle = Handle.close(m_CaptureUIDisableHandle);
@@ -123,7 +125,7 @@ class CaptureModeSwitcher extends UIComponent
 	// Called when advanced settings button clicked.
 	private void onAdvancedSettingsButtonClicked()
 	{
-		//
+		((MainActivity)this.getCameraActivity()).showAdvancedSettings();
 	}
 	
 	
@@ -160,7 +162,7 @@ class CaptureModeSwitcher extends UIComponent
 			Log.e(TAG, "onCaptureModeItemClicked() - Fail to change capture mode to '" + item.captureMode + "'");
 		
 		// close panel
-		this.closeCaptureModesPanel();
+		this.closeCaptureModesPanel(true);
 	}
 	
 	
@@ -195,6 +197,15 @@ class CaptureModeSwitcher extends UIComponent
 			public void onPropertyChanged(PropertySource source, PropertyKey<ScreenSize> key, PropertyChangeEventArgs<ScreenSize> e)
 			{
 				updateDirectionThreshold(e.getNewValue());
+			}
+		});
+		cameraActivity.addCallback(CameraActivity.PROP_STATE, new PropertyChangedCallback<CameraActivity.State>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<CameraActivity.State> key, PropertyChangeEventArgs<CameraActivity.State> e)
+			{
+				if(e.getOldValue() == State.RUNNING)
+					closeCaptureModesPanel(false);
 			}
 		});
 		

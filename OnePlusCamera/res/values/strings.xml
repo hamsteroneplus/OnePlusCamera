@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<!-- Advanced settings -->
+	<string name="adv_settings">Settings</string>
+	<string name="adv_settings_front_camera_mirror">Mirror front camera photo</string>
+	<string name="adv_settings_grid">Grid</string>
+	<string name="adv_settings_location">Save location</string>
+	<string name="adv_settings_photo_resolution">Photo resolution</string>
+	<string name="adv_settings_photo_resolution_format" formatted="false">%.1fMP %s</string>
+	<string name="adv_settings_shutter_sound">Shutter sound</string>
+	<string name="adv_settings_video_resolution">Video resolution</string>
+	
 	<!-- Application -->
 	<string name="app_name">OnePlusCamera</string>
 	

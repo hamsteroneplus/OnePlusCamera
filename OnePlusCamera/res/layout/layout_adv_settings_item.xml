@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="@dimen/adv_settings_item_height"
+    android:orientation="horizontal"
+    android:gravity="center_vertical" 
+    android:paddingStart="@dimen/adv_settings_item_padding_left"
+    android:paddingEnd="@dimen/adv_settings_item_padding_right">
+    
+    <!-- Title -->
+    <TextView android:id="@+id/menu_item_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        style="@style/AdvSettingsItemTitle"/>
+    
+    <!-- Summary -->
+    <TextView android:id="@+id/menu_item_summary"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="0"
+        android:ellipsize="end"
+        android:visibility="gone"
+        style="@style/AdvSettingsItemSummary"/>
+    
+    <!-- Switch -->
+    <Switch android:id="@+id/menu_item_switch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="0"
+        android:visibility="visible"/>
+
+</LinearLayout>
