@@ -5,6 +5,7 @@ import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -263,14 +264,12 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 									boolean ret = false;
 									for (String filter : IMAGE_FILTER) {
 										if (name.toLowerCase().endsWith(filter)) {
-											Log.d(TAG, "charles " + "name: " + name + "   filter: " + filter);
 											ret = true;
 											break;
 										}
 									}
 									for (String filter : VIDEO_FILTER) {
 										if (name.toLowerCase().endsWith(filter)) {
-											Log.d(TAG, "charles " + "name: " + name + "   filter: " + filter);
 											ret = true;
 											break;
 										}
@@ -278,14 +277,22 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 									return ret;
 								}
 							});
-							Log.d(TAG, "charles " + files.length);
 							if (files != null && files.length > 0) {
 								Arrays.sort(files, new Comparator<File>() {
 									public int compare(File f1, File f2) {
 										return Long.valueOf(f2.lastModified()).compareTo(f1.lastModified());
 									}
 								});
+								
 								m_FileList.addAll(Arrays.asList(files));
+								Iterator<File> it = m_FileList.iterator();
+								File fileItem;
+								while (it.hasNext()) {
+									fileItem = it.next();
+									if (fileItem.length()==0) {
+										it.remove();
+									}
+								}
 							}
 							if (msg.arg1 == 1) {
 								notifyCameraThread(EVENT_MEDIA_FILES_RESET, EventArgs.EMPTY);
@@ -333,7 +340,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		private static final String TAG = "DecodeBitmapThread";
 		private Handler m_Handler;
 		private int m_Current;
-		static final private int OFFSET = 3;
+		static final private int OFFSET = 2;
 
 		public DecodeBitmapThread(String name) {
 			super(name);
@@ -341,6 +348,10 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 
 		public Handler getHandler() {
 			return m_Handler;
+		}
+		
+		private boolean checkInterrupt(int position){
+			return false;// position > m_Current+OFFSET*2 || position < Math.max(1, m_Current-OFFSET*2);
 		}
 
 		@Override
@@ -354,35 +365,52 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 					switch (msg.what) {
 					case MESSAGE_GET_BITMAP: {
 						BitmapArgs args = (BitmapArgs) msg.obj;
-						if(args.getPosition() > m_Current+OFFSET || args.getPosition() < Math.max(0, m_Current-OFFSET)){
-							return;
-						}
+						String path = args.getPath();
+						PhotoCallback callback = args.getCallback();
+						int position = args.getPosition();
+						int width = msg.arg1;
+						int height = msg.arg2;
+						//
 						boolean isImage = false;
 						for (String filter : IMAGE_FILTER) {
-							if (args.getPath().toLowerCase().endsWith(filter)) {
+							if (path.toLowerCase().endsWith(filter)) {
 								isImage = true;
 								break;
 							}
 						}
 						Bitmap bitmap;
 						Boolean isVideo;
+						//
+						if(checkInterrupt(position)){
+							return;
+						}
+						//
 						if (isImage) {
-							bitmap = decodeBitmap(args.getPath(), msg.arg1, msg.arg2);
+							bitmap = decodeBitmap(path, width, height);
 							isVideo = false;
 						} else {
-							bitmap = ThumbnailUtils.createVideoThumbnail(args.getPath(),
+							bitmap = ThumbnailUtils.createVideoThumbnail(path,
 									MediaStore.Video.Thumbnails.FULL_SCREEN_KIND);
 							isVideo = true;
 						}
-						if (args.m_IsVertical) {
+						//
+						if(checkInterrupt(position)){
+							return;
+						}
+						
+						Log.d(TAG, ": " + position + " bitmap: " + bitmap + " path: "+path);
+						//
+						if (args.m_IsVertical && bitmap!=null) {
 							Matrix matrix = new Matrix();
-
 							matrix.postRotate(90);
-
 							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
 						}
-
-						args.getCallback().onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, msg.arg1, msg.arg2), isVideo);
+						//
+						if(checkInterrupt(position)){
+							return;
+						}
+						//
+						callback.onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, width, height), isVideo);
 						break;
 					}
 					}
