@@ -545,6 +545,7 @@ final class PreviewGallery extends UIComponent {
     		Log.d(TAG, "cacheIndex" + cacheIndex);
     		
     		if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && m_Map.get(cacheIndex).equals(path)){
+    			Log.d(TAG, "setPageData return : cacheIndex: " + cacheIndex + " position: " + position);
     			return;
     		}
 			m_Map.put(cacheIndex, path);

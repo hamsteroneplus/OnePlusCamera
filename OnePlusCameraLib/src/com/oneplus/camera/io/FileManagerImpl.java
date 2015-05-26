@@ -351,7 +351,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		}
 		
 		private boolean checkInterrupt(int position){
-			return false;// position > m_Current+OFFSET*2 || position < Math.max(1, m_Current-OFFSET*2);
+			return position > m_Current+OFFSET*2 || position < Math.max(1, m_Current-OFFSET*2);
 		}
 
 		@Override
