@@ -127,11 +127,23 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	}
 
 	@Override
+	public void setCurrent(int position){
+		m_DecodeBitmapThread.m_Current = position;
+	}
+	
+	@Override
 	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position) {
 
 		m_DecodeBitmapThread.m_Current = position;
-		m_DecodeBitmapHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
-				new BitmapArgs(position, path, isVertical, callback)));
+		if(position == m_DecodeBitmapThread.m_Current){
+			Log.d(TAG, "getBitmap: now");
+			m_DecodeBitmapHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
+					new BitmapArgs(position, path, isVertical, callback)));
+		}else{
+			Log.d(TAG, "getBitmap: later");
+			m_DecodeBitmapHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
+					new BitmapArgs(position, path, isVertical, callback)));
+		}
 	}
 
 	private class BitmapArgs {
@@ -327,7 +339,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
 						}
 
-						args.getCallback().onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, msg.arg1, msg.arg2), isVideo);
+						args.getCallback().onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, msg.arg1, msg.arg2), isVideo, false);
 						break;
 					}
 					}
@@ -351,7 +363,11 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		}
 		
 		private boolean checkInterrupt(int position){
-			return position > m_Current+OFFSET*2 || position < Math.max(1, m_Current-OFFSET*2);
+			boolean result = position > m_Current+OFFSET || position < Math.max(1, m_Current-OFFSET);
+			if(result){
+				Log.d(TAG, "checkInterrupt: position: " + position +" m_Current: " + m_Current);
+			}
+			return result;
 		}
 
 		@Override
@@ -382,6 +398,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						Boolean isVideo;
 						//
 						if(checkInterrupt(position)){
+							callback.onBitmapLoad(null, !isImage, true);
 							return;
 						}
 						//
@@ -395,6 +412,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						//
 						if(checkInterrupt(position)){
+							callback.onBitmapLoad(null, isVideo, true);
 							return;
 						}
 						
@@ -405,12 +423,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 							matrix.postRotate(90);
 							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
 						}
-						//
-						if(checkInterrupt(position)){
-							return;
-						}
-						//
-						callback.onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, width, height), isVideo);
+						callback.onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, width, height), isVideo, false);
 						break;
 					}
 					}

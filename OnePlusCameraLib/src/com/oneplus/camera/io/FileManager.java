@@ -46,9 +46,11 @@ public interface FileManager extends Component
 		/**
 		 * Called when bitmap load.
 		 */
-		void onBitmapLoad(Bitmap bitmap, boolean isVideo);
+		void onBitmapLoad(Bitmap bitmap, boolean isVideo, boolean isIntrrupt);
 	}
-
+	
+	void setCurrent(int position);
+	
 	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position);
 	/**
 	 * Start media saving asynchronously.

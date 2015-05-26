@@ -11,8 +11,6 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.net.Uri;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
@@ -156,10 +154,10 @@ final class PreviewGallery extends UIComponent {
 		if (Rotation.PORTRAIT == newRotation || Rotation.INVERSE_PORTRAIT == newRotation) {
 			if (Rotation.LANDSCAPE == prevRotation || Rotation.INVERSE_LANDSCAPE == prevRotation){
 				m_VerticalViewPager.setVisibility(View.INVISIBLE);	
-				m_PreviousPosition = m_VerticalViewPager.getCurrentItem();
-				m_ViewPager.setCurrentItem(m_PreviousPosition, true);
+				m_PreviousPosition = m_VerticalViewPager.getCurrentItem();				
 				preFetch(m_Adapter, m_PreviousPosition);
 				m_ViewPager.setVisibility(View.VISIBLE);
+				m_ViewPager.setCurrentItem(m_PreviousPosition, true);
 			}
 			//
 			m_PreviewGallery.setRotation(newRotation);
@@ -265,9 +263,7 @@ final class PreviewGallery extends UIComponent {
 			}
 		});
 		
-		for (int i = 1; i < Math.min(m_Adapter.getCount(), PAGE_OFFSET + 2); i++) {
-			m_Adapter.setPageData(i);
-		}
+		preFetch(m_Adapter, 0);
 
 
 		m_ViewPager.setPageTransformer(false, new PageTransformer() {
@@ -330,7 +326,8 @@ final class PreviewGallery extends UIComponent {
 	}
 	
 	void preFetch(PreviewPagerAdapter adapter, int position){
-		for(int i=0; i<=TARGET; i++){
+		m_FileManager.setCurrent(position);
+		for(int i=0; i<TARGET; i++){
 			if(i == 0){
 				if(position != 0){
 					adapter.setPageData(position);
@@ -359,7 +356,9 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-
+				if (position == 0) {
+					m_PreviewGallery.setAlpha(ALPHA_MAX * positionOffset);
+				}
 			}
 
 			public void onPageSelected(int position) {
@@ -375,9 +374,7 @@ final class PreviewGallery extends UIComponent {
 			}
 		});
 		
-		for (int i = 1; i < Math.min(m_Adapter.getCount(), PAGE_OFFSET + 2); i++) {
-			m_VerticalAdapter.setPageData(i);
-		}
+		preFetch(m_VerticalAdapter, 0);
 		
 		m_VerticalViewPager.setPageTransformer(false, new PageTransformer() {
 
@@ -516,9 +513,6 @@ final class PreviewGallery extends UIComponent {
             		ret = m_Pagers.get(cacheIndex);
             		container.removeView(ret);
             		container.addView(ret);
-//            		if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && !m_Map.get(cacheIndex).equals(m_Files.get(position-1).getAbsolutePath())){
-//            			setPageData(position);
-//            		}
             	}
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage());
@@ -545,7 +539,7 @@ final class PreviewGallery extends UIComponent {
     		Log.d(TAG, "cacheIndex" + cacheIndex);
     		
     		if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && m_Map.get(cacheIndex).equals(path)){
-    			Log.d(TAG, "setPageData return : cacheIndex: " + cacheIndex + " position: " + position);
+    			Log.d(TAG, "setPageData already set return : cacheIndex: " + cacheIndex + " position: " + position);
     			return;
     		}
 			m_Map.put(cacheIndex, path);
@@ -568,16 +562,25 @@ final class PreviewGallery extends UIComponent {
     		m_FileManager.getBitmap(path, m_ReqWidth, m_ReqHeight, new PhotoCallback() {
 
     			@Override
-    			public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo) {
+    			public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo, final boolean isIntrrupt) {
+    				if(isIntrrupt){
+    					m_Map.delete(cacheIndex);
+    					return;
+    				}
     				if (bitmap != null) {
-    					new Handler(Looper.getMainLooper()).post(new Runnable() {
+    					HandlerUtils.post(m_PreviewGallery, new Runnable() {
 
     						@Override
     						public void run() {
     							ImageView image = softImage.get();
     							if (image != null) {
-    								image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-    								image.setImageBitmap(bitmap);
+    								if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && !m_Map.get(cacheIndex).equals(path)){
+    					    			Log.d(TAG, "setPageData return after decode : cacheIndex: " + cacheIndex + " position: " + position);
+    					    			return;
+    					    		}else{
+	    								image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+	    								image.setImageBitmap(bitmap);
+    					    		}
 
     								if (isVideo) {
     									ImageView play = softPlay.get();
