@@ -30,4 +30,8 @@
 	<!-- Recording timer -->
 	<color name="recording_timer_text">#FFFFFF</color>
 	
+	<!-- Zoom bar -->
+	<color name="zoom_bar_track">#80FFFFFF</color>
+	<color name="zoom_bar_track_progress">#FEEA00</color>
+	
 </resources>

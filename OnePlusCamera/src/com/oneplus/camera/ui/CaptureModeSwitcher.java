@@ -233,7 +233,7 @@ class CaptureModeSwitcher extends UIComponent
 	@SuppressWarnings("incomplete-switch")
 	private boolean onTouch(MotionEventArgs e)
 	{
-		if(e.isHandled())
+		if(e.isHandled() || e.getPointerCount() > 1)
 		{
 			m_TouchDownPosition = null;
 			m_GestureState = GestureState.IDLE;

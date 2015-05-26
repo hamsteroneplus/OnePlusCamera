@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 
 import android.graphics.ImageFormat;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
@@ -118,6 +119,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 */
 	PropertyKey<Integer> PROP_MAX_AF_REGION_COUNT = new PropertyKey<>("MaxAfRegionCount", Integer.class, Camera.class, 0);
 	/**
+	 * Read-only property to get minimum crop size.
+	 */
+	PropertyKey<Size> PROP_MIN_SCALER_CROP_SIZE = new PropertyKey<>("MinScalerCropSize", Size.class, Camera.class, new Size(1, 1));
+	/**
 	 * Property to get or set captured picture format defined in {@link ImageFormat}.
 	 */
 	PropertyKey<Integer> PROP_PICTURE_FORMAT = new PropertyKey<>("PictureFormat", Integer.class, Camera.class, ImageFormat.JPEG);
@@ -161,6 +166,10 @@ public interface Camera extends BaseObject, HandlerObject
 	 * Read-only property to check current preview state.
 	 */
 	PropertyKey<OperationState> PROP_PREVIEW_STATE = new PropertyKey<>("PreviewState", OperationState.class, Camera.class, OperationState.STOPPED);
+	/**
+	 * Property to get or set crop region.
+	 */
+	PropertyKey<Rect> PROP_SCALER_CROP_REGION = new PropertyKey<>("ScalerCropRegion", Rect.class, Camera.class, 0, null);
 	/**
 	 * Property to get or set scene mode defined in {@link CaptureRequest}.
 	 */

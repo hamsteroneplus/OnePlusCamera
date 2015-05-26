@@ -22,5 +22,8 @@
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
 		android:layout="@layout/layout_recording_timer"/>
+	
+	<!-- Zoom bar -->
+	<include layout="@layout/layout_zoom_bar"/>
 
 </RelativeLayout>

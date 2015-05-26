@@ -23,6 +23,7 @@ public class MotionEventArgs extends EventArgs implements RecyclableObject
 	// Private fields.
 	private volatile int m_Action;
 	private volatile boolean m_IsFreeInstance;
+	private volatile MotionEvent m_MotionEvent;
 	private volatile int m_PointerCount;
 	private volatile float m_X;
 	private volatile float m_Y;
@@ -40,6 +41,16 @@ public class MotionEventArgs extends EventArgs implements RecyclableObject
 	public final int getAction()
 	{
 		return m_Action;
+	}
+	
+	
+	/**
+	 * Get internal {@link MotionEvent} instance.
+	 * @return {@link MotionEvent}.
+	 */
+	public final MotionEvent getMotionEvent()
+	{
+		return m_MotionEvent;
 	}
 	
 	
@@ -83,6 +94,7 @@ public class MotionEventArgs extends EventArgs implements RecyclableObject
 		MotionEventArgs e = POOL.pollLast();
 		if(e == null)
 			e = new MotionEventArgs();
+		e.m_MotionEvent = event;
 		e.m_Action = event.getAction();
 		e.m_PointerCount = event.getPointerCount();
 		e.m_X = event.getX();
@@ -101,6 +113,7 @@ public class MotionEventArgs extends EventArgs implements RecyclableObject
 		{
 			if(m_IsFreeInstance)
 				return;
+			m_MotionEvent = null;
 			m_IsFreeInstance = true;
 			this.clearHandledState();
 			if(POOL.size() < POOL_SIZE)

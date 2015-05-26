@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import android.os.Message;
+import android.os.SystemClock;
 
 import com.oneplus.base.EventArgs;
 import com.oneplus.base.EventHandler;
@@ -311,14 +312,14 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 			case MSG_TARGET_EVENT_RAISED:
 			{
 				Object[] array = (Object[])msg.obj;
-				this.onTargetEventRaised((EventKey<?>)array[0], (EventArgs)array[1]);
+				this.onTargetEventRaised((Long)array[0], (EventKey<?>)array[1], (EventArgs)array[2]);
 				break;
 			}
 			
 			case MSG_TARGET_PROPERTY_CHANGED:
 			{
 				Object[] array = (Object[])msg.obj;
-				this.onTargetPropertyChanged((PropertyKey<?>)array[0], (PropertyChangeEventArgs<?>)array[1]);
+				this.onTargetPropertyChanged((Long)array[0], (PropertyKey<?>)array[1], (PropertyChangeEventArgs<?>)array[2]);
 				break;
 			}
 			
@@ -441,7 +442,7 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 							@Override
 							public void onEventReceived(EventSource source, EventKey key, EventArgs e)
 							{
-								HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_EVENT_RAISED, 0, 0, new Object[]{ key, e.clone() });
+								HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_EVENT_RAISED, 0, 0, new Object[]{ SystemClock.elapsedRealtimeNanos(), key, e.clone() });
 							}
 						};
 						for(int i = eventKeys.size() - 1 ; i >= 0 ; --i)
@@ -456,7 +457,7 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 							@Override
 							public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
 							{
-								HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_PROPERTY_CHANGED, 0, 0, new Object[]{ key, e.clone() });
+								HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_PROPERTY_CHANGED, 0, 0, new Object[]{ SystemClock.elapsedRealtimeNanos(), key, e.clone() });
 							}
 						};
 						for(int i = propertyKeys.size() - 1 ; i >= 0 ; --i)
@@ -464,7 +465,7 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 							PropertyKey<?> key = propertyKeys.get(i);
 							Object value = target.get(key);
 							target.addCallback(key, callback);
-							HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_PROPERTY_CHANGED, 0, 0, new Object[]{ key, PropertyChangeEventArgs.obtain(key.defaultValue, value) });
+							HandlerUtils.sendMessage(ProxyComponent.this, MSG_TARGET_PROPERTY_CHANGED, 0, 0, new Object[]{ SystemClock.elapsedRealtimeNanos(), key, PropertyChangeEventArgs.obtain(key.defaultValue, value) });
 						}
 					}
 					
@@ -500,11 +501,12 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 	
 	/**
 	 * Called after target event raised.
+	 * @param time Event time, use {@link SystemClock#elapsedRealtimeNanos()} to check with current time.
 	 * @param key Event key.
 	 * @param e Event data.
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	protected void onTargetEventRaised(EventKey<?> key, EventArgs e)
+	protected void onTargetEventRaised(long time, EventKey<?> key, EventArgs e)
 	{
 		this.raise((EventKey)key, e);
 		if(e instanceof RecyclableObject)
@@ -514,11 +516,12 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 	
 	/**
 	 * Called after target property changed.
+	 * @param time Changed time, use {@link SystemClock#elapsedRealtimeNanos()} to check with current time.
 	 * @param key Property key.
 	 * @param e Event data.
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	protected void onTargetPropertyChanged(PropertyKey<?> key, PropertyChangeEventArgs<?> e)
+	protected void onTargetPropertyChanged(long time, PropertyKey<?> key, PropertyChangeEventArgs<?> e)
 	{
 		if(key != PROP_IS_RELEASED)
 		{

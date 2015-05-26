@@ -333,6 +333,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		this.setReadOnly(PROP_EXPOSURE_COMPENSATION_RANGE, new Range<Float>(exposureCompRange.getLower() * evStep, exposureCompRange.getUpper() * evStep));
 		this.setReadOnly(PROP_EXPOSURE_COMPENSATION_STEP, cameraChar.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue());
 		
+		// check zooming state
+		float minCropRatio = cameraChar.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+		Size minCropSize = new Size((int)(m_SensorSize.getWidth() / minCropRatio), (int)(m_SensorSize.getHeight() / minCropRatio));
+		this.setReadOnly(PROP_MIN_SCALER_CROP_SIZE, minCropSize);
+		
 		// enable logs
 		this.enablePropertyLogs(PROP_CAPTURE_STATE, LOG_PROPERTY_CHANGE);
 		this.enablePropertyLogs(PROP_FOCUS_STATE, LOG_PROPERTY_CHANGE);
@@ -502,6 +507,16 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return true;
 		}
 		return false;
+	}
+	
+	
+	// Apply scaler crop region.
+	private boolean applyScalerCropRegion(Rect region, CaptureRequest.Builder requestBuilder)
+	{
+		if(requestBuilder == null)
+			return false;
+		requestBuilder.set(CaptureRequest.SCALER_CROP_REGION, region);
+		return true;
 	}
 	
 	
@@ -1617,6 +1632,9 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			Log.v(TAG, "prepareCaptureRequestParams() - FPS range : ", m_PreviewFpsRange);
 			requestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, m_PreviewFpsRange);
 		}
+		
+		// setup crop region
+		this.applyScalerCropRegion(this.get(PROP_SCALER_CROP_REGION), requestBuilder);
 	}
 	
 	
@@ -1704,6 +1722,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			return this.setPreviewSizeProp((Size)value);
 		if(key == PROP_PREVIEW_RECEIVER)
 			return this.setPreviewReceiver(value);
+		if(key == PROP_SCALER_CROP_REGION)
+			this.setScalerCripRegionProp((Rect)value);
 		if(key == PROP_SCENE_MODE)
 			return this.setSceneModeProp((Integer)value);
 		if(key == PROP_VIDEO_SIZE)
@@ -2098,6 +2118,17 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		
 		// complete
 		return this.notifyPropertyChanged(PROP_IS_RECORDING_MODE, !isRecordingMode, isRecordingMode);
+	}
+	
+	
+	// Set PROP_SCALER_CROP_REGION property.
+	private boolean setScalerCripRegionProp(Rect region)
+	{
+		this.verifyAccess();
+		this.verifyReleaseState();
+		if(this.applyScalerCropRegion(region, m_PreviewRequestBuilder))
+			this.applyToPreview();
+		return super.set(PROP_SCALER_CROP_REGION, region);
 	}
 	
 	

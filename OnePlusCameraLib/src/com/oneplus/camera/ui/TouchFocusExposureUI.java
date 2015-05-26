@@ -175,7 +175,7 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	private void onTouch(MotionEventArgs e)
 	{
 		// check event
-		if(e.isHandled())
+		if(e.isHandled() || e.getPointerCount() > 1)
 		{
 			this.getHandler().removeMessages(MSG_START_AF);
 			return;

@@ -13,10 +13,12 @@ import com.oneplus.camera.ui.CaptureBarBuilder;
 import com.oneplus.camera.ui.CaptureModeSwitcherBuilder;
 import com.oneplus.camera.ui.CountDownTimerIndicatorBuilder;
 import com.oneplus.camera.ui.OptionsPanelBuilder;
+import com.oneplus.camera.ui.PinchZoomingUIBuilder;
 import com.oneplus.camera.ui.PreviewGalleryBuilder;
 import com.oneplus.camera.ui.FocusExposureIndicatorBuilder;
 import com.oneplus.camera.ui.RecordingTimerUIBuilder;
 import com.oneplus.camera.ui.TouchFocusExposureUIBuilder;
+import com.oneplus.camera.ui.ZoomBarBuilder;
 
 final class ComponentBuilders
 {
@@ -25,6 +27,7 @@ final class ComponentBuilders
 		new LocationManagerBuilder(),
 		new SlowMotionControllerBuilder(),
 		new TimelapseControllerBuilder(),
+		new ZoomControllerBuilder(),
 	};
 	
 	
@@ -39,6 +42,7 @@ final class ComponentBuilders
 		new FocusExposureIndicatorBuilder(),
 		new LocationManagerBuilder(),
 		new OptionsPanelBuilder(),
+		new PinchZoomingUIBuilder(),
 		new PreviewGalleryBuilder(),
 		new RecordingTimerUIBuilder(),
 		new SceneManagerBuilder(),
@@ -46,5 +50,7 @@ final class ComponentBuilders
 		new SlowMotionUIBuilder(),
 		new TimelapseUIBuilder(),
 		new TouchFocusExposureUIBuilder(),
+		new ZoomBarBuilder(),
+		new ZoomControllerBuilder(),
 	};
 }
