@@ -50,6 +50,8 @@ final class PreviewGallery extends UIComponent {
 	static private final int MESSAGE_UPDATE_RESET = 1000;
 	static private final int MESSAGE_UPDATE_ADDED = 1001;
 	static private final int MESSAGE_UPDATE_DELETED = 1002;
+	static private final float ALPHA_MIN = 0f;
+	static private final float ALPHA_MAX = 0.8f;
 
 	// Private fields
 	private RotateRelativeLayout m_PreviewGallery;
@@ -244,7 +246,9 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-
+				if (position == 0) {
+					m_PreviewGallery.setAlpha(ALPHA_MAX * positionOffset);
+				}
 			}
 
 			@Override
@@ -415,14 +419,14 @@ final class PreviewGallery extends UIComponent {
 	}
 
 	void bringToBack() {
-		m_PreviewGallery.setBackgroundDrawable(null);
+		m_PreviewGallery.setAlpha(ALPHA_MIN);
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		parent.removeView(m_PreviewGallery);
 		parent.addView(m_PreviewGallery, m_OrignalZ);
 	}
 
 	void bringToFront() {
-		m_PreviewGallery.setBackgroundColor(getCameraActivity().getResources().getColor(R.color.Previerw_gallery_background));
+		m_PreviewGallery.setAlpha(ALPHA_MAX);
 		m_PreviewGallery.bringToFront();
 	}
 
