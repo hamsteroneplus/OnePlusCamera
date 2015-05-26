@@ -134,7 +134,6 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	@Override
 	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position) {
 
-		m_DecodeBitmapThread.m_Current = position;
 		if(position == m_DecodeBitmapThread.m_Current){
 			Log.d(TAG, "getBitmap: now");
 			m_DecodeBitmapHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
