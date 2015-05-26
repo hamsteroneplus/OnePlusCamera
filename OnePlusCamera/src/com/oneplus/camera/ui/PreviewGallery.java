@@ -326,7 +326,11 @@ final class PreviewGallery extends UIComponent {
 					newEvent.setLocation(event.getRawX(), event.getRawY());
 					cameraActivity.onTouchEvent(newEvent);
 				}
-				return false;
+				if(event.getPointerCount() > 1){
+					return true;
+				}else{
+					return false;
+				}
 			}
 		});
 	}
@@ -416,7 +420,11 @@ final class PreviewGallery extends UIComponent {
 					newEvent.setLocation(event.getRawX(), event.getRawY());
 					cameraActivity.onTouchEvent(newEvent);
 				}
-				return false;
+				if(event.getPointerCount() > 1){
+					return true;
+				}else{
+					return false;
+				}
 			}
 		});
 	}
