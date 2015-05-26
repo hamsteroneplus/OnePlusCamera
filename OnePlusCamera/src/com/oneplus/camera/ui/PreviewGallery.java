@@ -100,7 +100,13 @@ final class PreviewGallery extends UIComponent {
 		}
 		case MESSAGE_UPDATE_ADDED: {
 			File file = new File((String) (msg.obj));
-			int current = m_ViewPager.getCurrentItem();
+			int current;
+			if (Rotation.PORTRAIT == getRotation() || Rotation.INVERSE_PORTRAIT == getRotation()){
+				current = m_ViewPager.getCurrentItem();
+			}else{
+				current = m_VerticalViewPager.getCurrentItem();
+			}
+			
 			m_Adapter.addFile(file);
 			m_VerticalAdapter.addFile(file);
 			if (current != 0) {
