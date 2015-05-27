@@ -2,9 +2,15 @@
 <com.oneplus.camera.widget.RotateRelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/preview_gallery"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#000000"
-    android:alpha="0.0" >
+    android:layout_height="match_parent" >
+
+    <FrameLayout
+        android:id="@+id/preview_gallery_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.0"
+        android:background="#000000" >
+    </FrameLayout>
 
     <android.support.v4.view.ViewPager
         android:id="@+id/preview_gallery_pager"

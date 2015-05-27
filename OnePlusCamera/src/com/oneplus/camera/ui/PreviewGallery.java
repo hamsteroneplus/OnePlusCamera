@@ -53,6 +53,7 @@ final class PreviewGallery extends UIComponent {
 
 	// Private fields
 	private RotateRelativeLayout m_PreviewGallery;
+	private View m_BG;
 	private ViewPager m_ViewPager;
 	private VerticalViewPager m_VerticalViewPager;
 	private PreviewPagerAdapter m_Adapter, m_VerticalAdapter;
@@ -137,6 +138,7 @@ final class PreviewGallery extends UIComponent {
 		// setup UI
 		final CameraActivity cameraActivity = getCameraActivity();
 		m_PreviewGallery = (RotateRelativeLayout) cameraActivity.findViewById(R.id.preview_gallery);
+		m_BG = m_PreviewGallery.findViewById(R.id.preview_gallery_bg);
 
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		for (int index = 0; index < parent.getChildCount(); index++) {
@@ -252,7 +254,7 @@ final class PreviewGallery extends UIComponent {
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
 				if (position == 0) {
-					m_PreviewGallery.setAlpha(ALPHA_MAX * positionOffset);
+					m_BG.setAlpha(ALPHA_MAX * positionOffset);
 				}
 			}
 
@@ -377,7 +379,7 @@ final class PreviewGallery extends UIComponent {
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
 				if (position == 0) {
-					m_PreviewGallery.setAlpha(ALPHA_MAX * positionOffset);
+					m_BG.setAlpha(ALPHA_MAX * positionOffset);
 				}
 			}
 
@@ -448,14 +450,14 @@ final class PreviewGallery extends UIComponent {
 	}
 
 	void bringToBack() {
-		m_PreviewGallery.setAlpha(ALPHA_MIN);
+		m_BG.setAlpha(ALPHA_MIN);
 		ViewGroup parent = ((ViewGroup) m_PreviewGallery.getParent());
 		parent.removeView(m_PreviewGallery);
 		parent.addView(m_PreviewGallery, m_OrignalZ);
 	}
 
 	void bringToFront() {
-		m_PreviewGallery.setAlpha(ALPHA_MAX);
+		m_BG.setAlpha(ALPHA_MAX);
 		m_PreviewGallery.bringToFront();
 	}
 
