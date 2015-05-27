@@ -132,16 +132,16 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	}
 	
 	@Override
-	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position) {
+	public void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, int position) {
 
 		if(position == m_DecodeBitmapThread.m_Current){
 			Log.d(TAG, "getBitmap: now");
 			m_DecodeBitmapHandler.sendMessageAtFrontOfQueue(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
-					new BitmapArgs(position, path, isVertical, callback)));
+					new BitmapArgs(position, path, callback)));
 		}else{
 			Log.d(TAG, "getBitmap: later");
 			m_DecodeBitmapHandler.sendMessage(Message.obtain(m_FileHandler, MESSAGE_GET_BITMAP, width, height, 
-					new BitmapArgs(position, path, isVertical, callback)));
+					new BitmapArgs(position, path, callback)));
 		}
 	}
 
@@ -151,10 +151,9 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		private PhotoCallback m_callback;
 		private boolean m_IsVertical;
 
-		BitmapArgs(int position, String path, boolean isVertical, PhotoCallback callback) {
+		BitmapArgs(int position, String path, PhotoCallback callback) {
 			m_Position = position;
 			m_Path = path;
-			m_IsVertical = isVertical;
 			m_callback = callback;
 		}
 		
@@ -414,12 +413,6 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						
 						Log.d(TAG, ": " + position + " bitmap: " + bitmap + " path: "+path);
-						//
-						if (args.m_IsVertical && bitmap!=null) {
-							Matrix matrix = new Matrix();
-							matrix.postRotate(90);
-							bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-						}
 						callback.onBitmapLoad(ThumbnailUtils.extractThumbnail(bitmap, width, height), isVideo, false);
 						break;
 					}

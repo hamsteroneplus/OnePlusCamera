@@ -51,7 +51,7 @@ public interface FileManager extends Component
 	
 	void setCurrent(int position);
 	
-	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, final boolean isVertical, int position);
+	void getBitmap(final String path, final int width, final int height, final PhotoCallback callback, int position);
 	/**
 	 * Start media saving asynchronously.
 	 * @param task Media save task.

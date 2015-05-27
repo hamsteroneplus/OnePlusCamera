@@ -589,6 +589,7 @@ final class PreviewGallery extends UIComponent {
     		softImage.get().setScaleType(ImageView.ScaleType.CENTER);
     		softImage.get().setImageResource(R.drawable.loading);
     		final SoftReference<ImageView> softPlay = new SoftReference<ImageView>((ImageView) root.findViewById(R.id.play_icon));
+    		softPlay.get().setVisibility(View.GONE);
 
     		final File file = m_Files.get(position-1);
     		m_FileManager.getBitmap(path, m_ReqWidth, m_ReqHeight, new PhotoCallback() {
@@ -646,7 +647,7 @@ final class PreviewGallery extends UIComponent {
     					HandlerUtils.sendMessage(m_PreviewGallery, MESSAGE_UPDATE_DELETED, 0, 0, file);
     				}
     			}
-    		}, m_IsVertical, position);
+    		}, position);
         }
 	}
 }

@@ -8,6 +8,7 @@
         android:id="@+id/preview_image"
         android:layout_width="@dimen/preview_item_land_width"
         android:layout_height="@dimen/preview_item_land_height"
+        android:rotation="90"
         android:layout_centerInParent="true"
         android:scaleType="center"
         android:src="@drawable/loading" />
