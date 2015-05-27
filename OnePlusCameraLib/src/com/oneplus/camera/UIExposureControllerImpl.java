@@ -1,18 +1,66 @@
 package com.oneplus.camera;
 
+import java.util.LinkedList;
 import java.util.List;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
+import com.oneplus.base.PropertyChangeEventArgs;
+import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
+import com.oneplus.base.PropertySource;
+import com.oneplus.base.BaseActivity.State;
 import com.oneplus.camera.Camera.MeteringRect;
+import com.oneplus.camera.capturemode.CaptureModeManager;
 
 final class UIExposureControllerImpl extends ProxyComponent<ExposureController> implements ExposureController
 {
+	// Private fields.
+	private final LinkedList<AELockHandle> m_AELockHandles = new LinkedList<>();
+	
+	
+	// Class for focus lock handle.
+	private final class AELockHandle extends Handle
+	{
+		public final Handle internalHandle;
+		
+		public AELockHandle(Handle internalHandle)
+		{
+			super("AELockWrapper");
+			this.internalHandle = internalHandle;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			unlockAutoExposure(this);
+		}
+	}
+	
+	
 	// Constructor.
 	UIExposureControllerImpl(CameraActivity cameraActivity)
 	{
 		super("UI Exposure Controller", cameraActivity, cameraActivity.getCameraThread(), ExposureController.class);
+	}
+	
+	
+	// Lock AE
+	@Override
+	public Handle lockAutoExposure(int flags)
+	{
+		this.verifyAccess();
+		Handle handle = this.callTargetMethod("lockAutoExposure", new Class[]{ int.class }, flags);
+		if(Handle.isValid(handle))
+		{
+			AELockHandle wrappedHandle = new AELockHandle(handle);
+			m_AELockHandles.add(wrappedHandle);
+			if(m_AELockHandles.size() == 1)
+				this.setReadOnly(PROP_IS_AE_LOCKED, true);
+			return wrappedHandle;
+		}
+		return null;
 	}
 	
 	
@@ -29,10 +77,40 @@ final class UIExposureControllerImpl extends ProxyComponent<ExposureController> 
 	}
 	
 	
-	// Called when AE lock state changes.
-	private void onControllerAELockedChanged(boolean isLocked)
+	// Initialize.
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@Override
+	protected void onInitialize()
 	{
-		//super.set(PROP_IS_AE_LOCKED, isLocked);
+		// call super
+		super.onInitialize();
+		
+		// find components
+		CaptureModeManager captureModeManager = this.findComponent(CaptureModeManager.class);
+		
+		// add call-backs
+		CameraActivity activity = this.getCameraActivity();
+		PropertyChangedCallback unlockFocusCallback = new PropertyChangedCallback()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
+			{
+				unlockAutoExposure();
+			}
+		};
+		activity.addCallback(CameraActivity.PROP_CAMERA, unlockFocusCallback);
+		activity.addCallback(CameraActivity.PROP_MEDIA_TYPE, unlockFocusCallback);
+		activity.addCallback(CameraActivity.PROP_STATE, new PropertyChangedCallback<State>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<State> key, PropertyChangeEventArgs<State> e)
+			{
+				if(e.getNewValue() == State.PAUSING)
+					unlockAutoExposure();
+			}
+		});
+		if(captureModeManager != null)
+			captureModeManager.addCallback(CaptureModeManager.PROP_CAPTURE_MODE, unlockFocusCallback);
 	}
 	
 	
@@ -122,5 +200,27 @@ final class UIExposureControllerImpl extends ProxyComponent<ExposureController> 
 		
 		// complete
 		return true;
+	}
+	
+	
+	// Unlock AE.
+	private void unlockAutoExposure()
+	{
+		if(m_AELockHandles.isEmpty())
+			return;
+		
+		Log.w(TAG, "unlockAutoExposure()");
+		
+		AELockHandle[] handles = new AELockHandle[m_AELockHandles.size()];
+		m_AELockHandles.toArray(handles);
+		for(int i = handles.length - 1 ; i >= 0 ; --i)
+			Handle.close(handles[i]);
+	}
+	private void unlockAutoExposure(AELockHandle handle)
+	{
+		this.verifyAccess();
+		if(!m_AELockHandles.remove(handle))
+			return;
+		Handle.close(handle.internalHandle);
 	}
 }

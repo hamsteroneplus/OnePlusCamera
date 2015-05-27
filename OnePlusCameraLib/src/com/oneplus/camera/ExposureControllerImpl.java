@@ -1,9 +1,11 @@
 package com.oneplus.camera;
 
+import java.util.LinkedList;
 import java.util.List;
 
 import android.util.Range;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
@@ -14,7 +16,7 @@ import com.oneplus.camera.Camera.MeteringRect;
 final class ExposureControllerImpl extends CameraComponent implements ExposureController
 {
 	// Private fields.
-	//
+	private final LinkedList<Handle> m_AELockHandles = new LinkedList<>();
 	
 	
 	// Call-backs.
@@ -43,6 +45,9 @@ final class ExposureControllerImpl extends CameraComponent implements ExposureCo
 		// check camera
 		if(camera == null)
 			return;
+		
+		// clear AE lock
+		camera.set(Camera.PROP_IS_AE_LOCKED, false);
 		
 		// add call-backs
 		camera.addCallback(Camera.PROP_AE_REGIONS, m_CameraPropertyChangedCallback);
@@ -74,13 +79,66 @@ final class ExposureControllerImpl extends CameraComponent implements ExposureCo
 		camera.removeCallback(Camera.PROP_EXPOSURE_COMPENSATION_RANGE, m_CameraPropertyChangedCallback);
 		camera.removeCallback(Camera.PROP_EXPOSURE_COMPENSATION_STEP, m_CameraPropertyChangedCallback);
 		camera.removeCallback(Camera.PROP_IS_AE_LOCKED, m_CameraPropertyChangedCallback);
+		
+		// unlock AE
+		m_AELockHandles.clear();
+		this.setReadOnly(PROP_IS_AE_LOCKED, false);
+	}
+	
+	
+	// Lock AE
+	@Override
+	public Handle lockAutoExposure(int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "lockAutoExposure() - Component is not running");
+			return null;
+		}
+		
+		// check camera
+		Camera camera = this.getCamera();
+		if(camera == null)
+		{
+			Log.w(TAG, "lockAutoExposure() - No primary camera");
+			return null;
+		}
+		
+		// create handle
+		Handle handle = new Handle("AELock")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				unlockAutoExposure(this);
+			}
+		};
+		m_AELockHandles.add(handle);
+		Log.v(TAG, "lockAutoExposure() - Handle : ", handle, ", handle count : ", m_AELockHandles.size());
+		
+		// lock AE
+		if(m_AELockHandles.size() == 1)
+		{
+			camera.set(Camera.PROP_IS_AE_LOCKED, true);
+			this.setReadOnly(PROP_IS_AE_LOCKED, true);
+		}
+		
+		// complete
+		return handle;
 	}
 	
 	
 	// Called when AE lock state changes.
 	private void onAELockedChanged(boolean isLocked)
 	{
-		super.setReadOnly(PROP_IS_AE_LOCKED, isLocked);
+		if(!isLocked && !m_AELockHandles.isEmpty())
+		{
+			Log.w(TAG, "onAELockedChanged() - AE unlocked by camera");
+			m_AELockHandles.clear();
+			this.setReadOnly(PROP_IS_AE_LOCKED, false);
+		}
 	}
 	
 	
@@ -150,30 +208,6 @@ final class ExposureControllerImpl extends CameraComponent implements ExposureCo
 	}
 	
 	
-	// Set PROP_IS_AE_LOCKED property.
-	private boolean setAELockedProp(boolean isLocked)
-	{
-		// check state
-		this.verifyAccess();
-		if(!this.isRunningOrInitializing())
-		{
-			Log.e(TAG, "setAELockedProp() - Component is not running");
-			return false;
-		}
-		
-		// check camera
-		Camera camera = this.getCamera();
-		if(camera == null)
-		{
-			Log.e(TAG, "setAELockedProp() - No primary camera");
-			return false;
-		}
-		
-		// set AE lock
-		return camera.set(Camera.PROP_IS_AE_LOCKED, isLocked);
-	}
-	
-	
 	// Set PROP_AE_REGIONS property.
 	private boolean setAERegionsProp(List<MeteringRect> regions)
 	{
@@ -219,5 +253,27 @@ final class ExposureControllerImpl extends CameraComponent implements ExposureCo
 		
 		// set AE regions
 		return camera.set(Camera.PROP_EXPOSURE_COMPENSATION, ev);
+	}
+	
+	
+	// Unlock AE.
+	private void unlockAutoExposure(Handle handle)
+	{
+		// remove handle
+		this.verifyAccess();
+		if(!m_AELockHandles.remove(handle))
+			return;
+		
+		Log.v(TAG, "unlockAutoExposure() - Handle : ", handle, ", handle count : ", m_AELockHandles.size());
+		
+		// check state
+		if(!m_AELockHandles.isEmpty())
+			return;
+		
+		// unlock AE
+		Camera camera = this.getCamera();
+		if(camera != null)
+			camera.set(Camera.PROP_IS_AE_LOCKED, false);
+		this.setReadOnly(PROP_IS_AE_LOCKED, false);
 	}
 }

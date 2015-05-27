@@ -5,6 +5,7 @@ import java.util.List;
 
 import android.util.Range;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.component.Component;
 
@@ -35,4 +36,12 @@ public interface ExposureController extends Component
 	 * Read-only property to check whether AE is locked or not.
 	 */
 	PropertyKey<Boolean> PROP_IS_AE_LOCKED = new PropertyKey<>("IsAELocked", Boolean.class, ExposureController.class, false);
+	
+	
+	/**
+	 * Lock auto exposure.
+	 * @param flags Flags, reserved.
+	 * @return Handle to AE lock.
+	 */
+	Handle lockAutoExposure(int flags);
 }

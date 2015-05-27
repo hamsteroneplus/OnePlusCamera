@@ -251,6 +251,17 @@ final class FocusExposureIndicator extends UIComponent
 	}
 	
 	
+	// Check whether both AE/AF are locked
+	private boolean isFocusExposureLocked()
+	{
+		if(m_FocusController == null || !m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED))
+			return false;
+		if(m_ExposureController == null || !m_ExposureController.get(ExposureController.PROP_IS_AE_LOCKED))
+			return false;
+		return true;
+	}
+	
+	
 	// Called when AF regions changed.
 	private void onAfRegionsChanged(List<MeteringRect> regions)
 	{
@@ -260,38 +271,6 @@ final class FocusExposureIndicator extends UIComponent
 			m_AfRegion = null;
 		//if(m_FocusController.get(FocusController.PROP_FOCUS_STATE) == FocusState.SCANNING)
 			//this.showFocusIndicator(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED), false);
-	}
-	
-	
-	// Called when focus locked or unlocked.
-	private void onFocusLockedChanged(boolean isLocked)
-	{
-		if(isLocked)
-		{
-			// show indicator
-			this.showFocusIndicator(true, false);
-			this.getHandler().removeMessages(MSG_HIDE_FOCUS_INDICATOR);
-			
-			// check recording state
-			switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
-			{
-				case PREPARING:
-				case READY:
-					break;
-				default:
-					return;
-			}
-			
-			// show locked text
-			this.setViewVisibility(m_FocusLockedIndicator, true);
-			this.rotateLayout(m_FocusLockedIndicatorContainer, 0);
-			this.rotateFocusLockedIndicator(this.getRotation());
-		}
-		else
-		{
-			this.setViewVisibility(m_FocusLockedIndicator, false);
-			this.hideFocusIndicator();
-		}
 	}
 	
 	
@@ -529,7 +508,7 @@ final class FocusExposureIndicator extends UIComponent
 					case PREPARING:
 						break;
 					case READY:
-						onFocusLockedChanged(m_FocusController != null && m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED));
+						updateFocusExposureLockIndicator();
 						break;
 					case REVIEWING:
 						hideFocusIndicator();
@@ -552,6 +531,14 @@ final class FocusExposureIndicator extends UIComponent
 			m_ExposureController.addCallback(ExposureController.PROP_EXPOSURE_COMPENSATION, callback);
 			m_ExposureController.addCallback(ExposureController.PROP_EXPOSURE_COMPENSATION_RANGE, callback);
 			m_ExposureController.addCallback(ExposureController.PROP_EXPOSURE_COMPENSATION_STEP, callback);
+			m_ExposureController.addCallback(ExposureController.PROP_IS_AE_LOCKED, new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					updateFocusExposureLockIndicator();
+				}
+			});
 			this.onExposureCompChanged();
 		}
 		if(m_FocusController != null)
@@ -577,7 +564,7 @@ final class FocusExposureIndicator extends UIComponent
 				@Override
 				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 				{
-					onFocusLockedChanged(e.getNewValue());
+					updateFocusExposureLockIndicator();
 				}
 			});
 		}
@@ -589,8 +576,8 @@ final class FocusExposureIndicator extends UIComponent
 		{
 			this.onAfRegionsChanged(m_FocusController.get(FocusController.PROP_AF_REGIONS));
 			this.onFocusStateChanged(m_FocusController.get(FocusController.PROP_FOCUS_STATE));
-			this.onFocusLockedChanged(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED));
 		}
+		this.updateFocusExposureLockIndicator();
 	}
 	
 	
@@ -845,5 +832,52 @@ final class FocusExposureIndicator extends UIComponent
 			m_IndicatorContainer.startAnimation(animationSet);
 		}
 		m_IndicatorContainer.setVisibility(View.VISIBLE);
+	}
+	
+	
+	// Update AE/AF lock indicator according to current state.
+	private void updateFocusExposureLockIndicator()
+	{
+		// check AE/AF lock state
+		boolean isVisible = this.isFocusExposureLocked();
+		
+		// check capture state
+		if(isVisible)
+		{
+			CameraActivity activity = this.getCameraActivity();
+			isVisible = (activity.get(CameraActivity.PROP_PHOTO_CAPTURE_STATE) != PhotoCaptureState.REVIEWING
+					&& activity.get(CameraActivity.PROP_VIDEO_CAPTURE_STATE) != VideoCaptureState.REVIEWING);
+		}
+		
+		// update visibility
+		if(isVisible)
+		{
+			if(m_FocusLockedIndicator != null && m_FocusLockedIndicator.getVisibility() != View.VISIBLE)
+			{
+				// show focus indicator
+				this.showFocusIndicator(true, false);
+				this.getHandler().removeMessages(MSG_HIDE_FOCUS_INDICATOR);
+				
+				// check recording state
+				switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+				{
+					case PREPARING:
+					case READY:
+						break;
+					default:
+						return;
+				}
+				
+				// show locked text
+				this.setViewVisibility(m_FocusLockedIndicator, true);
+				this.rotateLayout(m_FocusLockedIndicatorContainer, 0);
+				this.rotateFocusLockedIndicator(this.getRotation());
+			}
+		}
+		else
+		{
+			this.setViewVisibility(m_FocusLockedIndicator, false);
+			this.hideFocusIndicatorDelayed();
+		}
 	}
 }

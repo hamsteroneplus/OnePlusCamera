@@ -158,8 +158,13 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	{
 		Log.w(TAG, "lockFocusAndExposure()");
 		
+		// lock focus
 		if(!Handle.isValid(m_FocusLockHandle) && m_FocusController != null)
 			m_FocusLockHandle = m_FocusController.lockFocus(0);
+		
+		// lock AE
+		if(!Handle.isValid(m_ExposureLockHandle) && m_ExposureController != null)
+			m_ExposureLockHandle = m_ExposureController.lockAutoExposure(0);
 	}
 	
 	
