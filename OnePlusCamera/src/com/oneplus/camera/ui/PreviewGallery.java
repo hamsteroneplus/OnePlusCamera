@@ -295,7 +295,10 @@ final class PreviewGallery extends UIComponent {
 
 				if (position < -1) { // [-Infinity,-1)
 					// This page is way off-screen to the left.
-					view.setAlpha(0);
+					view.setTranslationX(0);
+					view.setScaleX(1);
+					view.setScaleY(1);
+					view.setAlpha(1);
 
 				} else if (position <= 1) { // [-1,1]
 					// Modify the default slide transition to shrink the page as
@@ -323,7 +326,10 @@ final class PreviewGallery extends UIComponent {
 
 				} else { // (1,+Infinity]
 					// This page is way off-screen to the right.
-					view.setAlpha(0);
+					view.setTranslationX(0);
+					view.setScaleX(1);
+					view.setScaleY(1);
+					view.setAlpha(1);
 				}
 
 			}
