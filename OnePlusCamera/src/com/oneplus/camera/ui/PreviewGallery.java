@@ -151,12 +151,18 @@ final class PreviewGallery extends UIComponent {
 
 	@Override
 	protected void onDeinitialize() {
-		m_ViewPager.setAdapter(null);
-		m_VerticalViewPager.setAdapter(null);
-		m_ViewPager.removeAllViews();
-		m_VerticalViewPager.removeAllViews();
-		m_VerticalAdapter.deinitialize();
-		m_Adapter.deinitialize();
+		if(m_ViewPager != null)
+			m_ViewPager.setAdapter(null);
+		if(m_VerticalViewPager != null)
+			m_VerticalViewPager.setAdapter(null);
+		if(m_ViewPager != null)
+			m_ViewPager.removeAllViews();
+		if(m_VerticalViewPager != null)
+			m_VerticalViewPager.removeAllViews();
+		if(m_VerticalAdapter != null)
+			m_VerticalAdapter.deinitialize();
+		if(m_Adapter != null)
+			m_Adapter.deinitialize();
 		super.onDeinitialize();
 	}
 	
