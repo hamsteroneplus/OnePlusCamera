@@ -2,22 +2,28 @@ package com.oneplus.camera.ui;
 
 import java.util.List;
 
-import android.animation.Animator;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Message;
 import android.util.Range;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewPropertyAnimator;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.AnimationSet;
+import android.view.animation.ScaleAnimation;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
@@ -25,24 +31,27 @@ import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
+import com.oneplus.base.Rotation;
 import com.oneplus.camera.Camera.MeteringRect;
+import com.oneplus.camera.widget.RotateRelativeLayout;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.ExposureController;
 import com.oneplus.camera.FocusController;
 import com.oneplus.camera.FocusState;
 import com.oneplus.camera.MainActivity;
+import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.R;
 import com.oneplus.camera.UIComponent;
+import com.oneplus.camera.VideoCaptureState;
 import com.oneplus.widget.ViewUtils;
 
 final class FocusExposureIndicator extends UIComponent
 {
 	// Constants.
-	private static final long DURATION_FOCUS_INDICATOR_VISIBLE = 600;
+	private static final long DURATION_FOCUS_INDICATOR_VISIBLE = 1000;
 	private static final long DURATION_FOCUS_INDICATOR_SHOW = 300;
 	private static final long DURATION_EXPOSURE_COMP_ICON_ROTATION = 100;
 	private static final int MSG_HIDE_FOCUS_INDICATOR = 10000;
-	private static final int MSG_SHOW_FOCUS_INDICATOR = 10001;
 	
 	
 	// Private fields.
@@ -51,11 +60,13 @@ final class FocusExposureIndicator extends UIComponent
 	private ImageView m_FocusIndicator;
 	private FocusExposureRegionDrawable m_FocusingDrawable;
 	private FocusExposureRegionDrawable m_FocusLockedDrawable;
+	private RotateRelativeLayout m_FocusLockedIndicatorContainer;
+	private TextView m_FocusLockedIndicator;
 	private ImageView m_ExposureCompDirectionIcon;
 	private View m_ExposureCompDragIcon;
 	private View m_ExposureCompDragIconContainer;
 	private ExposureController m_ExposureController;
-	private ViewPropertyAnimator m_IndicatorAnimator;
+	private Animation m_IndicatorAnimation;
 	private final Point m_IndicatorCenterPointInWindow = new Point();
 	private View m_IndicatorContainer;
 	private int m_IndicatorContainerHeight;
@@ -80,6 +91,26 @@ final class FocusExposureIndicator extends UIComponent
 		public FocusExposureRegionDrawable(Context context, int resId)
 		{
 			m_BaseDrawable = context.getDrawable(resId);
+			m_BaseDrawable.setCallback(new Drawable.Callback()
+			{
+				@Override
+				public void unscheduleDrawable(Drawable who, Runnable what)
+				{
+					FocusExposureRegionDrawable.this.unscheduleSelf(what);
+				}
+				
+				@Override
+				public void scheduleDrawable(Drawable who, Runnable what, long when)
+				{
+					FocusExposureRegionDrawable.this.scheduleSelf(what, when);
+				}
+				
+				@Override
+				public void invalidateDrawable(Drawable who)
+				{
+					FocusExposureRegionDrawable.this.invalidateSelf();
+				}
+			});
 			m_ExposureCompBorderWidth = context.getResources().getDimensionPixelSize(R.dimen.exposure_comp_border_thickness);
 			m_ExposureCompPaint = new Paint();
 			m_ExposureCompPaint.setColor(context.getResources().getColor(R.color.exposure_comp_border));
@@ -148,6 +179,23 @@ final class FocusExposureIndicator extends UIComponent
 			m_RelativeExposureComp = exposureComp;
 			this.invalidateSelf();
 		}
+		
+		// Start animation.
+		public void startAnimation()
+		{
+			if(m_BaseDrawable instanceof AnimationDrawable)
+				((AnimationDrawable)m_BaseDrawable).start();
+		}
+		
+		// Stop animation.
+		public void stopAnimation()
+		{
+			if(m_BaseDrawable instanceof AnimationDrawable)
+			{
+				((AnimationDrawable)m_BaseDrawable).stop();
+				((AnimationDrawable)m_BaseDrawable).selectDrawable(0);
+			}
+		}
 	}
 	
 	
@@ -168,10 +216,6 @@ final class FocusExposureIndicator extends UIComponent
 				this.hideFocusIndicator();
 				break;
 				
-			case MSG_SHOW_FOCUS_INDICATOR:
-				this.showFocusIndicator(true);
-				break;
-				
 			default:
 				super.handleMessage(msg);
 				break;
@@ -182,23 +226,21 @@ final class FocusExposureIndicator extends UIComponent
 	// Hide focus indicator.
 	private void hideFocusIndicator()
 	{
-		if(m_IndicatorAnimator != null)
-		{
-			m_IndicatorAnimator.cancel();
-			m_IndicatorAnimator = null;
-		}
+		if(m_IndicatorContainer != null)
+			m_IndicatorContainer.clearAnimation();
 		this.setViewVisibility(m_IndicatorContainer, false);
-		HandlerUtils.removeMessages(this, MSG_SHOW_FOCUS_INDICATOR);
 	}
 	
 	
 	// Hide focus indicator later according to current state.
 	private void hideFocusIndicatorDelayed()
 	{
+		if(m_FocusController != null && m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED))
+			return;
 		if(m_FocusController != null)
 		{
 			if(m_FocusController.get(FocusController.PROP_FOCUS_STATE) != FocusState.SCANNING
-					&& m_IndicatorAnimator == null
+					&& m_IndicatorAnimation == null
 					&& !m_IsChangingExposureComp)
 			{
 				HandlerUtils.sendMessage(FocusExposureIndicator.this, MSG_HIDE_FOCUS_INDICATOR, true, DURATION_FOCUS_INDICATOR_VISIBLE);
@@ -216,7 +258,40 @@ final class FocusExposureIndicator extends UIComponent
 			m_AfRegion = regions.get(0);
 		else
 			m_AfRegion = null;
-		HandlerUtils.sendMessage(this, MSG_SHOW_FOCUS_INDICATOR, true);
+		//if(m_FocusController.get(FocusController.PROP_FOCUS_STATE) == FocusState.SCANNING)
+			//this.showFocusIndicator(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED), false);
+	}
+	
+	
+	// Called when focus locked or unlocked.
+	private void onFocusLockedChanged(boolean isLocked)
+	{
+		if(isLocked)
+		{
+			// show indicator
+			this.showFocusIndicator(true, false);
+			this.getHandler().removeMessages(MSG_HIDE_FOCUS_INDICATOR);
+			
+			// check recording state
+			switch(this.getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+			{
+				case PREPARING:
+				case READY:
+					break;
+				default:
+					return;
+			}
+			
+			// show locked text
+			this.setViewVisibility(m_FocusLockedIndicator, true);
+			this.rotateLayout(m_FocusLockedIndicatorContainer, 0);
+			this.rotateFocusLockedIndicator(this.getRotation());
+		}
+		else
+		{
+			this.setViewVisibility(m_FocusLockedIndicator, false);
+			this.hideFocusIndicator();
+		}
 	}
 	
 	
@@ -226,7 +301,7 @@ final class FocusExposureIndicator extends UIComponent
 		if(focusState == FocusState.SCANNING)
 		{
 			m_IsChangingExposureComp = false;
-			HandlerUtils.sendMessage(this, MSG_SHOW_FOCUS_INDICATOR, true);
+			this.showFocusIndicator(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED), true);
 		}
 		else
 			this.hideFocusIndicatorDelayed();
@@ -408,6 +483,8 @@ final class FocusExposureIndicator extends UIComponent
 				return onExposureCompDragIconTouch(event);
 			}
 		});
+		m_FocusLockedIndicatorContainer = (RotateRelativeLayout)baseView.findViewById(R.id.focus_exposure_lock_indicator_container);
+		m_FocusLockedIndicator = (TextView)m_FocusLockedIndicatorContainer.findViewById(R.id.focus_exposure_lock_indicator);
 		this.addAutoRotateView(m_IndicatorContainer);
 		
 		// add property changed call-backs
@@ -417,7 +494,49 @@ final class FocusExposureIndicator extends UIComponent
 			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
 			{
 				if(!e.getNewValue())
+				{
+					switch(getCameraActivity().get(CameraActivity.PROP_VIDEO_CAPTURE_STATE))
+					{
+						case STARTING:
+						case CAPTURING:
+							break;
+						default:
+							hideFocusIndicator();
+							break;
+					}
+				}
+			}
+		});
+		cameraActivity.addCallback(CameraActivity.PROP_PHOTO_CAPTURE_STATE, new PropertyChangedCallback<PhotoCaptureState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<PhotoCaptureState> key, PropertyChangeEventArgs<PhotoCaptureState> e)
+			{
+				if(e.getNewValue() == PhotoCaptureState.REVIEWING)
+				{
 					hideFocusIndicator();
+					setViewVisibility(m_FocusLockedIndicator, false);
+				}
+			}
+		});
+		cameraActivity.addCallback(CameraActivity.PROP_VIDEO_CAPTURE_STATE, new PropertyChangedCallback<VideoCaptureState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<VideoCaptureState> key, PropertyChangeEventArgs<VideoCaptureState> e)
+			{
+				switch(e.getNewValue())
+				{
+					case PREPARING:
+						break;
+					case READY:
+						onFocusLockedChanged(m_FocusController != null && m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED));
+						break;
+					case REVIEWING:
+						hideFocusIndicator();
+					default:
+						setViewVisibility(m_FocusLockedIndicator, false);
+						break;
+				}
 			}
 		});
 		if(m_ExposureController != null)
@@ -453,6 +572,14 @@ final class FocusExposureIndicator extends UIComponent
 					onFocusStateChanged(e.getNewValue());
 				}
 			});
+			m_FocusController.addCallback(FocusController.PROP_IS_FOCUS_LOCKED, new PropertyChangedCallback<Boolean>()
+			{
+				@Override
+				public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+				{
+					onFocusLockedChanged(e.getNewValue());
+				}
+			});
 		}
 		else
 			Log.w(TAG, "onInitialize() - No FocusController");
@@ -462,6 +589,65 @@ final class FocusExposureIndicator extends UIComponent
 		{
 			this.onAfRegionsChanged(m_FocusController.get(FocusController.PROP_AF_REGIONS));
 			this.onFocusStateChanged(m_FocusController.get(FocusController.PROP_FOCUS_STATE));
+			this.onFocusLockedChanged(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED));
+		}
+	}
+	
+	
+	// Called when rotation changed.
+	@Override
+	protected void onRotationChanged(Rotation prevRotation, Rotation newRotation)
+	{
+		// call super
+		super.onRotationChanged(prevRotation, newRotation);
+		
+		// rotate focus lock indicator
+		this.rotateLayout(m_FocusLockedIndicatorContainer, new ViewRotationCallback()
+		{
+			@Override
+			public void onRotated(View view, Rotation rotation)
+			{
+				rotateFocusLockedIndicator(rotation);
+			}
+		});
+	}
+	
+	
+	// Rotate focus lock indicator to given rotation.
+	private void rotateFocusLockedIndicator(Rotation rotation)
+	{
+		// change indicator position
+		if(m_FocusLockedIndicator != null && m_FocusLockedIndicator.getVisibility() == View.VISIBLE)
+		{
+			CameraActivity activity = this.getCameraActivity();
+			Resources res = activity.getResources();
+			RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams)m_FocusLockedIndicator.getLayoutParams();
+			switch(rotation)
+			{
+				case LANDSCAPE:
+				case INVERSE_LANDSCAPE:
+					layoutParams.removeRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+					layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+					layoutParams.topMargin = res.getDimensionPixelSize(R.dimen.focus_lock_text_margin_top_land);
+					m_FocusLockedIndicator.setBackgroundColor(Color.TRANSPARENT);
+					m_FocusLockedIndicator.setTextAppearance(activity, R.style.FocusLockText_Landscape);
+					break;
+				case PORTRAIT:
+					layoutParams.removeRule(RelativeLayout.ALIGN_PARENT_TOP);
+					layoutParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+					layoutParams.bottomMargin = res.getDimensionPixelSize(R.dimen.focus_lock_text_margin_bottom_port);
+					m_FocusLockedIndicator.setBackgroundColor(res.getColor(R.color.focus_lock_text_background_port));
+					m_FocusLockedIndicator.setTextAppearance(activity, R.style.FocusLockText_Portrait);
+					break;
+				case INVERSE_PORTRAIT:
+					layoutParams.removeRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+					layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+					layoutParams.topMargin = res.getDimensionPixelSize(R.dimen.focus_lock_text_margin_bottom_port);
+					m_FocusLockedIndicator.setBackgroundColor(res.getColor(R.color.focus_lock_text_background_port));
+					m_FocusLockedIndicator.setTextAppearance(activity, R.style.FocusLockText_Portrait);
+					break;
+			}
+			m_FocusLockedIndicator.requestLayout();
 		}
 	}
 	
@@ -548,7 +734,7 @@ final class FocusExposureIndicator extends UIComponent
 	
 	
 	// Show focus indicator.
-	private void showFocusIndicator(boolean animation)
+	private void showFocusIndicator(boolean isFocusLocked, boolean animation)
 	{
 		// check state
 		if(m_Viewfinder == null)
@@ -556,14 +742,16 @@ final class FocusExposureIndicator extends UIComponent
 		if(m_IndicatorContainer == null)
 			return;
 		
+		Log.v(TAG, "showFocusIndicator");
+		
 		// cancel hiding indicator
 		HandlerUtils.removeMessages(this, MSG_HIDE_FOCUS_INDICATOR);
-		
+		 
 		// cancel current animator
-		if(m_IndicatorAnimator != null)
+		if(!animation && m_IndicatorAnimation != null)
 		{
-			m_IndicatorAnimator.cancel();
-			m_IndicatorAnimator = null;
+			m_IndicatorContainer.clearAnimation();
+			m_IndicatorAnimation = null;
 		}
 		
 		// check preview state
@@ -581,9 +769,17 @@ final class FocusExposureIndicator extends UIComponent
 			float exposureComp = m_RelativeExposureComp;
 			m_RelativeExposureComp = 0;
 			m_FocusingDrawable = new FocusExposureRegionDrawable(cameraActivity, R.drawable.focus);
+			m_FocusLockedDrawable = new FocusExposureRegionDrawable(this.getCameraActivity(), R.drawable.focus_locked_animation);
 			this.setRelativeExposureComp(exposureComp, false, false);
 		}
-		m_FocusIndicator.setImageDrawable(m_FocusingDrawable);
+		if(isFocusLocked)
+		{
+			m_FocusIndicator.setImageDrawable(m_FocusLockedDrawable);
+			m_FocusLockedDrawable.stopAnimation();
+			m_FocusLockedDrawable.startAnimation();
+		}
+		else
+			m_FocusIndicator.setImageDrawable(m_FocusingDrawable);
 		
 		// update indicator position
 		float focusX, focusY;
@@ -619,39 +815,34 @@ final class FocusExposureIndicator extends UIComponent
 		// show indicator
 		if(animation)
 		{
-			m_IndicatorAnimator = m_IndicatorContainer.animate();
-			m_IndicatorAnimator.setListener(new Animator.AnimatorListener()
+			AnimationSet animationSet = new AnimationSet(true);
+			ScaleAnimation scaleAnimation = new ScaleAnimation(1.4f, 1, 1.4f, 1, ScaleAnimation.RELATIVE_TO_SELF, 0.5f, ScaleAnimation.RELATIVE_TO_SELF, 0.5f);
+			AlphaAnimation alphaAnimation = new AlphaAnimation(0, 1);
+			scaleAnimation.setDuration(DURATION_FOCUS_INDICATOR_SHOW);
+			scaleAnimation.setFillBefore(true);
+			alphaAnimation.setDuration(DURATION_FOCUS_INDICATOR_SHOW);
+			alphaAnimation.setFillBefore(true);
+			animationSet.addAnimation(scaleAnimation);
+			animationSet.addAnimation(alphaAnimation);
+			animationSet.setAnimationListener(new Animation.AnimationListener()
 			{
 				@Override
-				public void onAnimationStart(Animator animation)
+				public void onAnimationStart(Animation animation)
 				{}
 				
 				@Override
-				public void onAnimationRepeat(Animator animation)
+				public void onAnimationRepeat(Animation animation)
 				{}
 				
 				@Override
-				public void onAnimationEnd(Animator animation)
+				public void onAnimationEnd(Animation animation)
 				{
-					m_IndicatorAnimator = null;
-					hideFocusIndicatorDelayed();
-				}
-				
-				@Override
-				public void onAnimationCancel(Animator animation)
-				{
-					m_IndicatorAnimator = null;
+					m_IndicatorAnimation = null;
 					hideFocusIndicatorDelayed();
 				}
 			});
-			m_IndicatorContainer.setAlpha(0f);
-			m_IndicatorContainer.setScaleX(1.4f);
-			m_IndicatorContainer.setScaleY(1.4f);
-			m_IndicatorAnimator.setDuration(DURATION_FOCUS_INDICATOR_SHOW);
-			m_IndicatorAnimator.alpha(1);
-			m_IndicatorAnimator.scaleX(1);
-			m_IndicatorAnimator.scaleY(1);
-			m_IndicatorAnimator.start();
+			m_IndicatorAnimation = animationSet;
+			m_IndicatorContainer.startAnimation(animationSet);
 		}
 		m_IndicatorContainer.setVisibility(View.VISIBLE);
 	}

@@ -22,6 +22,9 @@
 	<string name="capture_mode_timelapse">Time-lapse</string>
 	<string name="capture_mode_video">Video</string>
 	
+	<!-- 2A lock -->
+	<string name="focus_exposure_locked">AE/AF locked</string>
+	
 	<!-- Resolution -->
 	<string name="resolution_video_1080p">Full HD</string>
 	<string name="resolution_video_2160p">UHD</string>

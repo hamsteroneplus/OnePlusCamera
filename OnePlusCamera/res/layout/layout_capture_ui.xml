@@ -5,6 +5,7 @@
 	
 	<!-- Focus/Exposure indicator -->
 	<include layout="@layout/layout_focus_exposure_indicator"/>
+	<include layout="@layout/layout_focus_exposure_lock"/>
 	
 	<!-- Count-down timer -->
 	<ViewStub android:id="@+id/count_down_timer_container"

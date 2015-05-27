@@ -18,9 +18,9 @@ final class LocationManagerImpl extends ProxyComponent<LocationManager> implemen
 	
 	// Called when binding to target properties.
 	@Override
-	protected void onBindingToTargetPropertys(List<PropertyKey<?>> keys)
+	protected void onBindingToTargetProperties(List<PropertyKey<?>> keys)
 	{
-		super.onBindingToTargetPropertys(keys);
+		super.onBindingToTargetProperties(keys);
 		keys.add(PROP_IS_LOCATION_LISTENER_STARTED);
 		keys.add(PROP_LOCATION);
 	}

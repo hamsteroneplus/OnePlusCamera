@@ -1076,7 +1076,16 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			this.setReadOnly(PROP_IS_TOUCHING_ON_SCREEN, true);
 		
 		// dispatch touch event
-		boolean result = super.dispatchTouchEvent(ev);
+		boolean result;
+		try
+		{
+			result = super.dispatchTouchEvent(ev);
+		}
+		catch(Throwable ex)
+		{
+			Log.e(TAG, "dispatchTouchEvent() - Unhandled error", ex);
+			result = false;
+		}
 		
 		// check ACTION_DOWN
 		if(action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)

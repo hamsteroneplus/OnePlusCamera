@@ -616,19 +616,16 @@ public class CameraThread extends BaseThread implements ComponentOwner
 				// check state
 				boolean lockFocus = false;
 				FocusState focusState = m_FocusController.get(FocusController.PROP_FOCUS_STATE);
-				if(focusState == FocusState.FOCUSED)
-				{
-					if(m_FocusController.get(FocusController.PROP_FOCUS_MODE) == FocusMode.CONTINUOUS_AF)
-						Log.v(TAG, "capturePhotoInternal() - No need to lock focus, because current focus mode is continuous AF");
-					else
-						lockFocus = true;
-				}
-				else if(focusState == FocusState.SCANNING)
+				if(focusState == FocusState.SCANNING)
 				{
 					Log.w(TAG, "capturePhotoInternal() - Waiting for focus complete");
 					m_PhotoCaptureHandle = handle;
 					return true;
 				}
+				else if(focusState == FocusState.FOCUSED)
+					Log.v(TAG, "capturePhotoInternal() - No need to lock focus, because focus state is FOCUSED");
+				else if(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED))
+					Log.v(TAG, "capturePhotoInternal() - No need to lock focus, because focus is locked");
 				else
 					lockFocus = true;
 				

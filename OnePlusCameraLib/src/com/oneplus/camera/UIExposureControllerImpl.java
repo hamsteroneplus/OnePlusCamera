@@ -18,9 +18,9 @@ final class UIExposureControllerImpl extends ProxyComponent<ExposureController> 
 	
 	// Called before binding to controller.
 	@Override
-	protected void onBindingToTargetPropertys(List<PropertyKey<?>> keys)
+	protected void onBindingToTargetProperties(List<PropertyKey<?>> keys)
 	{
-		super.onBindingToTargetPropertys(keys);
+		super.onBindingToTargetProperties(keys);
 		keys.add(PROP_AE_REGIONS);
 		keys.add(PROP_EXPOSURE_COMPENSATION);
 		keys.add(PROP_EXPOSURE_COMPENSATION_RANGE);

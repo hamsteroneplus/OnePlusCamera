@@ -70,11 +70,6 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 			this.method = method;
 			this.args = args;
 		}
-		
-		public void complete()
-		{
-			this.closeDirectly();
-		}
 
 		@Override
 		protected void onClose(int flags)
@@ -246,10 +241,6 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 			Log.e(TAG, "callTargetMethod() - Fail to call target method", ex);
 			throw new RuntimeException("Fail to call target method.", ex);
 		}
-		finally
-		{
-			handle.complete();
-		}
 	}
 	
 	
@@ -352,7 +343,7 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 	 * Called before binding to properties owned by target component.
 	 * @param keys Property keys to bind.
 	 */
-	protected void onBindingToTargetPropertys(List<PropertyKey<?>> keys)
+	protected void onBindingToTargetProperties(List<PropertyKey<?>> keys)
 	{}
 	
 	
@@ -423,7 +414,7 @@ public abstract class ProxyComponent<TTarget extends Component> extends CameraCo
 		final ArrayList<EventKey<?>> eventKeys = new ArrayList<>();
 		final ArrayList<PropertyKey<?>> propertyKeys = new ArrayList<>();
 		this.onBindingToTargetEvents(eventKeys);
-		this.onBindingToTargetPropertys(propertyKeys);
+		this.onBindingToTargetProperties(propertyKeys);
 		
 		// bind to target events and properties
 		if(!eventKeys.isEmpty() || !propertyKeys.isEmpty())

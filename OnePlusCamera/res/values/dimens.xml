@@ -50,6 +50,14 @@
 	<dimen name="focus_indicator_container_height">180dp</dimen>
 	<dimen name="focus_indicator_container_width">180dp</dimen>
 	
+	<!-- Focus lock -->
+	<dimen name="focus_lock_text_padding_left">3dp</dimen>
+	<dimen name="focus_lock_text_padding_right">3dp</dimen>
+	<dimen name="focus_lock_text_size">14sp</dimen>
+	<dimen name="focus_lock_text_height">17dp</dimen>
+	<dimen name="focus_lock_text_margin_bottom_port">134dp</dimen>
+	<dimen name="focus_lock_text_margin_top_land">17dp</dimen>
+	
 	<!-- Options panel -->
 	<dimen name="options_panel_height">70dp</dimen>
 	<dimen name="options_panel_item_height">50dp</dimen>

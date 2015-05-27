@@ -5,6 +5,7 @@ import java.util.List;
 
 import android.graphics.PointF;
 import android.os.Message;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 
 import com.oneplus.base.BaseActivity.State;
@@ -23,24 +24,31 @@ import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CameraComponent;
 import com.oneplus.camera.ExposureController;
 import com.oneplus.camera.FocusController;
+import com.oneplus.camera.FocusMode;
+import com.oneplus.camera.FocusState;
 import com.oneplus.camera.PhotoCaptureState;
 import com.oneplus.camera.Camera.MeteringRect;
 
 final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFocusUI, TouchAutoExposureUI
 {
 	// Constants.
-	private static final long DURATION_AF_LOCK_THREAHOLD = 500;
+	private static final long DURATION_AF_LOCK_THREAHOLD = 1000;
 	private static final long DURATION_START_AF_THREAHOLD = 500;
+	private static final long DURATION_MIN_TOUCH_AF_INTERVAL = 300;
 	private static final float AF_REGION_WIDTH = 0.25f;
 	private static final float AF_REGION_HEIGHT = 0.25f;
 	private static final float TOUCH_AF_DISTANCE_THRESHOLD = 0.2f;
 	private static final int MSG_START_AF = 10000;
-	private static final int MSG_LOCK_AF = 10001;
+	private static final int MSG_LOCK_AE_AF = 10001;
 	
 	
 	// Private fields.
 	private ExposureController m_ExposureController;
+	private Handle m_ExposureLockHandle;
 	private FocusController m_FocusController;
+	private Handle m_FocusLockHandle;
+	private boolean m_IsPointerUppedWhenFocusScanning;
+	private long m_LastAFTriggeredTime;
 	private float m_TouchAfDistanceThreshold;
 	private Handle m_TouchAfHandle;
 	private final PointF m_TouchDownPosition = new PointF(-1, -1);
@@ -74,7 +82,14 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		m_FocusController = this.findComponent(FocusController.class);
 		if(m_FocusController == null)
 			return false;
-		//
+		m_FocusController.addCallback(FocusController.PROP_FOCUS_STATE, new PropertyChangedCallback<FocusState>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<FocusState> key, PropertyChangeEventArgs<FocusState> e)
+			{
+				onFocusStateChanged(e.getNewValue());
+			}
+		});
 		return true;
 	}
 	
@@ -123,8 +138,8 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 	{
 		switch(msg.what)
 		{
-			case MSG_LOCK_AF:
-				//
+			case MSG_LOCK_AE_AF:
+				this.lockFocusAndExposure();
 				break;
 				
 			case MSG_START_AF:
@@ -133,6 +148,49 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 				
 			default:
 				super.handleMessage(msg);
+				break;
+		}
+	}
+	
+	
+	// Lock AE and AF.
+	private void lockFocusAndExposure()
+	{
+		Log.w(TAG, "lockFocusAndExposure()");
+		
+		if(!Handle.isValid(m_FocusLockHandle) && m_FocusController != null)
+			m_FocusLockHandle = m_FocusController.lockFocus(0);
+	}
+	
+	
+	// Called when focus state changes.
+	@SuppressWarnings("incomplete-switch")
+	private void onFocusStateChanged(FocusState focusState)
+	{
+		switch(focusState)
+		{
+			case SCANNING:
+				m_IsPointerUppedWhenFocusScanning = !this.getCameraActivity().get(CameraActivity.PROP_IS_TOUCHING_ON_SCREEN);
+				break;
+			case FOCUSED:
+			case UNFOCUSED:
+				if(m_FocusController.get(FocusController.PROP_FOCUS_MODE) == FocusMode.NORMAL_AF 
+						&& this.getCameraActivity().get(CameraActivity.PROP_IS_TOUCHING_ON_SCREEN)
+						&& m_LastAFTriggeredTime > 0
+						&& !m_IsPointerUppedWhenFocusScanning)
+				{
+					long delay = (DURATION_AF_LOCK_THREAHOLD - (SystemClock.elapsedRealtime() - m_LastAFTriggeredTime));
+					if(delay > 0)
+					{
+						Log.v(TAG, "onFocusStateChanged() - Start AE/AF lock timer : ", delay, "ms");
+						this.getHandler().sendEmptyMessageDelayed(MSG_LOCK_AE_AF, delay);
+					}
+					else
+					{
+						Log.v(TAG, "onFocusStateChanged() - Lock AE/AF immediately");
+						this.lockFocusAndExposure();
+					}
+				}
 				break;
 		}
 	}
@@ -157,6 +215,15 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		});
 		
 		// add property changed call-backs
+		cameraActivity.addCallback(CameraActivity.PROP_IS_TOUCHING_ON_SCREEN, new PropertyChangedCallback<Boolean>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<Boolean> key, PropertyChangeEventArgs<Boolean> e)
+			{
+				if(!e.getNewValue())
+					m_IsPointerUppedWhenFocusScanning = true;
+			}
+		});
 		cameraActivity.addCallback(CameraActivity.PROP_SCREEN_SIZE, new PropertyChangedCallback<ScreenSize>()
 		{
 			@Override
@@ -208,10 +275,12 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 				
 			case MotionEvent.ACTION_CANCEL:
 				this.getHandler().removeMessages(MSG_START_AF);
+				this.getHandler().removeMessages(MSG_LOCK_AE_AF);
 				m_TouchDownPosition.set(-1, -1);
 				break;
 				
 			case MotionEvent.ACTION_UP:
+				this.getHandler().removeMessages(MSG_LOCK_AE_AF);
 				if(this.getHandler().hasMessages(MSG_START_AF))
 				{
 					this.getHandler().removeMessages(MSG_START_AF);
@@ -232,6 +301,8 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		if(!this.canTouchFocus())
 			return;
 		if(m_TouchDownPosition.x < 0 || m_TouchDownPosition.y < 0)
+			return;
+		if((SystemClock.elapsedRealtime() - m_LastAFTriggeredTime) < DURATION_MIN_TOUCH_AF_INTERVAL)
 			return;
 		
 		// calculate focus position
@@ -255,6 +326,9 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 		// cancel previous AF
 		m_TouchAfHandle = Handle.close(m_TouchAfHandle);
 		
+		// unlock AE and AF
+		this.unlockFocusAndExposure();
+		
 		// start AF
 		List<MeteringRect> regions = Arrays.asList(focusRect);
 		m_TouchAfHandle = m_FocusController.startAutoFocus(regions, FocusController.FLAG_SINGLE_AF);
@@ -264,13 +338,27 @@ final class TouchFocusExposureUI extends CameraComponent implements TouchAutoFoc
 			return;
 		}
 		
+		// save current time
+		m_LastAFTriggeredTime = SystemClock.elapsedRealtime();
+		
 		// change AE region
 		if(this.bindToExposureController())
+		{
+			m_ExposureController.set(ExposureController.PROP_EXPOSURE_COMPENSATION, 0f);
 			m_ExposureController.set(ExposureController.PROP_AE_REGIONS, regions);
+		}
 		
 		// raise event
 		this.raise(EVENT_TOUCH_AF, EventArgs.EMPTY);
 		this.raise(EVENT_TOUCH_AE, EventArgs.EMPTY);
+	}
+	
+	
+	// Unlock AE and AF.
+	private void unlockFocusAndExposure()
+	{
+		m_ExposureLockHandle = Handle.close(m_ExposureLockHandle);
+		m_FocusLockHandle = Handle.close(m_FocusLockHandle);
 	}
 	
 	

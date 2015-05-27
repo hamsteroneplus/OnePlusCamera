@@ -1,5 +1,6 @@
 package com.oneplus.camera;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -15,6 +16,7 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 {
 	// Private fields
 	private AfHandle m_CurrentAfHandle;
+	private final List<Handle> m_FocusLockHandles = new ArrayList<>();
 	private AfHandle m_PendingAfHandle;
 	
 	
@@ -85,6 +87,57 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 	}
 	
 	
+	// Lock focus.
+	@Override
+	public Handle lockFocus(int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "lockFocus() - Component is not running");
+			return null;
+		}
+		
+		// create handle
+		Handle handle = new Handle("FocusLock")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				unlockFocus(this);
+			}
+		};
+		m_FocusLockHandles.add(handle);
+		Log.v(TAG, "lockFocus() - Handle : ", handle, ", handle count : ", m_FocusLockHandles.size());
+		
+		// clear pending AF
+		if(m_PendingAfHandle != null)
+		{
+			m_PendingAfHandle.complete();
+			m_PendingAfHandle = null;
+		}
+		
+		// start locking focus
+		if(m_FocusLockHandles.size() == 1)
+		{
+			this.setReadOnly(PROP_IS_FOCUS_LOCKED, true);
+			if(this.get(PROP_FOCUS_STATE) != FocusState.SCANNING && this.get(PROP_FOCUS_MODE) == FocusMode.CONTINUOUS_AF)
+			{
+				Camera camera = this.getCamera();
+				if(camera != null)
+				{
+					Log.w(TAG, "lockFocus() - Disable continuous AF to lock focus");
+					camera.set(Camera.PROP_FOCUS_MODE, FocusMode.NORMAL_AF);
+				}
+			}
+		}
+		
+		// complete
+		return handle;
+	}
+	
+	
 	// Called when AF regions changed.
 	private void onAfRegionsChanged(Camera camera, List<MeteringRect> regions)
 	{
@@ -143,6 +196,13 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 				m_CurrentAfHandle = null;
 			}
 			
+			// lock focus
+			if(this.get(PROP_IS_FOCUS_LOCKED) && this.get(PROP_FOCUS_MODE) == FocusMode.CONTINUOUS_AF)
+			{
+				Log.w(TAG, "onFocusStateChanged() - Disable continuous AF to lock focus");
+				camera.set(Camera.PROP_FOCUS_MODE, FocusMode.NORMAL_AF);
+			}
+			
 			// start next AF
 			if(m_PendingAfHandle != null)
 			{
@@ -190,6 +250,11 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 			Log.e(TAG, "startAutoFocus() - Component is not running");
 			return null;
 		}
+		if(this.get(PROP_IS_FOCUS_LOCKED))
+		{
+			Log.w(TAG, "startAutoFocus() - Focus is locked");
+			return null;
+		}
 		
 		// check parameter
 		if((flags & (FLAG_CONTINOUS_AF | FLAG_SINGLE_AF)) == (FLAG_CONTINOUS_AF | FLAG_SINGLE_AF))
@@ -211,14 +276,16 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 		// check focus state
 		AfHandle handle = new AfHandle(regions, flags);
 		Log.v(TAG, "startAutoFocus() - Create handle : ", handle);
+		/*
 		if(camera.get(Camera.PROP_FOCUS_STATE) == FocusState.SCANNING)
 		{
 			Log.v(TAG, "startAutoFocus() - Focus state is SCANNING, start AF later");
 			if(m_PendingAfHandle != null)
 				Log.v(TAG, "startAutoFocus() - Cancel previous pending AF");
 			m_PendingAfHandle = handle;
-			return null;
+			return handle;
 		}
+		*/
 		
 		// start AF
 		if(!this.startAutoFocus(camera, handle))
@@ -295,5 +362,24 @@ final class FocusControllerImpl extends CameraComponent implements FocusControll
 		// complete
 		m_CurrentAfHandle = handle;
 		return true;
+	}
+	
+	
+	// Unlock focus.
+	private void unlockFocus(Handle handle)
+	{
+		// remove handle
+		this.verifyAccess();
+		if(!m_FocusLockHandles.remove(handle))
+			return;
+		
+		Log.v(TAG, "unlockFocus() - Handle : ", handle, ", handle count : ", m_FocusLockHandles.size());
+		
+		// check state
+		if(!m_FocusLockHandles.isEmpty())
+			return;
+		
+		// unlock focus
+		this.setReadOnly(PROP_IS_FOCUS_LOCKED, false);
 	}
 }

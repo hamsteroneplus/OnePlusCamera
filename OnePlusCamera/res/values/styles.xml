@@ -1,31 +1,43 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
 	
 	<!-- Advanced settings -->
-	<style name="AdvSettingsItemSummary">
-		<item name="android:fontFamily">sans-serif</item>
+	<style name="AdvSettingsItemSummary" parent="BaseText">
 		<item name="android:textColor">@color/adv_settings_item_summary</item>
 		<item name="android:textSize">@dimen/adv_settings_item_summary_text_size</item>
 	</style>
-	<style name="AdvSettingsItemTitle">
-		<item name="android:fontFamily">sans-serif</item>
+	<style name="AdvSettingsItemTitle" parent="BaseText">
 		<item name="android:textColor">@color/adv_settings_item_title</item>
 		<item name="android:textSize">@dimen/adv_settings_item_title_text_size</item>
 	</style>
 	
-	<!-- Capture modes panel -->
-	<style name="CaptureModesPanelItemText">
+	<!-- Base text -->
+	<style name="BaseText">
 		<item name="android:fontFamily">sans-serif</item>
+	</style>
+	
+	<!-- Capture modes panel -->
+	<style name="CaptureModesPanelItemText" parent="BaseText">
 		<item name="android:textColor">@color/capture_modes_panel_title_text</item>
 		<item name="android:textSize">@dimen/capture_modes_panel_item_text</item>
 	</style>
 	
 	<!-- Count-down timer -->
-	<style name="CountDownTimerText">
-		<item name="android:fontFamily">sans-serif</item>
+	<style name="CountDownTimerText" parent="BaseText">
 		<item name="android:textColor">@color/count_down_timer_text</item>
 		<item name="android:shadowColor">@color/count_down_timer_text_shadow</item>
 		<item name="android:shadowRadius">10</item>
 		<item name="android:textSize">@dimen/count_down_timer_text_size</item>
+	</style>
+	
+	<!-- Focus lock -->
+	<style name="FocusLockText" parent="BaseText">
+		<item name="android:textSize">@dimen/focus_lock_text_size</item>
+	</style>
+	<style name="FocusLockText.Portrait" parent="FocusLockText">
+		<item name="android:textColor">@color/focus_lock_text_port</item>
+	</style>
+	<style name="FocusLockText.Landscape" parent="FocusLockText">
+		<item name="android:textColor">@color/focus_lock_text_land</item>
 	</style>
 	
 	<!-- Main window style -->
@@ -34,8 +46,7 @@
 	</style>
 	
 	<!-- Options panel -->
-    <style name="OptionsPanelItemText">
-		<item name="android:fontFamily">sans-serif</item>
+    <style name="OptionsPanelItemText" parent="BaseText">
 		<item name="android:textColor">@color/options_panel_item_text</item>
 		<item name="android:textSize">@dimen/options_panel_item_text_size</item>
     </style>
@@ -44,8 +55,7 @@
 	</style>
     
 	<!-- Recording timer -->
-	<style name="RecordingTimerText">
-		<item name="android:fontFamily">sans-serif</item>
+	<style name="RecordingTimerText" parent="BaseText">
 		<item name="android:textColor">@color/recording_timer_text</item>
 		<item name="android:textSize">@dimen/recording_timer_text_size</item>
 	</style>

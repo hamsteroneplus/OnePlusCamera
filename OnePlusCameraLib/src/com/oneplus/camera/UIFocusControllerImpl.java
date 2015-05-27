@@ -1,59 +1,39 @@
 package com.oneplus.camera;
 
+import java.util.LinkedList;
 import java.util.List;
 
-import android.os.Message;
-
+import com.oneplus.base.BaseActivity.State;
 import com.oneplus.base.Handle;
-import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.PropertySource;
-import com.oneplus.base.component.ComponentSearchCallback;
-import com.oneplus.base.component.ComponentUtils;
 import com.oneplus.camera.Camera.MeteringRect;
+import com.oneplus.camera.capturemode.CaptureModeManager;
 
-final class UIFocusControllerImpl extends CameraComponent implements FocusController
+final class UIFocusControllerImpl extends ProxyComponent<FocusController> implements FocusController
 {
-	// Constants.
-	private static final int MSG_CONTROLLER_PROPERTY_CHANGED = 10000;
-	
-	
 	// Private fields.
-	private FocusController m_FocusController;
-	private WrappedAfHandle m_PendingAfHandle;
+	private final LinkedList<FocusLockHandle> m_FocusLockHandles = new LinkedList<>();
 	
 	
-	// Class for AF handle.
-	private final class WrappedAfHandle extends Handle
+	// Class for focus lock handle.
+	private final class FocusLockHandle extends Handle
 	{
-		public Handle actualHandle;
-		public final int flags;
-		public final List<MeteringRect> regions;
+		public final Handle internalHandle;
 		
-		public WrappedAfHandle(List<MeteringRect> regions, int flags)
+		public FocusLockHandle(Handle internalHandle)
 		{
-			super("WrappedAutoFocus");
-			this.regions = regions;
-			this.flags = flags;
+			super("FocusLockWrapper");
+			this.internalHandle = internalHandle;
 		}
 
 		@Override
-		protected void onClose(final int flags)
+		protected void onClose(int flags)
 		{
-			if(!HandlerUtils.post(m_FocusController, new Runnable()
-			{
-				@Override
-				public void run()
-				{
-					actualHandle = Handle.close(actualHandle, flags);
-				}
-			}))
-			{
-				Log.e(TAG, "onClose() - Fail to perform cross-thread operation");
-			}
+			unlockFocus(this);
 		}
 	}
 	
@@ -61,189 +41,104 @@ final class UIFocusControllerImpl extends CameraComponent implements FocusContro
 	// Constructor
 	UIFocusControllerImpl(CameraActivity cameraActivity)
 	{
-		super("Focus Controller (UI)", cameraActivity, true);
+		super("Focus Controller (UI)", cameraActivity, cameraActivity.getCameraThread(), FocusController.class);
 	}
 	
 	
-	// Handle message.
+	// Called before binding to target properties.
 	@Override
-	protected void handleMessage(Message msg)
+	protected void onBindingToTargetProperties(List<PropertyKey<?>> keys)
 	{
-		switch(msg.what)
+		super.onBindingToTargetProperties(keys);
+		keys.add(PROP_AF_REGIONS);
+		keys.add(PROP_CAN_CHANGE_FOCUS);
+		keys.add(PROP_FOCUS_MODE);
+		keys.add(PROP_FOCUS_STATE);
+		keys.add(PROP_IS_FOCUS_LOCKED);
+	}
+	
+	
+	// Lock focus.
+	@Override
+	public Handle lockFocus(int flags)
+	{
+		this.verifyAccess();
+		Handle handle = this.callTargetMethod("lockFocus", new Class[]{ int.class }, flags);
+		if(Handle.isValid(handle))
 		{
-			case MSG_CONTROLLER_PROPERTY_CHANGED:
-			{
-				Object[] array = (Object[])msg.obj;
-				this.onFocusControllerPropertyChanged((Camera)array[0], (PropertyKey<?>)array[1], array[2]);
-				break;
-			}
-			default:
-				super.handleMessage(msg);
-				break;
+			FocusLockHandle wrappedHandle = new FocusLockHandle(handle);
+			m_FocusLockHandles.add(wrappedHandle);
+			if(m_FocusLockHandles.size() == 1)
+				this.setReadOnly(PROP_IS_FOCUS_LOCKED, true);
+			return wrappedHandle;
 		}
-	}
-	
-	
-	// Called when AF regions changed.
-	private void onAfRegionsChanged(Camera camera, List<MeteringRect> regions)
-	{
-		if(this.getCamera() != camera)
-			return;
-		this.setReadOnly(PROP_AF_REGIONS, regions);
-	}
-	
-	
-	// Called when actual FocusController found.
-	private void onFocusControllerFound(final FocusController focusController)
-	{
-		// check state
-		if(!this.isRunningOrInitializing())
-			return;
-		
-		// add call-backs
-		if(!HandlerUtils.post(focusController, new Runnable()
-		{
-			@SuppressWarnings({ "unchecked", "rawtypes" })
-			@Override
-			public void run()
-			{
-				// add call-backs
-				Log.v(TAG, "onFocusControllerFound() - Add call-backs");
-				PropertyChangedCallback callback = new PropertyChangedCallback()
-				{
-					@Override
-					public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
-					{
-						Camera camera = getCameraThread().get(CameraThread.PROP_CAMERA);
-						HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, key, e.getNewValue() });
-					}
-				};
-				focusController.addCallback(PROP_AF_REGIONS, callback);
-				focusController.addCallback(PROP_CAN_CHANGE_FOCUS, callback);
-				focusController.addCallback(PROP_FOCUS_MODE, callback);
-				focusController.addCallback(PROP_FOCUS_STATE, callback);
-				focusController.addCallback(PROP_IS_FOCUS_LOCKED, callback);
-				
-				// sync current values
-				Camera camera = getCameraThread().get(CameraThread.PROP_CAMERA);
-				HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, PROP_AF_REGIONS, focusController.get(PROP_AF_REGIONS) });
-				HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, PROP_CAN_CHANGE_FOCUS, focusController.get(PROP_CAN_CHANGE_FOCUS) });
-				HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, PROP_FOCUS_MODE, focusController.get(PROP_FOCUS_MODE) });
-				HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, PROP_FOCUS_STATE, focusController.get(PROP_FOCUS_STATE) });
-				HandlerUtils.sendMessage(UIFocusControllerImpl.this, MSG_CONTROLLER_PROPERTY_CHANGED, 0, 0, new Object[]{ camera, PROP_IS_FOCUS_LOCKED, focusController.get(PROP_IS_FOCUS_LOCKED) });
-			}
-		}))
-		{
-			Log.e(TAG, "onFocusControllerFound() - Fail to perform cross-thread operation");
-			return;
-		}
-		
-		// save instance
-		m_FocusController = focusController;
-		
-		// start AF
-		if(m_PendingAfHandle != null)
-		{
-			WrappedAfHandle handle = m_PendingAfHandle;
-			m_PendingAfHandle = null;
-			this.startAutoFocus(handle);
-		}
-	}
-	
-	
-	// Called when property in FocusController changed.
-	@SuppressWarnings("unchecked")
-	private void onFocusControllerPropertyChanged(Camera camera, PropertyKey<?> key, Object newValue)
-	{
-		if(this.getCamera() != camera)
-			return;
-		if(key == PROP_AF_REGIONS)
-			this.onAfRegionsChanged(camera, (List<MeteringRect>)newValue);
-		else if(key == PROP_FOCUS_MODE)
-			this.onFocusModeChanged((FocusMode)newValue);
-		else if(key == PROP_FOCUS_STATE)
-			this.onFocusStateChanged((FocusState)newValue);
-	}
-	
-	
-	// Called when focus mode changed.
-	private void onFocusModeChanged(FocusMode focusMode)
-	{
-		Log.v(TAG, "onFocusModeChanged() - ", focusMode);
-		this.setReadOnly(PROP_FOCUS_MODE, focusMode);
-	}
-	
-	
-	// Called when focus state changed.
-	private void onFocusStateChanged(FocusState focusState)
-	{
-		Log.v(TAG, "onFocusStateChanged() - ", focusState);
-		this.setReadOnly(PROP_FOCUS_STATE, focusState);
+		return null;
 	}
 	
 	
 	// Initialize.
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	protected void onInitialize()
 	{
 		// call super
 		super.onInitialize();
 		
-		// bind to actual FocusController
-		ComponentUtils.findComponent(this.getCameraThread(), FocusController.class, this, new ComponentSearchCallback<FocusController>()
+		// find components
+		CaptureModeManager captureModeManager = this.findComponent(CaptureModeManager.class);
+		
+		// add call-backs
+		CameraActivity activity = this.getCameraActivity();
+		PropertyChangedCallback unlockFocusCallback = new PropertyChangedCallback()
 		{
 			@Override
-			public void onComponentFound(FocusController component)
+			public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
 			{
-				onFocusControllerFound(component);
+				unlockFocus();
+			}
+		};
+		activity.addCallback(CameraActivity.PROP_CAMERA, unlockFocusCallback);
+		activity.addCallback(CameraActivity.PROP_MEDIA_TYPE, unlockFocusCallback);
+		activity.addCallback(CameraActivity.PROP_STATE, new PropertyChangedCallback<State>()
+		{
+			@Override
+			public void onPropertyChanged(PropertySource source, PropertyKey<State> key, PropertyChangeEventArgs<State> e)
+			{
+				if(e.getNewValue() == State.PAUSING)
+					unlockFocus();
 			}
 		});
+		if(captureModeManager != null)
+			captureModeManager.addCallback(CaptureModeManager.PROP_CAPTURE_MODE, unlockFocusCallback);
 	}
-
+	
 	
 	// Start auto focus.
 	@Override
 	public Handle startAutoFocus(List<MeteringRect> regions, int flags)
 	{
-		// check state
 		this.verifyAccess();
-		if(!this.isRunningOrInitializing())
-		{
-			Log.e(TAG, "startAutoFocus() - Component is not running");
-			return null;
-		}
-		
-		// create handle
-		WrappedAfHandle handle = new WrappedAfHandle(regions, flags);
-		
-		// check focus controller
-		if(m_FocusController == null)
-		{
-			Log.w(TAG, "startAutoFocus() - FocusController is not ready, start AF later");
-			m_PendingAfHandle = handle;
-			return handle;
-		}
-		
-		// start AF
-		if(!this.startAutoFocus(handle))
-			return null;
-		return handle;
+		return this.callTargetMethod("startAutoFocus", new Class[]{ List.class, int.class }, regions, flags);
 	}
-	private boolean startAutoFocus(final WrappedAfHandle handle)
+	
+	
+	// Unlock focus.
+	private void unlockFocus()
 	{
-		if(HandlerUtils.post(m_FocusController, new Runnable()
-		{
-			@Override
-			public void run()
-			{
-				if(Handle.isValid(handle))
-					handle.actualHandle = m_FocusController.startAutoFocus(handle.regions, handle.flags);
-			}
-		}))
-		{
-			return true;
-		}
-		Log.e(TAG, "startAutoFocus() - Fail to perform cross-thread operation");
-		return false;
+		if(m_FocusLockHandles.isEmpty())
+			return;
+		
+		Log.w(TAG, "unlockFocus()");
+		
+		FocusLockHandle[] handles = new FocusLockHandle[m_FocusLockHandles.size()];
+		m_FocusLockHandles.toArray(handles);
+		for(int i = handles.length - 1 ; i >= 0 ; --i)
+			Handle.close(handles[i]);
+	}
+	private void unlockFocus(FocusLockHandle handle)
+	{
+		if(!m_FocusLockHandles.remove(handle))
+			return;
+		Handle.close(handle.internalHandle);
 	}
 }

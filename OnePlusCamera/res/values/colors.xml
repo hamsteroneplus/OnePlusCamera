@@ -19,6 +19,11 @@
 	<!-- Exposure compensation -->
 	<color name="exposure_comp_border">#FFEE00</color>
 	
+	<!-- Focus lock -->
+	<color name="focus_lock_text_background_port">#FFEA00</color>
+	<color name="focus_lock_text_land">#FFFFFF</color>
+	<color name="focus_lock_text_port">#000000</color>
+	
 	<!-- Options panel -->
 	<color name="options_panel_background">#4C000000</color>
 	<color name="options_panel_item_text">#99FFFFFF</color>

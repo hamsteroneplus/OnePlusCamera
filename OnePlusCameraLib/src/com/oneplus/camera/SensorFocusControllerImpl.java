@@ -157,7 +157,6 @@ final class SensorFocusControllerImpl extends CameraComponent
 	
 	
 	// Initialize.
-	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	protected void onInitialize()
 	{
@@ -185,14 +184,6 @@ final class SensorFocusControllerImpl extends CameraComponent
 		}
 		
 		// add property changed call-backs
-		PropertyChangedCallback callbackToReset = new PropertyChangedCallback()
-		{
-			@Override
-			public void onPropertyChanged(PropertySource source, PropertyKey key, PropertyChangeEventArgs e)
-			{
-				resetAfState();
-			}
-		};
 		cameraActivity.addCallback(CameraActivity.PROP_ACCELEROMETER_VALUES, new PropertyChangedCallback<float[]>()
 		{
 			@Override
@@ -240,6 +231,10 @@ final class SensorFocusControllerImpl extends CameraComponent
 	{
 		// check touch AF state
 		if((SystemClock.elapsedRealtime() - m_LastTouchAFTime) < DURATION_SENSOR_AF_AFTER_TOUCH_AF)
+			return true;
+		
+		// check focus lock
+		if(m_FocusController.get(FocusController.PROP_IS_FOCUS_LOCKED))
 			return true;
 		
 		// check state

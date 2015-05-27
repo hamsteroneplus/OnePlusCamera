@@ -46,6 +46,14 @@ public interface FocusController extends Component
 	
 	
 	/**
+	 * Lock focus.
+	 * @param flags Flags, reserved.
+	 * @return Handle to focus lock.
+	 */
+	Handle lockFocus(int flags);
+	
+	
+	/**
 	 * Start auto focus.
 	 * @param regions AF regions.
 	 * @param flags Flags :

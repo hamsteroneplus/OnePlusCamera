@@ -51,11 +51,13 @@ import com.oneplus.util.ListUtils;
 class CameraImpl extends HandlerBaseObject implements Camera
 {
 	// Constants
+	private static final long TIMEOUT_AF_START = 5000;
 	private static final long TIMEOUT_AF_COMPLETE = 5000;
 	private static final long TIMEOUT_CAPTURE_SESSION_CLOSED = 5000;
 	private static final int MSG_PREVIEW_FRAME_RECEIVED = 10000;
 	private static final int MSG_START_AF = 10010;
-	private static final int MSG_AF_TIMEOUT = 10011;
+	private static final int MSG_AF_START_TIMEOUT = 10011;
+	private static final int MSG_AF_COMPLETE_TIMEOUT = 10012;
 	private static final int MSG_CAPTURE_SESSION_CLOSE_TIMEOUT = 10020;
 	
 	
@@ -116,6 +118,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	private FocusMode m_FocusMode = FocusMode.DISABLED;
 	private final String m_Id;
 	private boolean m_IsAELocked;
+	private boolean m_IsAutoFocusStarting;
 	private boolean m_IsAutoFocusTimeout;
 	private boolean m_IsCaptureSequenceCompleted;
 	private volatile boolean m_IsPreviewReceived;
@@ -478,22 +481,29 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		// prepare values
 		int afModeValue;
+		//int triggerValue;
 		switch(focusMode)
 		{
 			case DISABLED:
 				afModeValue = CaptureRequest.CONTROL_AF_MODE_OFF;
+				//triggerValue = CaptureRequest.CONTROL_AF_TRIGGER_IDLE;
 				break;
 			case NORMAL_AF:
 				afModeValue = CaptureRequest.CONTROL_AF_MODE_AUTO;
+				//triggerValue = CaptureRequest.CONTROL_AF_TRIGGER_IDLE;
 				break;
 			case CONTINUOUS_AF:
 				if(m_IsRecordingMode)
 					afModeValue = CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO;
 				else
 					afModeValue = CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+				if(requestBuilder != null)
+					requestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+				//triggerValue = CaptureRequest.CONTROL_AF_TRIGGER_CANCEL;
 				break;
 			case MANUAL:
 				afModeValue = CaptureRequest.CONTROL_AF_MODE_OFF;
+				//triggerValue = CaptureRequest.CONTROL_AF_TRIGGER_IDLE;
 				break;
 			default:
 				Log.e(TAG, "applyFocusMode() - Unknown focus mode : " + m_FocusMode);
@@ -504,6 +514,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		if(requestBuilder != null)
 		{
 			requestBuilder.set(CaptureRequest.CONTROL_AF_MODE, afModeValue);
+			//requestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, triggerValue);
 			return true;
 		}
 		return false;
@@ -939,8 +950,12 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		switch(msg.what)
 		{
-			case MSG_AF_TIMEOUT:
+			case MSG_AF_COMPLETE_TIMEOUT:
 				this.onAutoFocusTimeout();
+				break;
+				
+			case MSG_AF_START_TIMEOUT:
+				this.onAutoFocusStartTimeout();
 				break;
 				
 			case MSG_CAPTURE_SESSION_CLOSE_TIMEOUT:
@@ -959,6 +974,18 @@ class CameraImpl extends HandlerBaseObject implements Camera
 			default:
 				super.handleMessage(msg);
 				break;
+		}
+	}
+	
+	
+	// Called when AF starting timeout.
+	private void onAutoFocusStartTimeout()
+	{
+		if(m_IsAutoFocusStarting)
+		{
+			Log.e(TAG, "onAutoFocusStartTimeout()");
+			m_IsAutoFocusStarting = false;
+			this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
 		}
 	}
 	
@@ -1457,34 +1484,51 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		// check focus state
 		int afState = result.get(CaptureResult.CONTROL_AF_STATE);
+		//Log.v(TAG, "CONTROL_AF_STATE = ", afState);
 		switch(afState)
 		{
 			case CaptureResult.CONTROL_AF_STATE_INACTIVE:
+				if(m_IsAutoFocusStarting)
+					break;
 				m_IsAutoFocusTimeout = false;
-				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
+				this.getHandler().removeMessages(MSG_AF_COMPLETE_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED:
+				if(m_IsAutoFocusStarting)
+					break;
 				m_IsAutoFocusTimeout = false;
-				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
+				this.getHandler().removeMessages(MSG_AF_COMPLETE_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.FOCUSED);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
+				if(m_IsAutoFocusStarting)
+					break;
 				m_IsAutoFocusTimeout = false;
-				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
+				this.getHandler().removeMessages(MSG_AF_COMPLETE_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.UNFOCUSED);
 				break;
 			case CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN:
 			case CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN:
+				if(m_IsAutoFocusStarting)
+				{
+					m_IsAutoFocusStarting = false;
+					this.getHandler().removeMessages(MSG_AF_START_TIMEOUT);
+				}
 				if(!m_IsAutoFocusTimeout && this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING))
-					this.getHandler().sendEmptyMessageDelayed(MSG_AF_TIMEOUT, TIMEOUT_AF_COMPLETE);
+					this.getHandler().sendEmptyMessageDelayed(MSG_AF_COMPLETE_TIMEOUT, TIMEOUT_AF_COMPLETE);
 				break;
 			default:
 				Log.w(TAG, "onPreviewCaptureCompleted() - Unknown AF state : " + afState);
 				m_IsAutoFocusTimeout = false;
-				this.getHandler().removeMessages(MSG_AF_TIMEOUT);
+				if(m_IsAutoFocusStarting)
+				{
+					m_IsAutoFocusStarting = false;
+					this.getHandler().removeMessages(MSG_AF_START_TIMEOUT);
+				}
+				this.getHandler().removeMessages(MSG_AF_COMPLETE_TIMEOUT);
 				this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
 				break;
 		}
@@ -1793,6 +1837,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		else
 			regions = Collections.unmodifiableList(regions);
 		
+		Log.v(TAG, "setAFRegionsProp() - Regions : ", regions);
+		
 		// apply regions
 		List<MeteringRect> oldRegions = m_AfRegions;
 		m_AfRegions = regions;
@@ -1927,6 +1973,8 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		}
 		if(m_FocusMode == focusMode)
 			return false;
+		
+		Log.v(TAG, "setFocusModeProp() - Focus mode : ", focusMode);
 		
 		// update focus mode
 		FocusMode oldMode = m_FocusMode;
@@ -2283,9 +2331,11 @@ class CameraImpl extends HandlerBaseObject implements Camera
 		boolean isPreviewStarted = (this.get(PROP_PREVIEW_STATE) == OperationState.STARTED);
 		if(isPreviewStarted)
 		{
-			m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-			this.startPreviewRequestDirectly();
+			//m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+			//this.startPreviewRequestDirectly();
 		}
+		
+		Log.v(TAG, "startAutoFocus()");
 		
 		// start AF
 		if(m_FocusMode == FocusMode.NORMAL_AF)
@@ -2296,6 +2346,13 @@ class CameraImpl extends HandlerBaseObject implements Camera
 				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
 				this.startPreviewRequestDirectly();
 				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+				m_IsAutoFocusStarting = true;
+				HandlerUtils.sendMessage(this, MSG_AF_START_TIMEOUT, true, TIMEOUT_AF_START);
+				if(this.get(PROP_FOCUS_STATE) == FocusState.SCANNING)
+				{
+					this.setReadOnly(PROP_FOCUS_STATE, FocusState.INACTIVE);
+					this.setReadOnly(PROP_FOCUS_STATE, FocusState.SCANNING);
+				}
 			}
 			else
 				m_PreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
@@ -2571,6 +2628,7 @@ class CameraImpl extends HandlerBaseObject implements Camera
 	{
 		try
 		{
+			Log.v(TAG, "startPreviewRequestDirectly()");
 			m_CaptureSession.setRepeatingRequest(m_PreviewRequestBuilder.build(), m_PreviewCaptureCallback, this.getHandler());
 			return true;
 		}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.oneplus.camera.widget.RotateRelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/focus_exposure_lock_indicator_container"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent">
+
+	<TextView android:id="@+id/focus_exposure_lock_indicator"
+		android:layout_width="wrap_content"
+		android:layout_height="@dimen/focus_lock_text_height"
+		android:layout_centerHorizontal="true"
+		android:layout_marginTop="@dimen/focus_lock_text_margin_top_land"
+		android:layout_marginBottom="@dimen/focus_lock_text_margin_bottom_port"
+		android:paddingLeft="@dimen/focus_lock_text_padding_left"
+		android:paddingRight="@dimen/focus_lock_text_padding_right"
+		android:text="@string/focus_exposure_locked"
+		android:gravity="center"
+		android:visibility="gone"/>
+
+</com.oneplus.camera.widget.RotateRelativeLayout>

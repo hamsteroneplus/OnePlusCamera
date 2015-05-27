@@ -70,9 +70,9 @@ final class UIZoomControllerImpl extends ProxyComponent<ZoomController> implemen
 	
 	// Called before binding to target.
 	@Override
-	protected void onBindingToTargetPropertys(List<PropertyKey<?>> keys)
+	protected void onBindingToTargetProperties(List<PropertyKey<?>> keys)
 	{
-		super.onBindingToTargetPropertys(keys);
+		super.onBindingToTargetProperties(keys);
 		keys.add(PROP_DIGITAL_ZOOM);
 		keys.add(PROP_IS_DIGITAL_ZOOM_SUPPORTED);
 		keys.add(PROP_IS_ZOOM_LOCKED);
