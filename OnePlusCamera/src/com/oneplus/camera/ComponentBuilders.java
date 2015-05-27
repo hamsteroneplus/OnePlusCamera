@@ -9,6 +9,7 @@ import com.oneplus.camera.slowmotion.SlowMotionControllerBuilder;
 import com.oneplus.camera.slowmotion.SlowMotionUIBuilder;
 import com.oneplus.camera.timelapse.TimelapseControllerBuilder;
 import com.oneplus.camera.timelapse.TimelapseUIBuilder;
+import com.oneplus.camera.ui.CameraPreviewGridBuilder;
 import com.oneplus.camera.ui.CaptureBarBuilder;
 import com.oneplus.camera.ui.CaptureModeSwitcherBuilder;
 import com.oneplus.camera.ui.CountDownTimerIndicatorBuilder;
@@ -33,6 +34,7 @@ final class ComponentBuilders
 	
 	static final ComponentBuilder[] BUILDERS_MAIN_ACTIVITY = new ComponentBuilder[]{
 		//new AudioManagerBuilder(),
+		new CameraPreviewGridBuilder(),
 		new CaptureBarBuilder(),
 		new CaptureModeManagerBuilder(),
 		new CaptureModeSwitcherBuilder(),
