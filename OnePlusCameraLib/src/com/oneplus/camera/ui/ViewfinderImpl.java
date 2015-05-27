@@ -1,6 +1,9 @@
 package com.oneplus.camera.ui;
 
+import java.util.LinkedList;
+
 import android.content.res.Configuration;
+import android.graphics.Canvas;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -15,6 +18,7 @@ import android.widget.RelativeLayout;
 
 import com.oneplus.base.BaseActivity;
 import com.oneplus.base.BaseActivity.State;
+import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
@@ -26,7 +30,7 @@ import com.oneplus.base.ScreenSize;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.UIComponent;
 
-final class ViewfinderImpl extends UIComponent implements Viewfinder
+final class ViewfinderImpl extends UIComponent implements Viewfinder, CameraPreviewOverlay
 {
 	// Constants
 	private static final int MSG_RECREATE_DIRECT_OUTPUT_SURFACE = 10000;
@@ -38,8 +42,29 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	private Size m_DirectOutputSurfaceSize;
 	private SurfaceView m_DirectOutputSurfaceView;
 	private boolean m_IsDirectOutputSurfaceCreated;
+	private final LinkedList<OverlayRendererHandle> m_OverlayRendererHandles = new LinkedList<>();
+	private View m_OverlayView;
 	private PreviewRenderingMode m_PreviewRenderingMode = PreviewRenderingMode.DIRECT;
 	private Size m_ScreenSize = new Size(0, 0);
+	
+	
+	// Class for overlay renderer.
+	private final class OverlayRendererHandle extends Handle
+	{
+		public final Renderer renderer;
+		
+		public OverlayRendererHandle(Renderer renderer)
+		{
+			super("OverlayRenderer");
+			this.renderer = renderer;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			removeRenderer(this);
+		}
+	}
 	
 	
 	// Constructor
@@ -47,6 +72,36 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	{
 		super("Viewfinder", cameraActivity, true);
 		this.enablePropertyLogs(PROP_PREVIEW_RECEIVER, LOG_PROPERTY_CHANGE);
+	}
+	
+	
+	// Add renderer to render preview overlay.
+	@Override
+	public Handle addRenderer(Renderer renderer, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "addRenderer() - Component is not running");
+			return null;
+		}
+		
+		// check parameter
+		if(renderer == null)
+		{
+			Log.e(TAG, "addRenderer() - No renderer to add");
+			return null;
+		}
+		
+		// add renderer
+		OverlayRendererHandle handle = new OverlayRendererHandle(renderer);
+		m_OverlayRendererHandles.add(handle);
+		
+		// update overlay
+		if(m_OverlayView != null)
+			m_OverlayView.invalidate();
+		return handle;
 	}
 	
 	
@@ -161,6 +216,18 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 		});
 		((ViewGroup)rootView).addView(m_DirectOutputSurfaceView, 0, layoutParams);
 		
+		// create overlay view
+		m_OverlayView = new View(this.getCameraActivity())
+		{
+			@Override
+			protected void onDraw(Canvas canvas)
+			{
+				onDrawOverlay(canvas);
+			}
+		};
+		layoutParams = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT);
+		((ViewGroup)rootView).addView(m_OverlayView, 1, layoutParams);
+		
 		// setup preview bounds
 		this.updatePreviewBounds();
 	}
@@ -189,6 +256,29 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 		
 		// setup Surface size
 		this.updateDirectOutputSurfaceSize(this.getCameraActivity().get(CameraActivity.PROP_CAMERA_PREVIEW_SIZE));
+	}
+	
+	
+	// Called when drawing content on overlay view.
+	private void onDrawOverlay(Canvas canvas)
+	{
+		if(!m_OverlayRendererHandles.isEmpty())
+		{
+			RenderingParams params = RenderingParams.obtain(this.get(PROP_PREVIEW_BOUNDS));
+			for(int i = m_OverlayRendererHandles.size() - 1 ; i >= 0 ; --i)
+				m_OverlayRendererHandles.get(i).renderer.onRender(canvas, params);
+			params.recycle();
+		}
+	}
+	
+	
+	// Invalidate camera preview overlay to trigger redrawing.
+	@Override
+	public void invalidateCameraPreviewOverlay()
+	{
+		this.verifyAccess();
+		if(m_OverlayView != null)
+			m_OverlayView.invalidate();
 	}
 	
 	
@@ -491,6 +581,20 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 	}
 	
 	
+	// Remove overlay renderer.
+	private void removeRenderer(OverlayRendererHandle handle)
+	{
+		// remove renderer
+		this.verifyAccess();
+		if(!m_OverlayRendererHandles.remove(handle))
+			return;
+		
+		// update overlay
+		if(m_OverlayView != null)
+			m_OverlayView.invalidate();
+	}
+	
+	
 	// Set size of direct output Surface.
 	private void updateDirectOutputSurfaceSize(Size size)
 	{
@@ -523,6 +627,10 @@ final class ViewfinderImpl extends UIComponent implements Viewfinder
 		
 		// update property
 		this.setReadOnly(PROP_PREVIEW_BOUNDS, new RectF(previewBounds));
+		
+		// invalidate overlay
+		if(m_OverlayView != null)
+			m_OverlayView.invalidate();
 	}
 	
 	

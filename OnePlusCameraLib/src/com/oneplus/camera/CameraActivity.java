@@ -2049,6 +2049,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 			}
 		}
 		
+		// release components
+		m_ComponentManager.release();
+		
 		// call super
 		super.onDestroy();
 		

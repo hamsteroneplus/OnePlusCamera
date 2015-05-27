@@ -77,6 +77,12 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	
 	
 	/**
+	 * Settings key for playing shutter sound.
+	 */
+	public static final String SETTINGS_KEY_SHUTTER_SOUND = "ShutterSound";
+	
+	
+	/**
 	 * Read-only property for available camera list.
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -156,6 +162,7 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	private PhotoCaptureHandlerHandle m_PhotoCaptureHandlerHandle;
 	private List<PhotoCaptureHandlerHandle> m_PhotoCaptureHandlerHandles;
 	private volatile ResourceIdTable m_ResourceIdTable;
+	private Settings m_Settings;
 	private VideoCaptureHandle m_VideoCaptureHandle;
 	private VideoCaptureHandlerHandle m_VideoCaptureHandlerHandle;
 	private List<VideoCaptureHandlerHandle> m_VideoCaptureHandlerHandles;
@@ -370,6 +377,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 			this.flags = flags;
 			this.result = result;
 		}
+	}
+	
+	
+	// Static initializer.
+	static
+	{
+		Settings.setGlobalDefaultValue(SETTINGS_KEY_SHUTTER_SOUND, true);
 	}
 	
 	
@@ -1100,6 +1114,16 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	}
 	
 	
+	/**
+	 * Check whether shutter sound is needed when capturing or not.
+	 * @return Shutter sound state.
+	 */
+	public boolean isShutterSoundNeeded()
+	{
+		return (m_Settings != null && m_Settings.getBoolean(SETTINGS_KEY_SHUTTER_SOUND));
+	}
+	
+	
 	// Called when available camera list changes.
 	private void onAvailableCamerasChanged(List<Camera> oldCameras, List<Camera> cameras)
 	{
@@ -1267,7 +1291,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		Log.v(TAG, "onShutter() - Index : ", e.getFrameIndex());
 		
 		// play shutter sound
-		if(this.get(PROP_VIDEO_CAPTURE_STATE) != VideoCaptureState.CAPTURING && e.getFrameIndex() == 0)
+		if(this.isShutterSoundNeeded()
+				&& this.get(PROP_VIDEO_CAPTURE_STATE) != VideoCaptureState.CAPTURING 
+				&& e.getFrameIndex() == 0)
 		{
 			if(m_IsCapturingBurstPhotos)
 			{
@@ -1316,6 +1342,9 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		m_PhotoCaptureHandlerHandles = new ArrayList<>();
 		m_VideoCaptureHandlerHandles = new ArrayList<>();
 		m_VideoSnapshotDisableHandles = new ArrayList<>();
+		
+		// load settings
+		m_Settings = new Settings(m_Context, null, true);
 		
 		// setup initial states
 		synchronized(this)
@@ -1374,6 +1403,13 @@ public class CameraThread extends BaseThread implements ComponentOwner
 	{
 		// close all cameras
 		this.closeCamerasInternal();
+		
+		// release all components
+		m_ComponentManager.release();
+		
+		// release settings
+		if(m_Settings != null)
+			m_Settings.release();
 		
 		// call super
 		super.onStopping();

@@ -41,7 +41,7 @@
 	</style>
 	
 	<!-- Main window style -->
-	<style name="CameraWindowStyle" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+	<style name="CameraWindow" parent="@android:style/Theme.NoTitleBar.Fullscreen">
 		<item name="android:windowAnimationStyle">@null</item>
 	</style>
 	
