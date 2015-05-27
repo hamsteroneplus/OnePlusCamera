@@ -147,10 +147,19 @@ final class PreviewGallery extends UIComponent {
 			}
 		}
 
-		initPager(getCameraActivity());
+		initPager(getCameraActivity());	}
 
+	@Override
+	protected void onDeinitialize() {
+		m_ViewPager.setAdapter(null);
+		m_VerticalViewPager.setAdapter(null);
+		m_ViewPager.removeAllViews();
+		m_VerticalViewPager.removeAllViews();
+		m_VerticalAdapter.deinitialize();
+		m_Adapter.deinitialize();
+		super.onDeinitialize();
 	}
-
+	
 	/*
 	 * @see
 	 * com.oneplus.camera.UIComponent#onRotationChanged(com.oneplus.base.Rotation
@@ -495,6 +504,13 @@ final class PreviewGallery extends UIComponent {
 				}
 	        }
 		}
+		
+		void deinitialize() {
+			m_FileManager = null;
+			m_Files = null;
+			m_PreviewGallery = null;
+			m_Pagers.clear();
+		}
 
 		void addFile(File file) {
 			m_Files.add(0, file);
@@ -527,12 +543,10 @@ final class PreviewGallery extends UIComponent {
 
         public void destroyItem(View container, int position, Object object) {
             Log.d(TAG, "destroyItem:" + position);
-//            ((ViewGroup) container).removeView((View) object);
         }
         @Override
         public void destroyItem(ViewGroup container, int position, Object object) {
             Log.d(TAG, "destroyItem:" + position);
-//            container.removeView((View) object);
         }
  
         @Override

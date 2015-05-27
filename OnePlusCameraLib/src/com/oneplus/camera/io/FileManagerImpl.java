@@ -104,6 +104,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 	protected void onDeinitialize() {
 		super.onDeinitialize();
 		m_FileThread.quitSafely();
+		m_DecodeBitmapThread.quitSafely();
 		m_FileThread = null;
 		m_FileHandler = null;
 		m_FileList.clear();
