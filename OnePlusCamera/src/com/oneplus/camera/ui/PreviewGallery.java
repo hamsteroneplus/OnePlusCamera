@@ -58,6 +58,7 @@ final class PreviewGallery extends UIComponent {
 	private PreviewPagerAdapter m_Adapter, m_VerticalAdapter;
 	private FileManager m_FileManager;
 	private int m_OrignalZ, m_PreviousPosition;
+	private boolean MultiTouch;
 	//
 	static final private int PAGE_OFFSET = 2, TARGET = PAGE_OFFSET+1;;
 
@@ -321,16 +322,25 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
+				boolean	ret = false;
+				if (MultiTouch) {
+					ret = true;
+				}
+
+				if (event.getPointerCount() > 1) {
+					MultiTouch = true;
+				}
+				if (event.getPointerCount() == 1 && event.getAction() == MotionEvent.ACTION_UP) {
+					MultiTouch = false;
+				}
+
 				if (m_ViewPager.getCurrentItem() == 0) {
 					MotionEvent newEvent = MotionEvent.obtain(event);
 					newEvent.setLocation(event.getRawX(), event.getRawY());
 					cameraActivity.onTouchEvent(newEvent);
 				}
-				if(event.getPointerCount() > 1){
-					return true;
-				}else{
-					return false;
-				}
+
+				return ret;
 			}
 		});
 	}
@@ -415,16 +425,24 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public boolean onTouch(View v, MotionEvent event) {
+				boolean	ret = false;
+				if (MultiTouch) {
+					ret = true;
+				}
+
+				if (event.getPointerCount() > 1) {
+					MultiTouch = true;
+				}
+				if (event.getPointerCount() == 1 && event.getAction() == MotionEvent.ACTION_UP) {
+					MultiTouch = false;
+				}
+
 				if (m_VerticalViewPager.getCurrentItem() == 0) {
 					MotionEvent newEvent = MotionEvent.obtain(event);
 					newEvent.setLocation(event.getRawX(), event.getRawY());
 					cameraActivity.onTouchEvent(newEvent);
 				}
-				if(event.getPointerCount() > 1){
-					return true;
-				}else{
-					return false;
-				}
+				return ret;
 			}
 		});
 	}

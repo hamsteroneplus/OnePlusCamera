@@ -362,11 +362,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 		}
 		
 		private boolean checkInterrupt(int position){
-			boolean result = position > m_Current+OFFSET || position < Math.max(1, m_Current-OFFSET);
-			if(result){
-				Log.d(TAG, "checkInterrupt: position: " + position +" m_Current: " + m_Current);
-			}
-			return result;
+			return position > m_Current+OFFSET || position < Math.max(1, m_Current-OFFSET);
 		}
 
 		@Override
@@ -397,6 +393,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						Boolean isVideo;
 						//
 						if(checkInterrupt(position)){
+							Log.d(TAG, "checkInterrupt before decode : position: " + position +" m_Current: " + m_Current);
 							callback.onBitmapLoad(null, !isImage, true);
 							return;
 						}
@@ -411,6 +408,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						}
 						//
 						if(checkInterrupt(position)){
+							Log.d(TAG, "checkInterrupt after decode : position: " + position +" m_Current: " + m_Current);
 							callback.onBitmapLoad(null, isVideo, true);
 							return;
 						}
