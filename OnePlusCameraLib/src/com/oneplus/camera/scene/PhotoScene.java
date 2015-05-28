@@ -2,10 +2,12 @@ package com.oneplus.camera.scene;
 
 import android.hardware.camera2.CaptureRequest;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.HandlerUtils;
 import com.oneplus.base.Log;
 import com.oneplus.camera.Camera;
 import com.oneplus.camera.CameraActivity;
+import com.oneplus.camera.FlashController;
 import com.oneplus.camera.media.MediaType;
 
 /**
@@ -13,8 +15,17 @@ import com.oneplus.camera.media.MediaType;
  */
 public abstract class PhotoScene extends BasicScene
 {
+	/**
+	 * Flag to indicate that flash should be disabled.
+	 */
+	protected static final int FLAG_DISABLE_FLASH = 0x1;
+	
+	
 	// Private fields.
 	private Camera m_Camera;
+	private final int m_Flags;
+	private FlashController m_FlashController;
+	private Handle m_FlashDisableHandle;
 	private final Integer m_SceneMode;
 	
 	
@@ -22,11 +33,16 @@ public abstract class PhotoScene extends BasicScene
 	 * Initialize new PhotoScene instance.
 	 * @param cameraActivity Camera activity.
 	 * @param id Mode ID.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_DISABLE_FLASH}</li>
+	 * </ul>
 	 */
-	protected PhotoScene(CameraActivity cameraActivity, String id)
+	protected PhotoScene(CameraActivity cameraActivity, String id, int flags)
 	{
 		super(cameraActivity, id);
 		m_SceneMode = null;
+		m_Flags = flags;
 	}
 	
 	
@@ -35,11 +51,16 @@ public abstract class PhotoScene extends BasicScene
 	 * @param cameraActivity Camera activity.
 	 * @param id Mode ID.
 	 * @param sceneMode Camera scene mode.
+	 * @param flags Flags :
+	 * <ul>
+	 *   <li>{@link #FLAG_DISABLE_FLASH}</li>
+	 * </ul>
 	 */
-	protected PhotoScene(CameraActivity cameraActivity, String id, int sceneMode)
+	protected PhotoScene(CameraActivity cameraActivity, String id, int sceneMode, int flags)
 	{
 		super(cameraActivity, id);
 		m_SceneMode = sceneMode;
+		m_Flags = flags;
 	}
 	
 	
@@ -102,6 +123,19 @@ public abstract class PhotoScene extends BasicScene
 			Log.e(TAG, "onEnter() - Fail to perform cross-thread operation");
 			return false;
 		}
+		
+		// disable flash
+		if((m_Flags & FLAG_DISABLE_FLASH) != 0)
+		{
+			if(m_FlashController == null)
+				m_FlashController = this.getCameraActivity().findComponent(FlashController.class);
+			if(m_FlashController != null)
+				m_FlashDisableHandle = m_FlashController.disableFlash(0);
+			else
+				Log.e(TAG, "onEnter() - No FlashController interface");
+		}
+		
+		// complete
 		return true;
 	}
 	
@@ -142,6 +176,9 @@ public abstract class PhotoScene extends BasicScene
 		{
 			Log.e(TAG, "onExit() - Fail to perform cross-thread operation");
 		}
+		
+		// enable flash
+		m_FlashDisableHandle = Handle.close(m_FlashDisableHandle);
 	}
 	
 	

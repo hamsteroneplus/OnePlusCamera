@@ -11,7 +11,7 @@ final class PhotoFaceBeautyScene extends PhotoScene
 	// Constructor.
 	PhotoFaceBeautyScene(CameraActivity cameraActivity)
 	{
-		super(cameraActivity, "Face Beauty (Photo)", CaptureRequest.CONTROL_SCENE_MODE_PORTRAIT);
+		super(cameraActivity, "Face Beauty (Photo)", CaptureRequest.CONTROL_SCENE_MODE_PORTRAIT, FLAG_DISABLE_FLASH);
 	}
 	
 	

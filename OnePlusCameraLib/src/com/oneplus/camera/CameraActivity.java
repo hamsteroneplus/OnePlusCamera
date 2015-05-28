@@ -1726,12 +1726,9 @@ public abstract class CameraActivity extends BaseActivity implements ComponentOw
 				break;
 		}
 		
-		// reset recording states
-		if(handle.getMediaType() == MediaType.VIDEO)
-		{
-			this.setReadOnly(PROP_ELAPSED_RECORDING_SECONDS, 0L);
-			m_VideoCaptureCUDHandle = Handle.close(m_VideoCaptureCUDHandle);
-		}
+		// reset preview state
+		if(m_CameraPreviewState == OperationState.STARTED)
+			this.changeCameraPreviewState(OperationState.STOPPED);
 		
 		// complete capture
 		switch(handle.getMediaType())

@@ -1297,10 +1297,10 @@ public class CameraThread extends BaseThread implements ComponentOwner
 		{
 			if(m_IsCapturingBurstPhotos)
 			{
-				//if(Handle.isValid(m_DefaultShutterSoundHandle))
-					//m_BurstCaptureSoundStreamHandle = m_AudioManager.playSound(m_DefaultShutterSoundHandle, AudioManager.FLAG_LOOP);
-				//else
-					//Log.w(TAG, "onShutter() - No sound for burst capture");
+				if(Handle.isValid(m_DefaultShutterSoundHandle))
+					m_BurstCaptureSoundStreamHandle = m_AudioManager.playSound(m_DefaultShutterSoundHandle, AudioManager.FLAG_LOOP);
+				else
+					Log.w(TAG, "onShutter() - No sound for burst capture");
 			}
 			else
 				this.playDefaultShutterSound();

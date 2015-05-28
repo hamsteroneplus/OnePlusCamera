@@ -11,7 +11,7 @@ final class HdrScene extends PhotoScene
 	// Constructor.
 	HdrScene(CameraActivity cameraActivity)
 	{
-		super(cameraActivity, "HDR", CaptureRequest.CONTROL_SCENE_MODE_HDR);
+		super(cameraActivity, "HDR", CaptureRequest.CONTROL_SCENE_MODE_HDR, FLAG_DISABLE_FLASH);
 	}
 	
 	

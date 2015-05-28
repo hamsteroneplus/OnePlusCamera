@@ -40,6 +40,48 @@ final class FlashControllerImpl extends CameraComponent implements FlashControll
 	}
 	
 	
+	// Disable flash temporarily.
+	@Override
+	public Handle disableFlash(int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing())
+		{
+			Log.e(TAG, "disableFlash() - Component is not running");
+			return null;
+		}
+		
+		// create handle
+		Handle handle = new Handle("FlashDisable")
+		{
+			@Override
+			protected void onClose(int flags)
+			{
+				enableFlash(this);
+			}
+		};
+		m_FlashDisableHandle.add(handle);
+		
+		// disable flash
+		if(m_FlashDisableHandle.size() == 1)
+			this.updateFlashState();
+		
+		// complete
+		return handle;
+	}
+	
+	
+	// Enable flash.
+	private void enableFlash(Handle handle)
+	{
+		this.verifyAccess();
+		if(!m_FlashDisableHandle.remove(handle) || !m_FlashDisableHandle.isEmpty())
+			return;
+		this.updateFlashState();
+	}
+	
+	
 	// Initialize.
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Override
@@ -77,8 +119,40 @@ final class FlashControllerImpl extends CameraComponent implements FlashControll
 	}
 	
 	
+	// Set flash mode to camera.
+	private boolean setFlashMode(final FlashMode flashMode)
+	{
+		final Camera camera = this.getCamera();
+		if(camera == null)
+		{
+			Log.e(TAG, "setFlashMode() - No primary camera");
+			return false;
+		}
+		if(!HandlerUtils.post(camera, new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				try
+				{
+					camera.set(Camera.PROP_FLASH_MODE, flashMode);
+				}
+				catch(Throwable ex)
+				{
+					Log.e(TAG, "setFlashMode() - Fail to set flash mode", ex);
+				}
+			}
+		}))
+		{
+			Log.e(TAG, "setFlashMode() - Fail to perform cross-thread operation");
+			return false;
+		}
+		return true;
+	}
+	
+	
 	// Set flash mode.
-	private boolean setFlashModeProp(final FlashMode flashMode, boolean forceSet)
+	private boolean setFlashModeProp(FlashMode flashMode, boolean forceSet)
 	{
 		if(forceSet || this.get(PROP_FLASH_MODE) != flashMode)
 		{
@@ -94,26 +168,9 @@ final class FlashControllerImpl extends CameraComponent implements FlashControll
 			}
 			
 			// apply flash mode
-			final Camera camera = this.getCamera();
+			Camera camera = this.getCamera();
 			String settingsKey = (camera.get(Camera.PROP_LENS_FACING) == LensFacing.BACK ? SETTINGS_KEY_FLASH_MODE_BACK : SETTINGS_KEY_FLASH_MODE_FRONT);
-			if(!HandlerUtils.post(camera, new Runnable()
-			{
-				@Override
-				public void run()
-				{
-					try
-					{
-						camera.set(Camera.PROP_FLASH_MODE, flashMode);
-					}
-					catch(Throwable ex)
-					{
-						Log.e(TAG, "setFlashModeProp() - Fail to set flash mode", ex);
-					}
-				}
-			}))
-			{
-				Log.e(TAG, "setFlashModeProp() - Fail to perform cross-thread operation");
-			}
+			this.setFlashMode(flashMode);
 			
 			// save to settings
 			this.getSettings().set(settingsKey, flashMode);
@@ -158,6 +215,7 @@ final class FlashControllerImpl extends CameraComponent implements FlashControll
 		if(!m_FlashDisableHandle.isEmpty())
 		{
 			this.setReadOnly(PROP_IS_FLASH_DISABLED, true);
+			this.setFlashMode(FlashMode.OFF);
 			return;
 		}
 		

@@ -1,5 +1,6 @@
 package com.oneplus.camera;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.PropertyKey;
 import com.oneplus.base.component.Component;
 
@@ -20,4 +21,12 @@ public interface FlashController extends Component
 	 * Read-only property to check whether flash is disabled or not.
 	 */
 	PropertyKey<Boolean> PROP_IS_FLASH_DISABLED = new PropertyKey<>("IsFlashDisabled", Boolean.class, FlashController.class, false);
+	
+	
+	/**
+	 * Disable flash temporarily.
+	 * @param flags Flags, reserved.
+	 * @return Handle to this operation.
+	 */
+	Handle disableFlash(int flags);
 }
