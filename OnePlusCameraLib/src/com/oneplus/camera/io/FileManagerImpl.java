@@ -121,6 +121,21 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 
 		return null;
 	}
+	
+	@Override
+	public boolean deleteFile(String path, boolean notify) {
+		File file = new File(path);
+		boolean ret = false;
+		if(!notify){
+			m_FileObserver.stopWatching();
+			ret = file.delete();
+			m_FileObserver.startWatching();
+		}else{
+			ret = file.delete();
+		}
+		Log.d(TAG, "deleteFile: " + ret + " path: " + path);
+		return ret;
+	}
 
 	@Override
 	public List<File> getMediaFiles() {
@@ -255,7 +270,7 @@ final class FileManagerImpl extends CameraThreadComponent implements FileManager
 						if (task.saveMediaToFile()) {
 							m_FileList.add(0, new File(task.getFilePath()));
 							notifyCameraThread(EVENT_MEDIA_FILE_SAVED, task);
-							notifyCameraThread(EVENT_MEDIA_FILES_ADDED, task);
+							notifyCameraThread(EVENT_MEDIA_FILE_ADDED, task);
 							// insert MediaStore
 							if (task.insertToMediaStore()) {
 								notifyCameraThread(EVENT_MEDIA_SAVED, task);

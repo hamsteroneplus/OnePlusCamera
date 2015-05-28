@@ -23,11 +23,15 @@ public interface FileManager extends Component
 	/**
 	 * Event raised when media file added.
 	 */
-	EventKey<MediaEventArgs> EVENT_MEDIA_FILES_ADDED = new EventKey<>("MediaFileUpdated", MediaEventArgs.class, FileManager.class);
+	EventKey<MediaEventArgs> EVENT_MEDIA_FILE_ADDED = new EventKey<>("MediaFileUpdated", MediaEventArgs.class, FileManager.class);
 	/**
 	 * Event raised when media file saving completed.
 	 */
 	EventKey<MediaEventArgs> EVENT_MEDIA_FILE_SAVED = new EventKey<>("MediaFileSaved", MediaEventArgs.class, FileManager.class);
+	/**
+	 * Event raised when media file saving completed.
+	 */
+	EventKey<MediaEventArgs> EVENT_MEDIA_FILE_DELETED = new EventKey<>("MediaFileSaved", MediaEventArgs.class, FileManager.class);
 	/**
 	 * Event raised when media saving cancelled.
 	 */
@@ -59,6 +63,8 @@ public interface FileManager extends Component
 	 * @return Handle to media saving.
 	 */
 	Handle saveMedia(MediaSaveTask task, int flags);
+	
+	boolean deleteFile(String path, boolean notify);
 	/**
 	 * get all medias asynchronously.
 	 * @return all medias.

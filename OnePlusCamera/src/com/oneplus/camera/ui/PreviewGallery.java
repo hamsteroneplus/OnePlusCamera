@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
@@ -76,15 +77,15 @@ final class PreviewGallery extends UIComponent {
 		switch (msg.what) {
 		case MESSAGE_UPDATE_DELETED: {
 			File file = (File) (msg.obj);
-			m_ViewPager.setAdapter(null);
-			m_VerticalViewPager.setAdapter(null);
-			m_Adapter.resetCache();
-			m_VerticalAdapter.resetCache();
-			m_Adapter.deleteFile(file);
-			m_VerticalAdapter.deleteFile(file);
-			m_ViewPager.setAdapter(m_Adapter);
-			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
-			bringToBack();
+			int current;
+			if (Rotation.PORTRAIT == getRotation() || Rotation.INVERSE_PORTRAIT == getRotation()){
+				current = m_ViewPager.getCurrentItem();
+			}else{
+				current = m_VerticalViewPager.getCurrentItem();
+			}
+
+			m_Adapter.deleteFile(file, current);
+			m_VerticalAdapter.deleteFile(file, current);
 			break;
 		}
 		case MESSAGE_UPDATE_RESET: {
@@ -92,8 +93,8 @@ final class PreviewGallery extends UIComponent {
 			m_VerticalViewPager.setAdapter(null);
 			m_Adapter.initialize(PreviewGallery.this);
 			m_VerticalAdapter.initialize(PreviewGallery.this);
-			m_Adapter.resetCache();
-			m_VerticalAdapter.resetCache();
+			m_Adapter.resetCache(1);
+			m_VerticalAdapter.resetCache(1);
 			m_PreviousPosition = 0;
 			m_ViewPager.setAdapter(m_Adapter);
 			m_VerticalViewPager.setAdapter(m_VerticalAdapter);
@@ -224,7 +225,7 @@ final class PreviewGallery extends UIComponent {
 
 						});
 
-						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILES_ADDED, new EventHandler<MediaEventArgs>() {
+						m_FileManager.addHandler(FileManager.EVENT_MEDIA_FILE_ADDED, new EventHandler<MediaEventArgs>() {
 
 							@Override
 							public void onEventReceived(EventSource source, EventKey<MediaEventArgs> key, MediaEventArgs e) {
@@ -268,7 +269,7 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-				if (position == 0) {
+				if (position == 0 && m_ViewPager.getVisibility()==View.VISIBLE) {
 					m_BG.setAlpha(ALPHA_MAX * positionOffset);
 				}
 			}
@@ -399,7 +400,7 @@ final class PreviewGallery extends UIComponent {
 
 			@Override
 			public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-				if (position == 0) {
+				if (position == 0 && m_VerticalViewPager.getVisibility()==View.VISIBLE) {
 					m_BG.setAlpha(ALPHA_MAX * positionOffset);
 				}
 			}
@@ -492,8 +493,9 @@ final class PreviewGallery extends UIComponent {
 		private List<View> m_Pagers = new ArrayList<View>();
 		private SparseArray<String> m_Map = new SparseArray<String>();
 		//
+		private int m_Height;
+		//
 		static private final String TAG = PreviewPagerAdapter.class.getSimpleName();
-
 
 		public PreviewPagerAdapter(boolean isVertical) {
 			super();
@@ -515,6 +517,11 @@ final class PreviewGallery extends UIComponent {
 					m_Pagers.add(layoutInflater.inflate(R.layout.layout_preview_gallery_item, parent, false));
 				}
 	        }
+			
+			mMinY = -1 * m_PreviewGallery.getContext().getResources().getDisplayMetrics().heightPixels;
+			mMidY = mMinY/2;
+			mMinX = -1 * m_PreviewGallery.getContext().getResources().getDisplayMetrics().widthPixels;
+			mMidX = mMinX/2;
 		}
 		
 		void deinitialize() {
@@ -527,10 +534,10 @@ final class PreviewGallery extends UIComponent {
 		void addFile(File file) {
 			m_Files.add(0, file);
 			notifyDataSetChanged();
-			resetCache();
+			resetCache(1);
 		}
 
-		void deleteFile(File file) {
+		void deleteFile(File file, int position) {
 			Iterator<File> it = m_Files.iterator();
 			File fileItem;
 			while (it.hasNext()) {
@@ -540,6 +547,7 @@ final class PreviewGallery extends UIComponent {
 				}
 			}
 			notifyDataSetChanged();
+			resetCache(position);
 		}
 		// Returns total number of pages
 		@Override
@@ -584,98 +592,268 @@ final class PreviewGallery extends UIComponent {
             return arg0 == arg1;
         }
         
-        private void resetCache(){
+        private void resetCache(int position){
         	m_Map.clear();
-        	int min = Math.max(1, 1-PAGE_OFFSET);
-			int max = Math.min(getCount(), 1+TARGET);
+        	int min = Math.max(1, position-PAGE_OFFSET);
+			int max = Math.min(getCount(), position+TARGET);
 			for(int i=min; i<max; i++){
 				setPageData(i);
 			}
         }
         
-    	private void setPageData(final int position) {
-    		final int cacheIndex = (position-1)%m_PageSize;
-    		final String path = m_Files.get(position-1).getAbsolutePath();
-    		Log.d(TAG, "cacheIndex" + cacheIndex);
-    		
-    		if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && m_Map.get(cacheIndex).equals(path)){
-    			Log.d(TAG, "setPageData already set return : cacheIndex: " + cacheIndex + " position: " + position);
-    			return;
-    		}
-			m_Map.put(cacheIndex, path);
-    		View root = m_Pagers.get(cacheIndex);
-    		Resources res = m_PreviewGallery.getContext().getResources();
-    		if (m_IsVertical) {
-    			m_ReqWidth = res.getDimensionPixelSize(R.dimen.preview_item_land_width);
-    			m_ReqHeight = res.getDimensionPixelSize(R.dimen.preview_item_land_height);
-    		} else {
-    			m_ReqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
-    			m_ReqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
-    		}
-
-    		final SoftReference<ImageView> softImage = new SoftReference<ImageView>((ImageView) root.findViewById(R.id.preview_image));
-    		softImage.get().setScaleType(ImageView.ScaleType.CENTER);
-    		softImage.get().setImageResource(R.drawable.loading);
-    		final SoftReference<ImageView> softPlay = new SoftReference<ImageView>((ImageView) root.findViewById(R.id.play_icon));
-    		softPlay.get().setVisibility(View.GONE);
-
-    		final File file = m_Files.get(position-1);
-    		m_FileManager.getBitmap(path, m_ReqWidth, m_ReqHeight, new PhotoCallback() {
-
-    			@Override
-    			public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo, final boolean isIntrrupt) {
-    				if(isIntrrupt){
-    					m_Map.delete(cacheIndex);
-    					return;
-    				}
-    				if (bitmap != null) {
-    					HandlerUtils.post(m_PreviewGallery, new Runnable() {
-
-    						@Override
-    						public void run() {
-    							ImageView image = softImage.get();
-    							if (image != null) {
-    								if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && !m_Map.get(cacheIndex).equals(path)){
-    					    			Log.d(TAG, "setPageData return after decode : cacheIndex: " + cacheIndex + " position: " + position);
-    					    			return;
-    					    		}else{
-	    								image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-	    								image.setImageBitmap(bitmap);
-    					    		}
-
-    								if (isVideo) {
-    									ImageView play = softPlay.get();
-    									play.setVisibility(View.VISIBLE);
-    									image.setOnClickListener(new View.OnClickListener() {
-
-    										@Override
-    										public void onClick(View v) {
-    											Intent intent = new Intent();
-    											intent.setAction(Intent.ACTION_VIEW);
-    											intent.setDataAndType(Uri.fromFile(file), "video/*");
-    											m_PreviewGallery.getContext().startActivity(intent);
-    										}
-    									});
-    								} else {
-    									image.setOnClickListener(new View.OnClickListener() {
-
-    										@Override
-    										public void onClick(View v) {
-    											Intent intent = new Intent();
-    											intent.setAction(Intent.ACTION_VIEW);
-    											intent.setDataAndType(Uri.fromFile(file), "image/*");
-    											m_PreviewGallery.getContext().startActivity(intent);
-    										}
-    									});
-    								}
-    							}
-    						}
-    					});
-    				} else {
-    					HandlerUtils.sendMessage(m_PreviewGallery, MESSAGE_UPDATE_DELETED, 0, 0, file);
-    				}
+    	private void finishDrawerPortrait(final View view, final File file) {
+    		if(mPaddingY == mMinY){
+            	isOpened = false;
+            }else if(mPaddingY == mMaxY){
+            	isOpened = true;
+            }else{
+            	if(mPaddingY > mMidY){
+    				mDrawerAnimator = ValueAnimator.ofInt(mPaddingY, mMaxY);
+    			}else if(mPaddingY <= mMidY){
+    				mDrawerAnimator = ValueAnimator.ofInt(mPaddingY, mMinY);
     			}
-    		}, position);
-        }
+    		    mDrawerAnimator.setDuration(180);
+    		    mDrawerAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+    		        public void onAnimationUpdate(ValueAnimator animation) {
+    		            Integer value = (Integer) animation.getAnimatedValue();
+    		            mPaddingY = value.intValue();
+    		            view.scrollTo(0, -1 * mPaddingY);
+    		            view.setAlpha(1 - Math.abs(((float) mPaddingY) / mMinY));
+    		            if(mPaddingY == mMinY){
+    		            	isOpened = false;
+    		            	view.setAlpha(1.0f);
+    		            	HandlerUtils.sendMessage(m_PreviewGallery, MESSAGE_UPDATE_DELETED, 0, 0, file);
+    		            	m_FileManager.deleteFile(file.getAbsolutePath(), false);
+    		            }else if(mPaddingY == mMaxY){
+    		            	isOpened = true;
+    		            }else{}
+    		            Log.d(TAG, "isOpened: " + isOpened);
+    		        }
+    		    });
+    		    mDrawerAnimator.start();
+            }
+    	    mPreviousY = 0;
+    	}
+    	
+    	private void finishDrawerLandscape(final View view, final File file) {
+    		if(mPaddingX == mMinX){
+            	isOpened = false;
+            }else if(mPaddingX == mMaxX){
+            	isOpened = true;
+            }else{
+            	if(mPaddingX > mMidX){
+    				mDrawerAnimator = ValueAnimator.ofInt(mPaddingX, mMaxX);
+    			}else if(mPaddingX <= mMidX){
+    				mDrawerAnimator = ValueAnimator.ofInt(mPaddingX, mMinX);
+    			}
+    		    mDrawerAnimator.setDuration(180);
+    		    mDrawerAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+    		        public void onAnimationUpdate(ValueAnimator animation) {
+    		            Integer value = (Integer) animation.getAnimatedValue();
+    		            mPaddingX = value.intValue();
+    		            view.scrollTo(mPaddingX, 0);
+    		            view.setAlpha(1 - Math.abs(((float) mPaddingX) / mMinX));
+    		            if(mPaddingX == mMinX){
+    		            	isOpened = false;
+    		            	view.setAlpha(1.0f);
+    		            	HandlerUtils.sendMessage(m_PreviewGallery, MESSAGE_UPDATE_DELETED, 0, 0, file);
+    		            	m_FileManager.deleteFile(file.getAbsolutePath(), false);
+    		            }else if(mPaddingX == mMaxX){
+    		            	isOpened = true;
+    		            }else{}
+    		            Log.d(TAG, "isOpened: " + isOpened);
+    		        }
+    		    });
+    		    mDrawerAnimator.start();
+            }
+    	    mPreviousX = 0;
+    	}
+        
+    	private boolean isOpened = true;
+    	private	ValueAnimator mDrawerAnimator = null;
+    	// for portrait
+        private int mMidY, mMinY, mMaxY, mPaddingY, mDiffY, mPreviousY;
+        private int mMidX, mMinX, mMaxX, mPaddingX, mDiffX, mPreviousX;
+        
+		private void setPageData(final int position) {
+
+			final int cacheIndex = (position - 1) % m_PageSize;
+			final String path = m_Files.get(position - 1).getAbsolutePath();
+			Log.d(TAG, "cacheIndex" + cacheIndex);
+
+			if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && m_Map.get(cacheIndex).equals(path)) {
+				Log.d(TAG, "setPageData already set return : cacheIndex: " + cacheIndex + " position: " + position);
+				return;
+			}
+			m_Map.put(cacheIndex, path);
+			View root = m_Pagers.get(cacheIndex);
+			
+			//
+			Resources res = m_PreviewGallery.getContext().getResources();
+			if (m_IsVertical) {
+				m_ReqWidth = res.getDimensionPixelSize(R.dimen.preview_item_land_width);
+				m_ReqHeight = res.getDimensionPixelSize(R.dimen.preview_item_land_height);
+			} else {
+				m_ReqWidth = res.getDimensionPixelSize(R.dimen.preview_item_width);
+				m_ReqHeight = res.getDimensionPixelSize(R.dimen.preview_item_height);
+			}
+			// delete animation reset
+			mPaddingX = mDiffX = mPreviousX = 0;
+			mPaddingY = mDiffY = mPreviousY = 0;
+			root.scrollTo(0, 0);
+			ImageView preview = (ImageView) root.findViewById(R.id.preview_image);
+			final SoftReference<View> softItem = new SoftReference<View>(root);
+			final SoftReference<ImageView> softImage = new SoftReference<ImageView>(preview);
+			softImage.get().setScaleType(ImageView.ScaleType.CENTER);
+			softImage.get().setImageResource(R.drawable.loading);
+			final SoftReference<ImageView> softPlay = new SoftReference<ImageView>((ImageView) root.findViewById(R.id.play_icon));
+			softPlay.get().setVisibility(View.GONE);
+
+			final File file = m_Files.get(position - 1);
+			m_FileManager.getBitmap(path, m_ReqWidth, m_ReqHeight, new PhotoCallback() {
+
+				@Override
+				public void onBitmapLoad(final Bitmap bitmap, final boolean isVideo, final boolean isIntrrupt) {
+					if (isIntrrupt) {
+						m_Map.delete(cacheIndex);
+						return;
+					}
+					if (bitmap != null) {
+						HandlerUtils.post(m_PreviewGallery, new Runnable() {
+
+							@Override
+							public void run() {
+								final View item = softItem.get();
+								final ImageView image = softImage.get();
+								if (image != null) {
+									if (!TextUtils.isEmpty(m_Map.get(cacheIndex)) && !m_Map.get(cacheIndex).equals(path)) {
+										Log.d(TAG, "setPageData return after decode : cacheIndex: " + cacheIndex + " position: "
+												+ position);
+										return;
+									} else {
+										image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+										image.setImageBitmap(bitmap);
+									}
+
+									if (isVideo) {
+										ImageView play = softPlay.get();
+										play.setVisibility(View.VISIBLE);
+										image.setOnClickListener(new View.OnClickListener() {
+
+											@Override
+											public void onClick(View v) {
+												Intent intent = new Intent();
+												intent.setAction(Intent.ACTION_VIEW);
+												intent.setDataAndType(Uri.fromFile(file), "video/*");
+												m_PreviewGallery.getContext().startActivity(intent);
+											}
+										});
+									} else {
+										image.setOnClickListener(new View.OnClickListener() {
+
+											@Override
+											public void onClick(View v) {
+												Intent intent = new Intent();
+												intent.setAction(Intent.ACTION_VIEW);
+												intent.setDataAndType(Uri.fromFile(file), "image/*");
+												m_PreviewGallery.getContext().startActivity(intent);
+											}
+										});
+									}
+									// delete animation
+									if (m_IsVertical) {
+										image.setOnTouchListener(new OnTouchListener() {
+
+											@Override
+											public boolean onTouch(View v, MotionEvent event) {
+												if (m_PreviewGallery.m_VerticalViewPager.getVisibility() == View.VISIBLE) {
+													if (event.getAction() == MotionEvent.ACTION_DOWN) {
+														mPreviousX = 0;
+														return true;
+													} else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+														if (mPreviousX == 0) {
+															mDiffX = 0;
+															mPreviousX = (int) event.getRawX();
+															return true;
+														}
+														mDiffX = (int) event.getRawX() - mPreviousX;
+														mPaddingX -= mDiffX;
+														if (mPaddingX > mMaxX) {
+															mPaddingX = mMaxX;
+														} else if (mPaddingX < mMinX) {
+															mPaddingX = mMinX;
+														}
+														if (mPaddingX > mMaxX) {
+															mPaddingX = mMaxX;
+														} else if (mPaddingX < mMinX) {
+															mPaddingX = mMinX;
+														}
+														mPreviousX = (int) event.getRawX();
+														Log.d(TAG, "mPaddingX: " + mPaddingX);
+														item.scrollTo(mPaddingX, 0);
+														item.setAlpha(1 - Math.abs(((float) mPaddingX) / mMinX));
+														return true;
+													} else if (event.getAction() == MotionEvent.ACTION_UP) {
+														finishDrawerLandscape(item, file);
+														return true;
+													} else {
+														return false;
+													}
+												}else{
+													return false;
+												}
+											}
+										});
+									} else {
+										image.setOnTouchListener(new OnTouchListener() {
+
+											@Override
+											public boolean onTouch(View v, MotionEvent event) {
+												if (m_PreviewGallery.m_ViewPager.getVisibility() == View.VISIBLE) {
+													int factor = 1;
+													if (m_PreviewGallery.getRotation() == Rotation.INVERSE_PORTRAIT) {
+														factor = -1;
+													}
+													if (event.getAction() == MotionEvent.ACTION_DOWN) {
+														mPreviousY = 0;
+														return true;
+													} else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+														if (mPreviousY == 0) {
+															mDiffY = 0;
+															mPreviousY = (int) event.getRawY() * factor;
+															return true;
+														}
+														mDiffY = (int) event.getRawY() * factor - mPreviousY;
+														mPaddingY += mDiffY;
+														if (mPaddingY > mMaxY) {
+															mPaddingY = mMaxY;
+														} else if (mPaddingY < mMinY) {
+															mPaddingY = mMinY;
+														}
+														mPreviousY = (int) event.getRawY() * factor;
+														item.scrollTo(0, -1 * mPaddingY);
+														item.setAlpha(1 - Math.abs(((float) mPaddingY) / mMinY));
+														return true;
+													} else if (event.getAction() == MotionEvent.ACTION_UP) {
+														finishDrawerPortrait(item, file);
+														return true;
+													} else {
+														return false;
+													}
+												}else{
+													return false;
+												}
+											}
+										});
+									}
+								}
+							}
+						});
+					} else {
+						HandlerUtils.sendMessage(m_PreviewGallery, MESSAGE_UPDATE_DELETED, 0, 0, file);
+					}
+				}
+			}, position);
+		}
 	}
 }
