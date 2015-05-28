@@ -129,6 +129,21 @@ public abstract class BasicComponent extends HandlerBaseObject implements Compon
 	
 	
 	/**
+	 * Check whether component state is {@link ComponentState#RUNNING RUNNING} or {@link ComponentState#INITIALIZING INITIALIZING}.
+	 * @param printLog True to print log if current state is not {@link ComponentState#RUNNING RUNNING} and {@link ComponentState#INITIALIZING INITIALIZING}.
+	 * @return Whether component is running or initializing.
+	 */
+	protected final boolean isRunningOrInitializing(boolean printLog)
+	{
+		if(m_State == ComponentState.RUNNING || m_State == ComponentState.INITIALIZING)
+			return true;
+		if(printLog)
+			Log.w(TAG, "Component is not running or initializing");
+		return false;
+	}
+	
+	
+	/**
 	 * Called when deinitializing component.
 	 */
 	protected void onDeinitialize()

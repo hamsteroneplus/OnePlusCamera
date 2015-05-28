@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.oneplus.base.Handle;
 import com.oneplus.base.Log;
 import com.oneplus.base.PropertyChangeEventArgs;
 import com.oneplus.base.PropertyChangedCallback;
@@ -13,14 +14,36 @@ import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.CameraComponent;
 import com.oneplus.camera.Mode;
 import com.oneplus.camera.Mode.State;
+import com.oneplus.util.ListUtils;
 
 final class SceneManagerImpl extends CameraComponent implements SceneManager
 {
 	// Private fields.
 	private final List<Scene> m_ActiveScenes = new ArrayList<>();
+	private Scene m_DefaultScene = Scene.NO_SCENE;
+	private final List<DefaultSceneHandle> m_DefaultSceneHandles = new ArrayList<>();
 	private Scene m_Scene = Scene.NO_SCENE;
 	private final List<SceneBuilder> m_SceneBuilders = new ArrayList<>();
 	private final List<Scene> m_Scenes = new ArrayList<>();
+	
+	
+	// Class for default scene handle.
+	private final class DefaultSceneHandle extends Handle
+	{
+		public final Scene scene;
+		
+		public DefaultSceneHandle(Scene scene)
+		{
+			super("DefaultScene");
+			this.scene = scene;
+		}
+
+		@Override
+		protected void onClose(int flags)
+		{
+			restoreDefaultScene(this, flags);
+		}
+	}
 	
 	
 	// Call-backs.
@@ -82,6 +105,38 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 	}
 	
 	
+	// Change default scene.
+	@Override
+	public Handle setDefaultScene(Scene scene, int flags)
+	{
+		// check state
+		this.verifyAccess();
+		if(!this.isRunningOrInitializing(true))
+			return null;
+		
+		// check parameter
+		if(scene == null)
+		{
+			Log.e(TAG, "setDefaultScene() - No scene specified");
+			return null;
+		}
+		
+		Log.v(TAG, "setDefaultScene() - Scene : ", scene);
+		
+		// create handle
+		DefaultSceneHandle handle = new DefaultSceneHandle(scene);
+		m_DefaultSceneHandles.add(handle);
+		
+		// change default scene
+		this.updateDefaultScene();
+		if((flags & FLAG_PRESERVE_CURRENT_SCENE) == 0)
+			this.setScene(m_DefaultScene, 0);
+		
+		// complete
+		return handle;
+	}
+	
+	
 	// Create new scene.
 	private boolean createScene(SceneBuilder builder)
 	{
@@ -136,6 +191,13 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 	{
 		if(m_ActiveScenes.remove(scene))
 		{
+			// update default scene
+			if(!m_DefaultSceneHandles.isEmpty() && m_DefaultSceneHandles.get(m_DefaultSceneHandles.size() - 1).scene == scene)
+			{
+				Log.w(TAG, "onSceneDisabled() - Default scene '" + scene + "' disabled");
+				this.updateDefaultScene();
+			}
+			
 			// exit this scene
 			if(m_Scene == scene)
 			{
@@ -171,6 +233,11 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 			else
 				m_ActiveScenes.add(scene);
 		}
+		if(!m_DefaultSceneHandles.isEmpty() && m_DefaultSceneHandles.get(m_DefaultSceneHandles.size() - 1).scene == scene)
+		{
+			Log.w(TAG, "onSceneEnabled() - Default scene '" + scene + "' enabled");
+			this.updateDefaultScene();
+		}
 		this.raise(EVENT_SCENE_ADDED, new SceneEventArgs(scene));
 	}
 	
@@ -180,6 +247,13 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 	{
 		if(m_ActiveScenes.remove(scene))
 		{
+			// update default scene
+			if(!m_DefaultSceneHandles.isEmpty() && m_DefaultSceneHandles.get(m_DefaultSceneHandles.size() - 1).scene == scene)
+			{
+				Log.w(TAG, "onSceneReleased() - Default scene '" + scene + "' released");
+				this.updateDefaultScene();
+			}
+			
 			// exit this scene
 			if(m_Scene == scene)
 			{
@@ -192,6 +266,28 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 		}
 		if(m_Scenes.remove(scene))
 			scene.removeCallback(Scene.PROP_STATE, m_SceneStateChangedCallback);
+	}
+	
+	
+	// Restore default scene.
+	private void restoreDefaultScene(DefaultSceneHandle handle, int flags)
+	{
+		// remove handle
+		this.verifyAccess();
+		boolean isLast = ListUtils.isLastObject(m_DefaultSceneHandles, handle);
+		if(!m_DefaultSceneHandles.remove(handle))
+			return;
+		
+		// restore
+		if(isLast)
+		{
+			// update default scene
+			this.updateDefaultScene();
+			
+			// change scene
+			if((flags & FLAG_PRESERVE_CURRENT_SCENE) == 0)
+				this.setScene(m_DefaultScene, 0);
+		}
 	}
 
 	
@@ -270,5 +366,23 @@ final class SceneManagerImpl extends CameraComponent implements SceneManager
 				cameraActivity.startCameraPreview();
 			}
 		}
+	}
+	
+	
+	// Update default scene according to current state.
+	private void updateDefaultScene()
+	{
+		if(!m_DefaultSceneHandles.isEmpty())
+		{
+			m_DefaultScene = m_DefaultSceneHandles.get(m_DefaultSceneHandles.size() - 1).scene;
+			if(!m_ActiveScenes.contains(m_DefaultScene))
+			{
+				Log.e(TAG, "updateDefaultScene() - Scene : " + m_DefaultScene + " is not contained in active list");
+				m_DefaultScene = Scene.NO_SCENE;
+			}
+		}
+		else
+			m_DefaultScene = Scene.NO_SCENE;
+		Log.v(TAG, "updateDefaultScene() - Default scene : ", m_DefaultScene);
 	}
 }

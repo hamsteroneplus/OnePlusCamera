@@ -6,7 +6,10 @@ import android.hardware.camera2.CaptureRequest;
 import com.oneplus.camera.CameraActivity;
 import com.oneplus.camera.R;
 
-final class PhotoFaceBeautyScene extends PhotoScene
+/**
+ * Face beauty scene for photo.
+ */
+public final class PhotoFaceBeautyScene extends PhotoScene
 {
 	// Constructor.
 	PhotoFaceBeautyScene(CameraActivity cameraActivity)

@@ -21,6 +21,7 @@ public class MainActivity extends CameraActivity
 {
 	// Private fields
 	private ViewGroup m_CaptureUIContainer;
+	private SceneManager m_SceneManager;
 	
 	
 	/**
@@ -40,6 +41,16 @@ public class MainActivity extends CameraActivity
 	public final ViewGroup getCaptureUIContainer()
 	{
 		return m_CaptureUIContainer;
+	}
+	
+	
+	/**
+	 * Get {@link SceneManager} component.
+	 * @return {@link SceneManager}.
+	 */
+	public final SceneManager getSceneManager()
+	{
+		return m_SceneManager;
 	}
 	
 	
@@ -86,14 +97,14 @@ public class MainActivity extends CameraActivity
 		cameraThread.start(this.get(PROP_MEDIA_TYPE));
 		
 		// setup scene builders
-		SceneManager sceneManager = this.findComponent(SceneManager.class);
-		if(sceneManager != null)
+		m_SceneManager = this.findComponent(SceneManager.class);
+		if(m_SceneManager != null)
 		{
 			for(int i = 0, count = SceneBuilders.BUILDERS.length ; i < count ; ++i)
-				sceneManager.addBuilder(SceneBuilders.BUILDERS[i], 0);
+				m_SceneManager.addBuilder(SceneBuilders.BUILDERS[i], 0);
 		}
 		else
-			Log.e(TAG, "onCreate() - No SceneManager");
+			Log.e(TAG, "onCreate() - No SceneManager interface");
 		
 		// setup effect builders
 		//
